@@ -26,6 +26,7 @@ import { providerLabel, resolvedProvider } from '../../ui/provider';
 import { openPull } from '../../ui/pull';
 import { openRepoPulls, workerRepos } from '../../ui/repos';
 import { openTerminal } from '../../ui/terminal';
+import { isOrca, openComment, openInOrca, openNewTask } from '../../ui/orca';
 import { hiringPaused, usageLabel, usageTitle } from '../../ui/usage';
 
 // The kinds of thing you can use that this defines (see InteractKinds in world/types.ts).
@@ -303,7 +304,63 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     player.lookPitch = -0.2;
   }
 
+  /** An Orca worktree's desk: the seat a figure sits at, or one under an Orca sign. */
+  function orcaDesk(deskId: string): boolean {
+    return !!store.workerAtDesk(deskId)?.orca || store.floorPlan.labels[deskId]?.by === 'orca';
+  }
+
+  /**
+   * On Orca (M3): the desk hint says what the office can do there. A figure: its terminal (or a chat
+   * agent's last words), open in Orca, a prompt, and for the desk's worktree mark read and a comment.
+   * An empty desk: a new task (a new worktree with an agent).
+   */
+  function orcaDeskHint(deskId: string): Hint {
+    const w = store.workerAtDesk(deskId);
+    const sign = store.floorPlan.labels[deskId]?.text;
+    const deskName = `${sign ? `🪧 ${sign} · ` : ''}${plan().byId.get(deskId)!.label}`;
+    const worktree = orcaDesk(deskId);
+    if (!w) {
+      const can = !!store.currentFloor()?.orcaCreate || store.floors.some((f) => f.orcaCreate);
+      return {
+        k: `orca|${sign}|${can}`,
+        parts: [h('span.title', {}, `${deskName} · ${sign ? 'no agent' : 'empty'}`), can ? key('E', 'New task') : '', sign ? key('O', 'Open in Orca') : '', worktree ? key('C', 'Comment') : ''],
+      };
+    }
+    const doing = w.activity ? clip(w.activity, 48) : '';
+    const remote = !!w.orca?.remote;
+    return {
+      k: `orca|${w.status}|${w.id}|${w.acked}|${doing}|${sign}`,
+      parts: [
+        h('span.title', {}, `${sign ? `🪧 ${sign} · ` : ''}${w.name} · ${STATUS_LABEL[w.status]}`),
+        doing ? aside(doing) : '',
+        remote ? aside('🌐 on another host') : '',
+        w.orca?.terminal ? key('E', 'Terminal') : key('E', 'Last message'),
+        w.orca?.terminal ? key('P', 'Prompt') : '',
+        remote ? '' : key('O', 'Open in Orca'),
+        !w.acked && !remote ? key('R', 'Mark read') : '',
+        remote ? '' : key('C', 'Comment'),
+      ],
+    };
+  }
+
+  function useOrcaDesk(deskId: string, k: string) {
+    const w = store.workerAtDesk(deskId);
+    const label = store.floorPlan.labels[deskId]?.text ?? plan().byId.get(deskId)?.label ?? 'this desk';
+    if (k === 'E' && w) return openWorkerTerminal(w.id);
+    if (k === 'E' && !w) return openNewTask(net, plan().byId.get(deskId)?.label ?? 'this desk');
+    if (k === 'O') return w ? openInOrca(net, { workerId: w.id }) : orcaDesk(deskId) && openInOrca(net, { deskId });
+    if (k === 'R' && w && !w.acked) return net.send({ t: 'orca.read', deskId });
+    if (k === 'C' && orcaDesk(deskId)) return openComment(net, deskId, label);
+    if (k === 'P' && w?.orca?.terminal)
+      return openPrompt({
+        title: `💬 Prompt ${w.name}`,
+        subtitle: w.status === 'working' ? `${w.name} is busy — it lands in their input box.` : undefined,
+        onSubmit: (text) => net.send({ t: 'worker.prompt', workerId: w.id, prompt: text }),
+      });
+  }
+
   function deskHint(deskId: string): Hint {
+    if (isOrca()) return orcaDeskHint(deskId);
     const w = store.workerAtDesk(deskId);
     // The sign over it, if it has one, and L to hang one (or change it).
     const sign = store.floorPlan.labels[deskId]?.text;
@@ -397,6 +454,7 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     hint: (it) => (it.deskId ? deskHint(it.deskId) : { k: '', parts: [] }),
     use: (it, key) => {
       if (!it.deskId) return;
+      if (isOrca()) return void useOrcaDesk(it.deskId, key);
       if (key === 'L') return openDeskLabel(net, it.deskId);
       const w = store.workerAtDesk(it.deskId);
       if (key === 'B' && !w) return openShell(it.deskId);

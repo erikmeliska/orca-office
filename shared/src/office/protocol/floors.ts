@@ -36,6 +36,8 @@ export interface FloorInfo {
   branch?: string;
   /** Which of FLOOR_PALETTES it's painted in. */
   palette: number;
+  /** An Orca project on this machine: the office can start a task (a new worktree) on this floor. */
+  orcaCreate?: boolean;
   /** Being cloned: on the elevator panel, but nobody can go there yet. */
   cloning?: boolean;
   /** How the clone is getting on, once git says. */

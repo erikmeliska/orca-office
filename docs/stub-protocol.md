@@ -84,3 +84,31 @@ Without `ORCA_OFFICE_STUB`, `/client` gets the same messages from Orca (`bridge/
 | Plugin `agent.tool.after` (`action`, `failed` worked out in the worker) | `action` / `activity` on working terminal agents: read, edit, test, web, failing after 2 failed runs in a row. |
 
 Mapping: floor = repository, desk = worktree (1–4 seats side by side in one cluster, `+N` on the sign past 4), figure = agent session. Messages: `welcome`, `floor.enter`, `floors`, `plan` (desk signs), `worker.update`, `worker.remove`, and `{ t: 'orca', online }` (the page shows "Orca offline" while the plugin isn't connected). The 2D list (`live.html`) connects with `?list=1` and still gets the plugin's messages, redacted.
+
+## Light control (M3)
+
+On the live bridge the page can act on Orca (`bridge/src/live/actions.ts`, design #14). Typing goes through the CLI: on Orca 1.4.272 the plugin's `terminal.sendText` is refused for any
+terminal outside the workspace active in Orca ("terminal is outside the active worktree"). Orca's
+read leaves out what sits in an agent's input box until it is sent, so the terminal window shows
+what you typed since the last Enter under it. Every other call
+the bridge makes goes through the plugin's allowlist with exact param shapes
+(`plugin/src/worker.ts` `validParams`); `orca worktree set` runs as the CLI.
+
+| Page → bridge | What Orca does | Answer |
+|---------------|----------------|--------|
+| `worker.attach` / `worker.detach` (terminal agent on this machine) | `terminal.read` (500 lines) every 250 ms while the page has it open | `term.snapshot` with `cols: 0` when the text changed |
+| `term.input` (only into the open terminal) | `orca terminal send --terminal <id> --text=<raw>`, in order, keystrokes merged while a send runs, ≤4096 chars a send | `orca.result` on errors |
+| `worker.prompt` | `orca terminal send … --text=<prompt> --enter` (Orca submits it as a prompt) | `orca.result` on errors |
+| `orca.open` | `workspace.open`, then `terminal.focus` for a terminal agent | `orca.result` |
+| `orca.read` | `orca worktree set --worktree <id> --read` | `orca.result` |
+| `orca.comment` / `orca.desk` | `orca worktree set --comment=<text>` / `orca worktree show` | `orca.result` / `orca.desk` |
+| `orca.create` | `workspace.create` with `projectId`, `agent`, `prompt` (and `name`) | `orca.create`: creating → created → ready (the figure sat down) or failed |
+
+Figures carry `orca: { terminal, remote }`; floors with an Orca project on this machine
+`orcaCreate: true`. Agents on other hosts are shown but not acted on. Rate limits per page
+(`bridge/src/rate.ts`): typing 200 frames / 64 KiB burst, new tasks 3 then one a minute, other
+actions 20 then 2 a second. Terminal text, typing, prompts and comments are never logged or kept.
+
+In the office (Orca mode) the desk keys are: E terminal (a chat agent: its last message; an empty
+desk: new task), P prompt, O open in Orca, R mark read, C comment. `npm run dev:fake` fakes all of
+it with made-up data (`bridge/fake/`).

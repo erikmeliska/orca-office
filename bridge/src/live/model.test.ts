@@ -9,6 +9,7 @@ const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({
   kind: 'worktree',
   name: id,
   project: 'demo-web',
+  projectId: 'proj-web',
   path: `/code/demo-web/${id}`,
   branch: id,
   hostId: 'local',
@@ -277,7 +278,7 @@ describe('parsing Orca', () => {
 
   test('snapshot, status event, hook and bots', () => {
     expect(parseWorkspaces({ workspaces: [{ id: 'w', kind: 'worktree', name: 'n', path: '/p', branch: 'b', hostId: 'local', status: { state: 'working', unread: true, lastActivityAt: 2 } }, { id: 1 }] })).toEqual([
-      { id: 'w', kind: 'worktree', name: 'n', project: null, path: '/p', branch: 'b', hostId: 'local', state: 'working', unread: true, lastActivityAt: 2 },
+      { id: 'w', kind: 'worktree', name: 'n', project: null, projectId: null, path: '/p', branch: 'b', hostId: 'local', state: 'working', unread: true, lastActivityAt: 2 },
     ]);
     expect(parseStatusEvent({ paneKey: 'p', state: 'blocked', workspaceListId: 'w', terminalId: 't', title: 'private' }, 5)).toEqual({ paneKey: 'p', workspaceListId: 'w', terminalId: 't', state: 'blocked', at: 5 });
     expect(parseToolHook({ tool: 'Bash', terminalId: 't', workspaceId: 'r::/p', action: 'test', failed: true }, 1)).toMatchObject({ tool: 'Bash', action: 'test', failed: true });

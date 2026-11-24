@@ -49,7 +49,7 @@ export class PluginLink {
     return true;
   }
 
-  call(method: string, params?: unknown): Promise<CallResult> {
+  call(method: string, params?: unknown, timeoutMs = this.timeoutMs): Promise<CallResult> {
     const socket = this.socket;
     if (!socket) return Promise.resolve({ ok: false, error: 'plugin_offline' });
     const id = randomUUID();
@@ -57,7 +57,7 @@ export class PluginLink {
       const timer = setTimeout(() => {
         this.pending.delete(id);
         resolve({ ok: false, error: 'timeout' });
-      }, this.timeoutMs);
+      }, timeoutMs);
       this.pending.set(id, { resolve, timer });
       socket.send(JSON.stringify({ type: 'call', id, method, params }));
     });

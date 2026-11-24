@@ -7,7 +7,7 @@
  * bubble right there) and handed to the model; errors are logged by kind only.
  */
 import { execFile } from 'node:child_process';
-import { parseAgentList, parseBots, type CliAgentList, type OrcaBot } from './orca.js';
+import { parseAgentList, parseBots, parseTerminals, type CliAgentList, type CliTerminal, type OrcaBot } from './orca.js';
 
 export const AGENTS_EVERY_MS = 5_000;
 export const BOTS_EVERY_MS = 15_000;
@@ -34,6 +34,8 @@ export function orcaCli(bin = process.env.ORCA_BIN || 'orca', timeoutMs = 8_000)
 export interface PollSink {
   agents(hostId: string, list: CliAgentList): void;
   bots(bots: OrcaBot[]): void;
+  /** This machine's terminal handles by pane (`orca terminal list`), for the office's live terminal. */
+  terminals?(list: CliTerminal[]): void;
   /** A poll failed (Orca not running, CLI missing): the kind of failure only. */
   error(what: string): void;
 }
@@ -86,6 +88,13 @@ export class CliPoller {
     } catch (err) {
       this.sink.error((err as Error).message);
     }
+    if (this.sink.terminals) {
+      try {
+        this.sink.terminals(parseTerminals(await this.run(['terminal', 'list', '--json'])));
+      } catch (err) {
+        this.sink.error((err as Error).message);
+      }
+    }
     for (const env of this.environments) {
       try {
         // Under the environment's name (its host tag in the office), so each list replaces only its own agents.
@@ -108,4 +117,25 @@ export class CliPoller {
       this.sink.error((err as Error).message);
     }
   }
+}
+
+/**
+ * Types into a terminal through the CLI (see ActionDeps.send): one argument per value, never a
+ * shell; the text is never logged, and a failure says only its kind.
+ */
+export function orcaSend(bin = process.env.ORCA_BIN || 'orca', timeoutMs = 8_000) {
+  return (terminalId: string, text: string, enter: boolean): Promise<true | string> =>
+    new Promise((resolve) => {
+      if (!/^term_[A-Za-z0-9_-]{1,120}$/.test(terminalId)) return resolve('invalid');
+      const args = ['terminal', 'send', '--terminal', terminalId, `--text=${text}`, ...(enter ? ['--enter'] : []), '--json'];
+      execFile(bin, args, { timeout: timeoutMs, maxBuffer: 1024 * 1024, env: process.env }, (err, stdout) => {
+        if (err) return resolve('cli_failed');
+        try {
+          const r = JSON.parse(stdout) as { ok?: boolean; result?: { send?: { accepted?: boolean } } };
+          resolve(r.ok !== false && r.result?.send?.accepted !== false ? true : 'not_accepted');
+        } catch {
+          resolve('cli_failed');
+        }
+      });
+    });
 }

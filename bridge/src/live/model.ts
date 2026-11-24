@@ -19,7 +19,7 @@ import { cleanLabel, type FloorPlan } from '@orca-office/shared/office/floorplan
 import { FLOOR_PALETTES } from '@orca-office/shared/office/floors';
 import { BEANBAGS, DESKS, WING_DESKS } from '@orca-office/shared/office/layout';
 import type { FloorInfo, WorkerAction, WorkerInfo, WorkerStatus } from '@orca-office/shared/office/protocol';
-import { worktreePath, type CliAgent, type OrcaBot, type OrcaState, type OrcaWorkspace, type StatusEvent, type ToolHook } from './orca.js';
+import { worktreePath, type CliAgent, type CliTerminal, type OrcaBot, type OrcaState, type OrcaWorkspace, type StatusEvent, type ToolHook } from './orca.js';
 
 export const DONE_DEBOUNCE_MS = 1_000;
 /** An agent seen only in an event, not (yet) in `orca agent list`, is kept this long. */
@@ -107,7 +107,13 @@ export class LiveModel {
   private workspaces = new Map<string, OrcaWorkspace>();
   private byPath = new Map<string, OrcaWorkspace>();
   private agents = new Map<string, AgentRec>();
+  /** terminalId → paneKey, from status events (the plugin's ids). */
   private terminals = new Map<string, string>();
+  /** paneKey → terminal handle, from `orca terminal list` (this machine). */
+  private paneTerminals = new Map<string, string>();
+  /** What the office shows by id, as last built: figure id → paneKey, and per floor, seat → desk (workspace key). */
+  private workerIds = new Map<string, string>();
+  private deskSeats = new Map<string, Map<string, string>>();
   private bots: OrcaBot[] = [];
   /** Bot folders: their chat agents are the bots' own, on the Staff floor (spike-m0.md #5). */
   private botFolders = new Set<string>();
@@ -191,6 +197,51 @@ export class LiveModel {
     this.version++;
   }
 
+  /** `orca terminal list --json`: each local pane's terminal handle. */
+  applyTerminals(list: CliTerminal[]): void {
+    this.paneTerminals = new Map(list.map((t) => [t.paneKey, t.handle]));
+  }
+
+  // ---- what the office's actions reach (M3) ---------------------------------------------------
+
+  /** The Orca side of a figure: its terminal (local terminal agents), workspace and kind. */
+  target(workerId: string): { paneKey: string; kind: 'chat' | 'terminal'; local: boolean; terminalId: string | null; workspaceId: string | null } | null {
+    const pane = this.workerIds.get(workerId);
+    const a = pane ? this.agents.get(pane) : undefined;
+    if (!a) return null;
+    const local = a.hostId === LOCAL;
+    return { paneKey: a.paneKey, kind: a.kind, local, terminalId: local && a.kind === 'terminal' ? this.terminalOf(a.paneKey) : null, workspaceId: this.workspaces.has(a.deskKey) ? a.deskKey : null };
+  }
+
+  /** The Orca workspace at a seat on a floor (any seat of its desk cluster), when it is one Orca lists. */
+  deskWorkspace(floorId: string, deskId: string): OrcaWorkspace | null {
+    const key = this.deskSeats.get(floorId)?.get(deskId);
+    return (key && this.workspaces.get(key)) || null;
+  }
+
+  /** Where a new task on this floor goes: its Orca project on this machine. */
+  floorProject(floorId: string): { projectId: string } | null {
+    for (const w of this.workspaces.values()) {
+      if (w.kind !== 'worktree' || !w.projectId || (w.hostId ?? LOCAL) !== LOCAL) continue;
+      if (floorId === floorId_(floorNameOf(w))) return { projectId: w.projectId };
+    }
+    return null;
+  }
+
+  /** The seat and floor of the first figure at a workspace (a new task's id from `workspace.create`), once it sits down. */
+  seatOfWorkspace(workspaceId: string): { floor: string; deskId: string } | null {
+    const path = worktreePath(workspaceId);
+    const ws = this.workspaces.get(workspaceId) ?? [...this.workspaces.values()].find((w) => w.kind === 'worktree' && !!path && w.path === path);
+    if (!ws || ![...this.agents.values()].some((a) => a.deskKey === ws.id)) return null;
+    for (const [floor, seats] of this.deskSeats) for (const [seat, key] of seats) if (key === ws.id) return { floor, deskId: seat };
+    return null;
+  }
+
+  private terminalOf(paneKey: string): string | null {
+    for (const [t, p] of this.terminals) if (p === paneKey) return t;
+    return this.paneTerminals.get(paneKey) ?? null;
+  }
+
   /** `orca bot list --json`: the Staff floor's people. */
   applyBots(bots: OrcaBot[]): void {
     this.bots = [...bots].sort((a, b) => a.name.localeCompare(b.name));
@@ -220,6 +271,8 @@ export class LiveModel {
   // ---- output ---------------------------------------------------------------------------------
 
   building(): Building {
+    this.workerIds.clear();
+    this.deskSeats.clear();
     const floors = new Map<string, { desks: Map<string, DeskRec>; agents: Map<string, AgentRec[]> }>();
     const floorOf = (name: string) => {
       let f = floors.get(name);
@@ -254,6 +307,7 @@ export class LiveModel {
     const want = new Map(ordered.map((d) => [d.key, Math.max(1, Math.min(MAX_SEATS, agents.get(d.key)?.length ?? 0))]));
     const seats = allocate(this.seats.get(id) ?? new Map(), ordered.map((d) => d.key), want);
     this.seats.set(id, seats);
+    this.deskSeats.set(id, new Map([...seats].flatMap(([key, at]) => at.map((s) => [s, key] as [string, string]))));
     const workers: WorkerInfo[] = [];
     const labels: FloorPlan['labels'] = {};
     let wing = 0;
@@ -271,7 +325,7 @@ export class LiveModel {
     const waiting = workers.filter((w) => w.status === 'needs_input').length;
     const dir = ordered.find((d) => d.hostId === LOCAL)?.key;
     return {
-      info: { id, name, dir: dir ? (this.workspaces.get(dir)?.path ?? '') : '', palette: hash(name) % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing },
+      info: { id, name, dir: dir ? (this.workspaces.get(dir)?.path ?? '') : '', palette: hash(name) % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing, ...(this.floorProject(id) ? { orcaCreate: true } : {}) },
       workers,
       plan: { wing, labels },
     };
@@ -279,6 +333,7 @@ export class LiveModel {
 
   private worker(a: AgentRec, deskId: string, d: DeskRec): WorkerInfo {
     const h = hash(a.paneKey);
+    this.workerIds.set(`a-${h.toString(36)}`, a.paneKey);
     const status = STATUS[a.shown];
     const tag = [a.kind === 'chat' ? '💬' : '', a.hostId !== LOCAL ? `🌐 ${hostLabel(a.hostId)}` : ''].filter(Boolean).join(' ');
     const working = a.shown === 'working';
@@ -299,6 +354,7 @@ export class LiveModel {
       viewers: [],
       viewerIds: [],
       task: { name: `${tag ? `${tag} ` : ''}${d.name}`, summary: a.bubble ?? SUMMARY[a.shown] },
+      orca: { terminal: a.kind === 'terminal' && a.hostId === LOCAL, remote: a.hostId !== LOCAL },
       ...(working && a.action ? { action: a.action } : {}),
       ...(working && a.activity ? { activity: a.activity } : {}),
       ...(working && a.workingSince ? { workingSince: a.workingSince } : {}),
@@ -443,6 +499,9 @@ function newAgent(paneKey: string, deskKey: string, floorName: string, now: numb
 export function floorNameOf(w: OrcaWorkspace): string {
   return w.project ?? (w.kind === 'folder' ? 'Folders' : 'Other');
 }
+
+/** floorId under another name, for the methods above whose locals are called floorId. */
+const floorId_ = (name: string) => floorId(name);
 
 export function floorId(name: string): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'floor';

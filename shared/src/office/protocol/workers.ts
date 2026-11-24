@@ -1,6 +1,7 @@
 // Workers at their desks: what they are, their worktrees and their terminals.
 
 import type { AgentEffort, AgentProvider } from './agents.js';
+import type { OrcaWorkerInfo } from './orca.js';
 import type { Usage } from './usage.js';
 
 export type WorkerStatus =
@@ -96,6 +97,10 @@ export interface WorkerInfo {
    */
   workedMs?: number;
   workingSince?: number;
+  /** An Orca agent session (orca-office): what the office can do with it. */
+  orca?: OrcaWorkerInfo;
+  /** Claude Code subagents (Task tool) it has running right now, shown as small helpers around it. */
+  helpers?: number;
   /** Sent out by a map's herald (the castle's Hand of the King), so every browser has it run to its seat from beside them. */
   via?: 'herald';
 }
