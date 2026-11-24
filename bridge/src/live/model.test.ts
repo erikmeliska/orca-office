@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'vitest';
-import { ACTION_MS, DONE_DEBOUNCE_MS, LiveModel, MAX_SEATS, PROVISIONAL_MS, STAFF_FLOOR, allocate, floorId } from './model.js';
+import { ACTION_MS, DONE_DEBOUNCE_MS, HELPER_MAX_MS, LiveModel, MAX_SEATS, PROVISIONAL_MS, STAFF_FLOOR, allocate, floorId } from './model.js';
 import { parseAgentList, parseBots, parseStatusEvent, parseToolHook, parseWorkspaces, type CliAgent, type OrcaWorkspace } from './orca.js';
 
 // Everything here is made up: fake repos, paths and messages.
@@ -149,7 +149,7 @@ describe('tool hooks', () => {
     return m;
   }
   const w = (m: LiveModel) => floor(m, 'demo-web')!.workers[0]!;
-  const hook = (tool: string, over = {}) => ({ terminalId: 't1', workspaceId: 'repo-1::/code/demo-web/a', tool, action: null, failed: false, at: 10, ...over });
+  const hook = (tool: string, over = {}) => ({ terminalId: 't1', workspaceId: 'repo-1::/code/demo-web/a', tool, action: null, failed: false, callId: null, at: 10, ...over });
 
   test('tools become actions', () => {
     const m = setup();
@@ -161,6 +161,23 @@ describe('tool hooks', () => {
     expect(w(m).action).toBe('web');
     m.applyHook(hook('Bash', { action: 'test' }));
     expect([w(m).action, w(m).activity]).toEqual(['test', 'Bash']);
+  });
+
+  test('subagents are helpers by their parent until their call ends, or its turn does', () => {
+    const m = setup();
+    m.applySubagentStart(hook('Task', { callId: 'c1' }));
+    m.applySubagentStart(hook('Task', { callId: 'c2' }));
+    m.applySubagentStart(hook('Task', { callId: 'c2' }));
+    m.applySubagentStart(hook('Task'));
+    expect(w(m).helpers).toBe(2);
+    m.applyHook(hook('Task', { callId: 'c1' }));
+    expect(w(m).helpers).toBe(1);
+    m.applyStatus({ paneKey: 'p1', workspaceListId: 'a', terminalId: 't1', state: 'blocked', at: 20 });
+    expect(w(m).helpers).toBeUndefined();
+    m.applyStatus({ paneKey: 'p1', workspaceListId: 'a', terminalId: 't1', state: 'working', at: 30 });
+    m.applySubagentStart(hook('Agent', { callId: 'c3', at: 40 }));
+    m.tick(40 + HELPER_MAX_MS + 1);
+    expect(w(m).helpers).toBeUndefined();
   });
 
   test('failing test runs in a row turn into failing; a pass resets it', () => {

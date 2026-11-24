@@ -207,6 +207,9 @@ function feedModel(msg: { type?: string; name?: unknown; payload?: unknown; [k: 
   } else if (msg.type === 'event' && (msg.name === 'workspace.created' || msg.name === 'workspace.removed')) {
     // The next snapshot has it; ask for one now.
     link.send({ type: 'resync' });
+  } else if (msg.type === 'hook' && msg.name === 'agent.tool.before') {
+    const h = parseToolHook(msg.payload, now);
+    if (h) model.applySubagentStart(h);
   } else if (msg.type === 'hook' && msg.name === 'agent.tool.after') {
     const h = parseToolHook(msg.payload, now);
     if (h) model.applyHook(h);

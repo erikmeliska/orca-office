@@ -40,6 +40,12 @@ function connect() {
           send({ type: 'event', name: 'agent.status.changed', at: Date.now(), payload: { paneKey: pane, terminalId: term, workspaceListId: null, state: 'working', receivedAt: Date.now() } });
           send({ type: 'hook', name: 'agent.tool.after', at: Date.now(), payload: { agent: 'claude', workspaceId, terminalId: term, tool, inputKeys: [], hasOutput: true, action, failed: !!failed } });
         }
+        // Ada sends out subagents: two at once, then one comes back, then the other.
+        const [, term, workspaceId] = CYCLE[0];
+        const call = (n) => `task-${Math.floor(step / 6)}-${n}`;
+        const phase = step % 6;
+        if (phase === 0) for (const n of [1, 2]) send({ type: 'hook', name: 'agent.tool.before', at: Date.now(), payload: { agent: 'claude', workspaceId, terminalId: term, tool: 'Task', callId: call(n) } });
+        if (phase === 3 || phase === 5) send({ type: 'hook', name: 'agent.tool.after', at: Date.now(), payload: { agent: 'claude', workspaceId, terminalId: term, tool: 'Task', callId: call(phase === 3 ? 1 : 2), inputKeys: [], hasOutput: true, action: null, failed: false } });
       }, 4_000));
     }
     if (m.type === 'resync') snapshot();

@@ -69,6 +69,8 @@ export interface ToolHook {
   action: string | null;
   /** A test or build run whose output says it failed. */
   failed: boolean;
+  /** The tool call's id, which ties a subagent's start (agent.tool.before) to its end. */
+  callId: string | null;
   at: number;
 }
 
@@ -177,6 +179,7 @@ export function parseToolHook(payload: unknown, at: number): ToolHook | null {
     tool: tool.slice(0, 64),
     action: str(o.action),
     failed: o.failed === true,
+    callId: str(o.callId)?.slice(0, 128) ?? null,
     at,
   };
 }

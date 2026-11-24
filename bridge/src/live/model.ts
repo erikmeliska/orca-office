@@ -29,6 +29,8 @@ export const MAX_SEATS = 4;
 /** A tool's action is acted out this long after its hook, unless another one comes first. */
 export const ACTION_MS = 12_000;
 export const STAFF_FLOOR = 'staff';
+/** A subagent nobody saw end is let go after this long. */
+export const HELPER_MAX_MS = 30 * 60_000;
 const LOCAL = 'local';
 
 const WORKER_COLORS = ['#ef476f', '#118ab2', '#ffd166', '#06d6a0', '#8338ec', '#f78c6b', '#4f86f7', '#073b4c', '#e76f51', '#2a9d8f', '#9b5de5', '#f15bb5'];
@@ -76,6 +78,8 @@ interface AgentRec {
   activity: string | null;
   fails: number;
   workingSince: number | null;
+  /** Claude Code subagents (Task/Agent tool) running now, by call id, since when (design #12). */
+  helpers: Map<string, number>;
 }
 
 interface DeskRec {
@@ -182,9 +186,18 @@ export class LiveModel {
     return false;
   }
 
+  /** An `agent.tool.before` hook for a subagent tool: a small helper sits by its parent until the call ends. */
+  applySubagentStart(h: ToolHook): void {
+    const rec = this.agentForHook(h);
+    if (!rec || !h.callId || rec.helpers.has(h.callId)) return;
+    rec.helpers.set(h.callId, h.at);
+    this.version++;
+  }
+
   /** An `agent.tool.after` hook: what the agent at that terminal acts out. */
   applyHook(h: ToolHook): void {
     const rec = this.agentForHook(h);
+    if (rec && h.callId && rec.helpers.delete(h.callId)) this.version++;
     if (!rec || rec.shown !== 'working') return;
     let action = (h.action as WorkerAction | null) ?? toolAction(h.tool) ?? null;
     if (action === 'test') {
@@ -258,6 +271,11 @@ export class LiveModel {
       }
       if (a.action && now - a.actionAt > ACTION_MS) {
         a.action = null;
+        changed = true;
+      }
+      for (const [id, since] of a.helpers) {
+        if (now - since <= HELPER_MAX_MS) continue;
+        a.helpers.delete(id);
         changed = true;
       }
       if (a.provisional && now - a.firstSeen > PROVISIONAL_MS) {
@@ -358,6 +376,7 @@ export class LiveModel {
       ...(working && a.action ? { action: a.action } : {}),
       ...(working && a.activity ? { activity: a.activity } : {}),
       ...(working && a.workingSince ? { workingSince: a.workingSince } : {}),
+      ...(a.helpers.size ? { helpers: a.helpers.size } : {}),
     };
   }
 
@@ -462,6 +481,8 @@ export class LiveModel {
     rec.pendingDone = null;
     if (st === 'working' && rec.shown !== 'working') rec.workingSince = at;
     if (st !== 'working') {
+      // Its turn is over: whatever subagents it had are done too.
+      rec.helpers.clear();
       rec.action = null;
       rec.workingSince = null;
       rec.fails = 0;
@@ -493,6 +514,7 @@ function newAgent(paneKey: string, deskKey: string, floorName: string, now: numb
     activity: null,
     fails: 0,
     workingSince: null,
+    helpers: new Map(),
   };
 }
 

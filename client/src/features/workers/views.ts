@@ -28,6 +28,7 @@ import { renderUsage } from '../../ui/usage';
 import { Worker } from '../../world/character';
 import { Drifters } from './adrift';
 import { Jail } from './jail';
+import { Helpers } from './helpers';
 import { Laptop } from './laptop';
 import { Arrivals, Departures } from './leaving';
 import { Sendoffs } from './sendhome';
@@ -45,6 +46,8 @@ export interface WorkerView {
   deskId: string;
   status: string;
   acked: boolean;
+  /** Its Claude Code subagents, as small helpers around it (WorkerInfo.helpers). */
+  helpers?: Helpers;
 }
 
 /** How close (meters) you stop a worker jumping, and how far you go before it starts again. */
@@ -159,6 +162,10 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
         v.model.setStatus(w.status, waitingOnSomeone(w));
         noOutline(v.model.root);
       }
+      if (w.helpers || v.helpers) {
+        v.helpers ??= new Helpers(desk.seatAnchor, w.color);
+        v.helpers.set(w.helpers ?? 0);
+      }
       v.model.setAction(w.action);
       v.model.setPr(workerPr(w, store.pulls.items));
       v.model.setLost(!!w.lost);
@@ -172,6 +179,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     }
     for (const [id, v] of workerViews) {
       if (store.workers.has(id)) continue;
+      v.helpers?.dispose();
       arrivals.forget(v.model);
       const desk = world.desks.get(v.deskId);
       // Up and about in the castle: it sets off from where it's standing.
@@ -285,6 +293,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
       const d = v.model.root.getWorldPosition(workerPos).distanceTo(player.pos);
       v.model.held = d < (v.model.held ? HOLD_LEAVE : HOLD_NEAR);
       v.model.update(dt, t);
+      v.helpers?.update(dt, t);
       // A board agent's kiosk has no laptop to paint (see buildKiosk).
       if (!desk.station) v.laptop.update(dt, store.screens.get(id), Math.hypot(desk.x - camPos.x, desk.z - camPos.z));
     }
