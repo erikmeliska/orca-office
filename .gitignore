@@ -5,3 +5,4 @@ dist/
 .env
 .orca/
 bridge/.spike/
+.playwright-mcp/
