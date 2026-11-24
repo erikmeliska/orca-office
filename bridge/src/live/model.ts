@@ -443,7 +443,7 @@ export class LiveModel {
     const busy = workers.filter((w) => w.status === 'working').length;
     const waiting = workers.filter((w) => w.status === 'needs_input').length;
     return {
-      info: { id, name: 'Staff', dir: '', palette: hash('Staff') % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing },
+      info: { id, name: 'Staff', dir: '', palette: hash('Staff') % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing, room: 'staff' },
       workers,
       plan: { wing, labels },
       links: {},
