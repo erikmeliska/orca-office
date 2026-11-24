@@ -1,0 +1,13 @@
+{
+  // Code copied from agent-office (see NOTICE): its own project, since it was written without
+  // noUncheckedIndexedAccess and verbatimModuleSyntax.
+  "extends": "../../../tsconfig.base.json",
+  "compilerOptions": {
+    "rootDir": ".",
+    "outDir": "../../../.tsbuild/shared-office",
+    "tsBuildInfoFile": "../../../.tsbuild/shared-office.tsbuildinfo",
+    "noUncheckedIndexedAccess": false,
+    "verbatimModuleSyntax": false
+  },
+  "include": ["."]
+}

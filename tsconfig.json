@@ -1,4 +1,4 @@
 {
   "files": [],
-  "references": [{ "path": "shared" }, { "path": "bridge" }, { "path": "client" }]
+  "references": [{ "path": "shared" }, { "path": "shared/src/office" }, { "path": "bridge" }, { "path": "client" }]
 }

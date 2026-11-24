@@ -1,5 +1,6 @@
 {
   "extends": "../tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": "../.tsbuild/shared", "tsBuildInfoFile": "../.tsbuild/shared.tsbuildinfo" },
-  "include": ["src"]
+  "include": ["src"],
+  "exclude": ["src/office"]
 }
