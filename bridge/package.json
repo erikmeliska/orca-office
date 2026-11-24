@@ -1,0 +1,13 @@
+{
+  "name": "@orca-office/bridge",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/main.ts",
+    "start": "tsx src/main.ts"
+  },
+  "dependencies": {
+    "@orca-office/shared": "*"
+  }
+}
