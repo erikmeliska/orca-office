@@ -20,7 +20,7 @@ import type { Interactable, Office } from '../world/types';
 import type { Sky } from '../world/sky';
 import type { Smoke } from '../world/smoke';
 import type { World } from '../world/world';
-import type { Activities, Hooks, Interactions, Keys, Messages, Ticks, Usables, View } from './registry';
+import type { Activities, Hooks, Interactions, Keys, Messages, Motion, Ticks, Usables, View } from './registry';
 
 /** What the hint bar says. */
 export interface Hint {
@@ -123,6 +123,11 @@ export interface Ctx {
   readonly messages: Messages<ServerMsg>;
   readonly keys: Keys<KeyboardEvent>;
   readonly ticks: Ticks;
+  /**
+   * Whether the office needs the full frame rate (something's moving) or can drop to a few frames a
+   * second: anything that animates says so here (see Motion, and frameLoop in core/loop.ts).
+   */
+  readonly motion: Motion;
   readonly activities: Activities<StopWhy, KeyboardEvent, HTMLElement>;
   readonly interactions: Interactions<OfficeInteraction>;
   /** What what you're doing makes of you and your view each frame (see ViewEffect). */

@@ -27,6 +27,7 @@ export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage
   ctx.ticks.add('world', updateWorld);
   ctx.ticks.add('env', updateSky);
   ctx.ticks.add('render', drawFrame);
+  installMotion(ctx, core);
 
   let lastSent = { x: 0, y: 0, z: 0, rotY: 0, moving: false, at: 0 };
   let spotSavedAt = 0;
@@ -193,15 +194,87 @@ export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage
 /**
  * The frame loop: each frame, every phase's ticks, in order (see TICK_PHASES, and installLoop). Its
  * clock starts now; hand what it returns to requestAnimationFrame to start it.
+ *
+ * It draws at the full frame rate only while something moves (see ctx.motion), and otherwise a few
+ * times a second (IDLE_FPS); while the page is hidden it draws nothing, and picks up again once the
+ * page is back. The sun's shadows are drawn once a frame while something moves (not on every render
+ * call: the outlines draw the scene twice), and every few frames otherwise.
  */
 export function frameLoop(ctx: Ctx, loading: { drew(): void }): (ts?: number) => void {
   const timer = new THREE.Timer();
+  const shadows = ctx.renderer.shadowMap;
+  shadows.autoUpdate = false;
+  /** Frames drawn since something last moved. */
+  let still = 0;
+  /** The loop's been started (see main.ts). */
+  let started = false;
+  /** A frame's been asked for already, so coming back to the page doesn't start a second loop. */
+  let asked = false;
   function frame(ts?: number) {
+    started = true;
+    asked = false;
+    // Hidden: nothing to draw until the page is back (see visibilitychange below).
+    if (document.hidden) return;
+    ask();
+    const moving = ctx.motion.moving();
+    if (!ctx.motion.due(moving)) return;
     timer.update(ts);
     const delta = timer.getDelta();
+    still = moving ? 0 : still + 1;
+    shadows.needsUpdate = still % IDLE_SHADOW_EVERY === 0;
     ctx.ticks.run({ delta, dt: Math.min(delta, 0.1), t: timer.getElapsed(), now: performance.now() });
     loading.drew();
+  }
+  function ask() {
+    if (asked) return;
+    asked = true;
     requestAnimationFrame(frame);
   }
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden || !started) return;
+    // Back: the world goes on from where it was (dt is capped), at the full rate for a moment.
+    ctx.motion.wake();
+    ask();
+  });
   return frame;
+}
+
+/** While nothing moves, the sun's shadows are drawn every this many frames (a few times a second). */
+const IDLE_SHADOW_EVERY = 3;
+
+/**
+ * What of the office's own keeps the full frame rate (see ctx.motion): you moving, the camera moving,
+ * a trip to another floor, whatever you're in the middle of, the view shaking or taken over, the roof's
+ * party, smoke and confetti, and your keys and mouse on the office itself (not typing in a window).
+ */
+function installMotion(ctx: Ctx, core: CoreState) {
+  const { motion } = ctx;
+  motion.add(() => ctx.player.moving || !ctx.player.grounded);
+  motion.watch(() => [ctx.player.pos]);
+  // The camera, wherever it's moved from (you, a ride, the telescope, a shake): where it is, which
+  // way it looks, and how wide.
+  const look = { x: 0, y: 0, z: 0 };
+  const lens = { x: 0, y: 0, z: 0 };
+  motion.watch(() => {
+    const { camera } = ctx;
+    const q = camera.quaternion;
+    Object.assign(look, { x: q.x, y: q.y, z: q.z });
+    Object.assign(lens, { x: q.w, y: camera.fov, z: camera.zoom });
+    return [camera.position, look, lens];
+  });
+  motion.add(() => !!core.trip || core.thud > 0 || ctx.activities.busy() || ctx.view.covered());
+  // Up on the roof, everything moves to the DJ's set.
+  motion.add(() => core.upTop);
+  motion.add(() => ctx.smoke.busy() || ctx.confetti.busy());
+  // Typing in a window (a terminal, the chat) is no reason to draw the office faster.
+  const typing = (e: Event) => e.target instanceof HTMLElement && (e.target.isContentEditable || !!e.target.closest('input, textarea, select'));
+  const onKey = (e: Event) => {
+    if (!typing(e)) motion.wake();
+  };
+  const onPointer = (e: Event) => {
+    if (document.pointerLockElement || e.target === ctx.canvas) motion.wake();
+  };
+  for (const t of ['keydown', 'keyup']) window.addEventListener(t, onKey, { capture: true, passive: true });
+  for (const t of ['pointerdown', 'pointerup', 'pointermove', 'wheel']) window.addEventListener(t, onPointer, { capture: true, passive: true });
+  window.addEventListener('resize', () => motion.wake());
 }

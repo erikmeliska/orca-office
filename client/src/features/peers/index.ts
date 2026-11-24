@@ -135,6 +135,19 @@ export function installPeers(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'puff
       }
     }
   });
+  // The full frame rate while anyone else is on the move, or turning round.
+  const turned = new Map<string, { x: number; y: number; z: number }>();
+  ctx.motion.add(() => [...remotes.keys()].some((id) => store.peers.get(id)?.moving));
+  ctx.motion.watch(function* () {
+    for (const [id, r] of remotes) {
+      yield r.person.root.position;
+      let turn = turned.get(id);
+      if (!turn) turned.set(id, (turn = { x: 0, y: 0, z: 0 }));
+      turn.x = r.person.root.rotation.y;
+      yield turn;
+    }
+    for (const id of turned.keys()) if (!remotes.has(id)) turned.delete(id);
+  });
   let speakTick = 0;
   ctx.ticks.add('hud', ({ now }) => {
     if (now - speakTick > 200) {

@@ -15,6 +15,11 @@ import { packUp, waddle, type Leaving } from './worker-leave';
 import { dressUp, growBeard, wearGarb } from './worker-dress';
 
 /** The little Claude worker that sits at a desk. Forward is +z. */
+/** Less of an act than this in a worker's stance doesn't show: going over to the next act is as good as done (see Worker.lively). */
+const BLENDED = 0.08;
+/** How far ahead (s) a worker says it's about to go over to its next act: more than a frame at a few frames a second. */
+const SOON = 0.25;
+
 export class Worker {
   readonly root = new THREE.Group();
   private body = new THREE.Group();
@@ -431,6 +436,37 @@ export class Worker {
     if (this.nameTag) this.nameTag.position.y = dead ? 0.95 : 1.4;
   }
 
+  /**
+   * Whether it's in the middle of something that wants the full frame rate (see ctx.motion): walking,
+   * leaving, dancing, popping in, cheering, a twirl, or going over from one act to the next. Doing the
+   * same thing over and over (typing, reading, breathing, the hops and foot-tapping of one that's done
+   * or waiting on you, which can go on for hours) isn't: that's drawn a few times a second.
+   */
+  lively(): boolean {
+    if (this.jailed) return false;
+    if (this.walking || !!this.leaving || !!this.dancing || this.spawnT < 1 || this.cheerT > 0 || this.twirlT >= 0) return true;
+    // About to go over to its next act (a frame a few times a second would skip most of the way there)…
+    if (this.nextAction !== this.action && this.status === 'working' && this.actionT + SOON >= this.actMin()) return true;
+    // …or going over to the act it's in now (its status just changed, say), until what's left of the last
+    // one is too little to see.
+    return this.acts.size > 0 && (this.acts.get(this.actOf(this.bounceT > 0)) ?? 0) < 1 - BLENDED;
+  }
+
+  /** How long (s) it keeps at what it's doing before going over to its next action. */
+  private actMin(): number {
+    return this.action === 'failing' ? DESPAIR_MIN : ACT_MIN;
+  }
+
+  /** What it's doing (see Act), given whether it's hopping. */
+  private actOf(hopping: boolean): Act {
+    return (
+      hopping || (this.bouncing && this.status === 'done') ? 'up'
+      : this.status === 'needs_input' ? 'waiting'
+      : this.status === 'working' ? (this.action ?? 'type')
+      : 'rest'
+    );
+  }
+
   update(dt: number, t: number) {
     if (this.jailed) return this.languish(dt, t);
     if (this.leaving) return this.carry(this.leaving, dt, t);
@@ -451,15 +487,11 @@ export class Worker {
     const pop = this.spawnT < 1 ? 1 + Math.sin(this.spawnT * Math.PI) * 0.35 : 1;
 
     this.actionT += dt;
-    if (this.nextAction !== this.action && this.actionT >= (this.action === 'failing' ? DESPAIR_MIN : ACT_MIN)) {
+    if (this.nextAction !== this.action && this.actionT >= this.actMin()) {
       this.action = this.nextAction;
       this.actionT = 0;
     }
-    const act: Act =
-      hopping || (this.bouncing && this.status === 'done') ? 'up'
-      : this.status === 'needs_input' ? 'waiting'
-      : this.status === 'working' ? (this.action ?? 'type')
-      : 'rest';
+    const act = this.actOf(hopping);
     const s = this.pose(act, dt, t);
     // A zombie at rest stands with its arms out in front of it, groping, listing to one side and swaying.
     const shamble = this.costume === 'halloween' ? Math.min(1, this.acts.get('rest') ?? 0) : 0;

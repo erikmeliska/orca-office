@@ -167,6 +167,8 @@ export function installBar(ctx: Ctx, deps: BarDeps) {
     drunkNow = drinking(now);
   });
 
+  // The world swims a few drinks in: the full frame rate till it's steady again.
+  ctx.motion.add(() => drunkNow > 0.01);
   /** Last frame went through the drunk vision. */
   let drunkVisionOn = false;
   ctx.view.add({

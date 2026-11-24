@@ -143,6 +143,11 @@ export class Confetti {
     this.mesh.visible = true;
   }
 
+  /** Whether any is falling or lying about, or still to rain down (the frame rate stays up for it: see ctx.motion). */
+  busy(): boolean {
+    return this.live > 0 || this.rains.length > 0;
+  }
+
   update(dt: number) {
     for (const r of this.rains) this.shed(r, dt);
     this.rains = this.rains.filter((r) => r.left > 0);

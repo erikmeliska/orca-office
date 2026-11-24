@@ -307,6 +307,19 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     arrivals.update(dt);
     parts.worlds.court()?.update(dt);
   });
+  // The full frame rate while a worker's doing something new (see Worker.lively), its helpers too, and
+  // while anyone's on the move: walking in, going home, sent off, about the court on a map of its own.
+  ctx.motion.add(() => {
+    for (const v of workerViews.values()) if (v.model.lively() || v.helpers?.lively()) return true;
+    return false;
+  });
+  ctx.motion.watch(function* () {
+    for (const v of workerViews.values()) yield v.model.root.position;
+    yield* departures.positions();
+    yield* sendoffs.positions();
+    yield* arrivals.positions();
+    yield* parts.worlds.court()?.positions() ?? [];
+  });
 
   /** The floor plan last shown, to tell someone knocking through from arriving on a floor already built out (or back on the office's map). */
   let shownPlan: { floor: string | null; map: string; wing: number } = { floor: null, map: OFFICE_PLAN.id, wing: 0 };

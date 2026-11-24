@@ -203,6 +203,79 @@ export class Ticks {
   }
 }
 
+// ---- How often to draw -------------------------------------------------------------------------------
+
+/** Frames a second while nothing moves: idle things (blinking, typing, the sky) still go on, just choppier. */
+export const IDLE_FPS = 10;
+/** How long (ms) one change keeps the frame rate up, so what it set off can ease to a stop smoothly. */
+export const SETTLE_MS = 1000;
+
+/** Something whose position is watched: a Vector3, or anything else with x, y and z. */
+export interface Point {
+  readonly x: number;
+  readonly y: number;
+  readonly z: number;
+}
+
+/**
+ * Whether the office has to be drawn at the full frame rate right now, or can drop to IDLE_FPS. A part
+ * says it's moving in one of three ways: `wake(ms)` (something just happened: keep the full rate up for
+ * a while), `add(fn)` (full rate whenever `fn` says so: an animation under way), or `watch(fn)` (full
+ * rate for a moment whenever any of the points `fn` gives moved since the last frame drawn). When in
+ * doubt, a part says it's moving: drawing too often costs a little power, a frozen-looking office
+ * costs more.
+ *
+ * Pure (the clock comes in), so it runs under node in the tests.
+ */
+export class Motion {
+  private until = -Infinity;
+  private readonly busy = new List<() => boolean>();
+  private readonly watched = new List<{ points: () => Iterable<Point>; last: number[] }>();
+  /** When the last frame was drawn (see due). */
+  private drawnAt = -Infinity;
+
+  constructor(private readonly clock: () => number = () => performance.now()) {}
+
+  /** Keeps the full frame rate for at least `ms` from now. */
+  wake(ms = SETTLE_MS): void {
+    this.until = Math.max(this.until, this.clock() + ms);
+  }
+
+  /** Full frame rate whenever `fn` says something's moving. */
+  add(fn: () => boolean): Off {
+    return this.busy.add(fn);
+  }
+
+  /** Full frame rate for SETTLE_MS whenever one of `points` has moved (more than a tenth of a millimetre) since the last look. */
+  watch(points: () => Iterable<Point>): Off {
+    return this.watched.add({ points, last: [] });
+  }
+
+  /** Whether something's moving: the full frame rate. Looks at every watch, so call it once a frame. */
+  moving(): boolean {
+    let moved = false;
+    for (const w of this.watched.items) {
+      const now: number[] = [];
+      for (const p of w.points()) now.push(p.x, p.y, p.z);
+      if (now.length !== w.last.length || now.some((v, i) => Math.abs(v - w.last[i]) > 1e-4)) moved = true;
+      w.last = now;
+    }
+    if (moved) this.wake();
+    return this.clock() < this.until || this.busy.items.some((fn) => fn());
+  }
+
+  /**
+   * Whether to draw a frame now: always while something's moving, otherwise once every 1/IDLE_FPS
+   * seconds (a few ms early, since frames don't land exactly on time). `moving` is moving()'s answer.
+   */
+  due(moving: boolean): boolean {
+    const now = this.clock();
+    if (!moving && now - this.drawnAt < 1000 / IDLE_FPS - 4) return false;
+    this.drawnAt = now;
+    return true;
+  }
+}
+
 // ---- Activities -----------------------------------------------------------------------------------
 
 /**
