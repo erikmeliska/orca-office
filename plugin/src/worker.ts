@@ -181,9 +181,12 @@ export default function activate(orca: OrcaWorkerApi) {
   }
 
   // Observe-only hook: Orca does not wait for it. Tool input/output can hold
-  // private content, so only the tool name and input keys leave the worker.
+  // private content, so only the tool name, input keys and what the call looks
+  // like from across the room (read/edit/test/web, and whether a test run
+  // failed) leave the worker; never a command, a path or any output.
   orca.hooks.on('agent.tool.after', (event) => {
     const input = event.input;
+    const action = toolAction(event.tool, input);
     send({
       type: 'hook',
       name: 'agent.tool.after',
@@ -196,6 +199,8 @@ export default function activate(orca: OrcaWorkerApi) {
         callId: event.callId ?? null,
         inputKeys: input && typeof input === 'object' && !Array.isArray(input) ? Object.keys(input) : [],
         hasOutput: event.output !== undefined,
+        action: action ?? null,
+        failed: action === 'test' && outputFailed(event.output),
       },
     });
   });
@@ -249,4 +254,97 @@ function safeEqual(a: string, b: string): boolean {
 function errorCode(err: unknown): string {
   if (err && typeof err === 'object' && 'code' in err) return String((err as { code: unknown }).code);
   return err instanceof Error ? err.message : String(err);
+}
+
+// ---- What a tool call looks like (a copy of shared/src/office/actions.ts) ----------------------
+// Orca loads plugin files as they are and refuses imports outside this folder, so the office's
+// tool → action rules are copied here; plugin/actions.test.ts checks the copy matches.
+
+type Action = 'read' | 'edit' | 'test' | 'web';
+
+const READ_TOOLS = new Set(['read', 'read_file', 'view', 'view_file', 'grep', 'grep_files', 'glob', 'ls', 'list', 'list_dir', 'list_files', 'find', 'codesearch', 'search_files', 'notebookread']);
+const EDIT_TOOLS = new Set(['edit', 'multiedit', 'write', 'write_file', 'create_file', 'notebookedit', 'apply_patch', 'patch', 'str_replace', 'str_replace_editor', 'str_replace_based_edit_tool']);
+const WEB_TOOLS = new Set(['websearch', 'webfetch', 'web_search', 'web_fetch', 'fetch', 'browse', 'search_web']);
+const SHELL_TOOLS = new Set(['bash', 'shell', 'exec_command', 'local_shell', 'run_command', 'terminal']);
+
+export function toolAction(tool: unknown, input?: unknown): Action | undefined {
+  if (typeof tool !== 'string') return undefined;
+  const name = tool.toLowerCase().replace(/^.*[.:/]/, '');
+  if (READ_TOOLS.has(name)) return 'read';
+  if (EDIT_TOOLS.has(name)) return 'edit';
+  if (WEB_TOOLS.has(name)) return 'web';
+  if (/^mcp__/.test(name)) return /web|fetch|brows|url|http/.test(name) ? 'web' : undefined;
+  if (SHELL_TOOLS.has(name)) {
+    const command = (input as { command?: unknown } | undefined)?.command;
+    return typeof command === 'string' ? commandAction(command) : undefined;
+  }
+  return undefined;
+}
+
+const CHECK =
+  /^(?:tsc|vue-tsc|svelte-check|jest|vitest|mocha|ava|pytest|py\.test|tox|nox|rspec|phpunit|karma|mypy|pyright|eslint|make|cmake|ninja|gradlew?|mvnw?|xcodebuild|ctest|bazel|bazelisk|webpack|rollup|turbo|nx|sbt)$|^(?:go (?:test|build|vet)|cargo (?:test|build|check|clippy|nextest)|dotnet (?:test|build)|swift (?:test|build)|mix (?:test|compile)|zig (?:build|test)|deno (?:test|check)|bun test|(?:flutter|dart) test|playwright test|cypress run|ruff check|(?:next|vite|nuxt|astro|ng) build|rake (?:test|spec))\b/;
+const CHECK_SCRIPT = /^(?:t|test|tests|build|check|lint|typecheck|type-check|tsc|compile|e2e|spec|verify|ci)(?:[:-]\S*)?$/;
+const READ = /^(?:cat|bat|head|tail|less|more|grep|egrep|fgrep|rg|ag|ack|find|fd|ls|tree|wc|stat|file|du|jq|diff|nl|awk)$/;
+const READ_SUB = /^sed -n\b|^git(?: (?:-C \S+|--?[\w-]+(?:=\S+)?))* (?:log|show|diff|status|blame|grep|ls-files|shortlog)\b|^gh (?:issue|pr|repo|run) (?:view|list|diff)\b/;
+const PREFIX = /^(?:\w+=(?:'[^']*'|"[^"]*"|\S*)\s+|(?:sudo|time|nice|nohup|command|exec|env|npx|bunx|pnpx|caffeinate|xvfb-run)\s+|(?:bundle exec|poetry run|uv run|pipenv run|pdm run|pnpm exec|yarn exec|python3? -m)\s+|timeout\s+\S+\s+)/;
+
+export function commandAction(command: string): 'test' | 'read' | undefined {
+  let first: 'read' | undefined;
+  let leading = true;
+  for (const part of command.split(/&&|\|\||[;|\n]/)) {
+    const words = normalize(part);
+    if (!words.length) continue;
+    if (isCheck(words)) return 'test';
+    if (!leading || /^(?:cd|pushd|export|source|set|\.)$/.test(words[0]!)) continue;
+    leading = false;
+    if (READ.test(words[0]!) || READ_SUB.test(words.join(' '))) first = 'read';
+  }
+  return first;
+}
+
+function normalize(part: string): string[] {
+  let s = part.replace(/^[\s({]+/, '').trim();
+  for (let prev = ''; prev !== s; ) {
+    prev = s;
+    s = s.replace(PREFIX, '');
+  }
+  const words = s.split(/\s+/).filter(Boolean);
+  if (words.length) words[0] = words[0]!.replace(/^.*[/\\]/, '').replace(/\.(?:cmd|exe|bat)$/i, '');
+  return words;
+}
+
+function isCheck(words: string[]): boolean {
+  const [prog, ...rest] = words as [string, ...string[]];
+  if (CHECK.test(prog) || CHECK.test(`${prog} ${rest[0] ?? ''}`)) return true;
+  if (/^(?:node|tsx|bun|deno)$/.test(prog) && rest.includes('--test')) return true;
+  if (/^(?:npm|pnpm|yarn|bun)$/.test(prog)) {
+    const script = rest.find((w) => !w.startsWith('-') && w !== 'run' && w !== 'run-script');
+    return !!script && CHECK_SCRIPT.test(script);
+  }
+  return false;
+}
+
+const FAILED = [
+  /^Tests:\s.*\b[1-9]\d* failed/m,
+  /^\s*(?:Test Files|Tests)\s+[1-9]\d* failed/m,
+  /^(?:#|ℹ) fail [1-9]/m,
+  /^=+ .*\b[1-9]\d* (?:failed|errors?)\b/m,
+  /^\s+[1-9]\d* failing$/m,
+  /^[1-9]\d* examples?, [1-9]\d* failures?/m,
+  /^(?:FAIL|--- FAIL)\b/m,
+  /^test result: FAILED/m,
+  /^error(?:\[E\d{4}\])?: /m,
+  /\berror TS\d{4}:|^Found [1-9]\d* errors?\b/m,
+  /^npm (?:ERR!|error) /m,
+  /^make: \*\*\*|\bBUILD FAILED\b/m,
+];
+
+/** Whether a test or build run's output says it failed: its exit code when the hook has one, else the summary lines. */
+export function outputFailed(output: unknown): boolean {
+  const o = output as { exitCode?: unknown; exit_code?: unknown; stdout?: unknown; stderr?: unknown; output?: unknown } | null | undefined;
+  const code = o && typeof o === 'object' ? (o.exitCode ?? o.exit_code) : undefined;
+  if (typeof code === 'number') return code !== 0;
+  const text = typeof output === 'string' ? output : o && typeof o === 'object' ? [o.stdout, o.stderr, o.output].filter((x) => typeof x === 'string').join('\n') : '';
+  const tail = text.length > 8000 ? text.slice(-8000) : text;
+  return FAILED.some((re) => re.test(tail));
 }

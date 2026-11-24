@@ -42,6 +42,13 @@ export class PluginLink {
     }
   }
 
+  /** A one-way message to the plugin (e.g. `resync`); false when it isn't connected. */
+  send(msg: unknown): boolean {
+    if (!this.socket) return false;
+    this.socket.send(JSON.stringify(msg));
+    return true;
+  }
+
   call(method: string, params?: unknown): Promise<CallResult> {
     const socket = this.socket;
     if (!socket) return Promise.resolve({ ok: false, error: 'plugin_offline' });

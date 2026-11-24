@@ -25,6 +25,8 @@ Node 24 (`.nvmrc`).
 npm install
 npm run typecheck && npm run lint && npm test && npm run build
 npm run dev          # stub bridge + Vite: the 3D office at http://127.0.0.1:5317
+npm run dev:live     # real bridge + Vite: your Orca agents in the 3D office (needs the plugin, see plugin/README.md)
+npm run dev:fake     # real bridge on a made-up Orca (fake CLI + fake plugin, bridge/fake/): for demos and screenshots
 npm run dev:bridge   # the real bridge, fed by the Orca plugin: http://127.0.0.1:4317/health
 npm run dev:client   # Vite only; the live list is at http://127.0.0.1:5317/live.html
 npm run typecheck:plugin   # needs `orca plugin types plugin` first (see plugin/README.md)

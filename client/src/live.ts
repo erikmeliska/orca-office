@@ -13,7 +13,7 @@ import {
 } from './office-state.js';
 
 // Live list of what Orca reports, until the 3D office lands (M1/M2).
-const BRIDGE = `ws://127.0.0.1:${__ORCA_OFFICE_BRIDGE_PORT__}/client`;
+const BRIDGE = `ws://127.0.0.1:${__ORCA_OFFICE_BRIDGE_PORT__}/client?list=1`;
 
 let office: Office = emptyOffice();
 let bridgeUp = false;

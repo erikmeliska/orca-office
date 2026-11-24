@@ -10,6 +10,10 @@ import { loadConfig } from './config.js';
 import { allowedClientOrigins, checkUpgrade } from './origin.js';
 import { PluginLink } from './plugin-link.js';
 import { StubSession } from './stub.js';
+import { CliPoller, orcaCli } from './live/cli.js';
+import { LiveModel } from './live/model.js';
+import { parseStatusEvent, parseToolHook, parseWorkspaces } from './live/orca.js';
+import { LiveSession } from './live/session.js';
 
 const config = loadConfig();
 const clientOrigins = allowedClientOrigins(config.clientPort);
@@ -117,6 +121,7 @@ function onPlugin(ws: WebSocket) {
     if (msg.type === 'hello') lastPluginHello = msg;
     if (msg.type === 'snapshot') lastSnapshotAt = Date.now();
     if (msg.type === 'result') return void link.settle(msg as never);
+    if (!config.stub) feedModel(msg);
     const out = JSON.stringify(redactForLog(msg));
     if (msg.type === 'snapshot') lastSnapshot = out;
     for (const c of clients) c.send(out);
@@ -147,6 +152,69 @@ function onPlugin(ws: WebSocket) {
 function broadcastPlugin() {
   const out = JSON.stringify({ type: 'bridge', plugin: link.connected });
   for (const c of clients) c.send(out);
+  const orca = JSON.stringify({ t: 'orca', online: link.connected });
+  for (const s of liveSessions.keys()) if (s.readyState === s.OPEN) s.send(orca);
+}
+
+// ---- Live office (M2): Orca's workspaces and agents on the 3D client's protocol -------------------
+
+const model = new LiveModel();
+const liveSessions = new Map<WebSocket, LiveSession>();
+let sentVersion = -1;
+let flushTimer: ReturnType<typeof setTimeout> | null = null;
+const poller = new CliPoller(orcaCli(), {
+  agents: (host, list) => (model.applyAgents(host, list.agents, Date.now()), changed()),
+  bots: (bots) => (model.applyBots(bots), changed()),
+  error: (what) => logOnce(what),
+});
+
+/** One line per kind of failure, not one every 5 s. */
+const logged = new Set<string>();
+function logOnce(what: string) {
+  if (logged.has(what)) return;
+  logged.add(what);
+  console.warn(what);
+}
+
+/** Plugin messages the office uses: the snapshot's workspaces, status events and tool hooks. */
+function feedModel(msg: { type?: string; name?: unknown; payload?: unknown; [k: string]: unknown }) {
+  const now = Date.now();
+  if (msg.type === 'snapshot') model.applyWorkspaces(parseWorkspaces(msg));
+  else if (msg.type === 'event' && msg.name === 'agent.status.changed') {
+    const ev = parseStatusEvent(msg.payload, now);
+    if (ev && model.applyStatus(ev)) poller.kick();
+  } else if (msg.type === 'event' && (msg.name === 'workspace.created' || msg.name === 'workspace.removed')) {
+    // The next snapshot has it; ask for one now.
+    link.send({ type: 'resync' });
+  } else if (msg.type === 'hook' && msg.name === 'agent.tool.after') {
+    const h = parseToolHook(msg.payload, now);
+    if (h) model.applyHook(h);
+  } else return;
+  changed();
+}
+
+/** Something changed: every live page hears what changed on its floor, at most every 100 ms. */
+function changed() {
+  if (flushTimer) return;
+  flushTimer = setTimeout(flush, 100);
+}
+
+function flush() {
+  flushTimer = null;
+  if (model.version === sentVersion) return;
+  sentVersion = model.version;
+  const b = model.building();
+  for (const [ws, s] of liveSessions) for (const m of s.update(b)) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
+}
+
+if (!config.stub) {
+  poller.start();
+  // The done debounce and fading actions run on the clock.
+  setInterval(() => {
+    const v = model.version;
+    model.tick(Date.now());
+    if (model.version !== v) changed();
+  }, 250);
 }
 
 /** How often a stub session's working workers move on to their next action. */
@@ -154,10 +222,38 @@ const STUB_TICK_MS = 4_000;
 
 function onClient(ws: WebSocket, url: string | undefined) {
   if (config.stub) return onStubClient(ws, url);
+  const query = new URL(url ?? '/client', 'http://127.0.0.1').searchParams;
+  // The 2D list view (live.html) still gets the plugin's messages as they are, redacted.
+  if (query.get('list') !== '1') return onLiveClient(ws, query);
   clients.add(ws);
   ws.send(JSON.stringify({ type: 'hello', role: 'bridge', protocol: PROTOCOL_VERSION, plugin: link.connected }));
   if (lastSnapshot && link.connected) ws.send(lastSnapshot);
   ws.on('close', () => clients.delete(ws));
+}
+
+/** The 3D office on Orca's data (M2). */
+function onLiveClient(ws: WebSocket, query: URLSearchParams) {
+  const session = new LiveSession(randomUUID().slice(0, 10), query, model.building());
+  liveSessions.set(ws, session);
+  const send = (msgs: unknown[]) => {
+    for (const m of msgs) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
+  };
+  send(session.welcome(model.building(), `live-${PROTOCOL_VERSION}`, link.connected));
+  ws.on('message', (data) => {
+    let msg: unknown;
+    try {
+      msg = JSON.parse(String(data));
+    } catch {
+      return;
+    }
+    if (typeof msg !== 'object' || msg === null || typeof (msg as { t?: unknown }).t !== 'string') return;
+    try {
+      send(session.handle(msg as never, model.building()));
+    } catch {
+      // A malformed message from the page: ignored.
+    }
+  });
+  ws.on('close', () => liveSessions.delete(ws));
 }
 
 /**
