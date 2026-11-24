@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 /**
  * The bridge's side of the single plugin connection: tracks it and turns
  * `call` requests into promises resolved by the plugin's `result` messages.
@@ -16,7 +18,6 @@ export interface CallResult {
 
 export class PluginLink {
   private socket: LinkSocket | null = null;
-  private nextId = 1;
   private pending = new Map<string, { resolve: (r: CallResult) => void; timer: ReturnType<typeof setTimeout> }>();
 
   constructor(private readonly timeoutMs = 5_000) {}
@@ -44,7 +45,7 @@ export class PluginLink {
   call(method: string, params?: unknown): Promise<CallResult> {
     const socket = this.socket;
     if (!socket) return Promise.resolve({ ok: false, error: 'plugin_offline' });
-    const id = String(this.nextId++);
+    const id = randomUUID();
     return new Promise((resolve) => {
       const timer = setTimeout(() => {
         this.pending.delete(id);

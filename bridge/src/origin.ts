@@ -2,7 +2,8 @@
  * WebSocket upgrades are checked by path and Origin. A browser tab on any site
  * can open ws://127.0.0.1, so loopback alone is not enough (design #20):
  * - `/plugin` is for the Orca worker, a Node process that sends no Origin;
- *   any request with an Origin is refused.
+ *   any request with an Origin is refused, and the worker must also present
+ *   the shared token (see auth.ts), checked by the caller.
  * - `/client` accepts only the office page itself.
  */
 export type Peer = 'plugin' | 'client';
