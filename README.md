@@ -40,3 +40,9 @@ checkout and takes the same `ORCA_OFFICE_PORT` / `ORCA_OFFICE_CLIENT_PORT`.
 
 Other ports: `ORCA_OFFICE_PORT=4417 ORCA_OFFICE_CLIENT_PORT=5417 npm run dev` (the bridge only lets
 the page on `ORCA_OFFICE_CLIENT_PORT` in, and the page is built against `ORCA_OFFICE_PORT`).
+
+Read-only view for a TV or a phone on the LAN: off by default; `ORCA_OFFICE_LAN_PORT=4318
+ORCA_OFFICE_LAN_HOST=<this Mac's LAN address>` adds a second port that serves only a states-and-badges
+page, no actions, terminals or texts ([details](docs/stub-protocol.md#read-only-lan-view-v2-39)). It opens
+a port to your network, so turn it on deliberately. Self-hosted GitHub/GitLab for the repo boards:
+`ORCA_OFFICE_FORGE_HOSTS=github:ghe.example.com,gitlab:gitlab.example.com`.

@@ -1,0 +1,59 @@
+/* The read-only LAN view (#39): a TV across the room or a phone. Big type, no pointer or keyboard needed. */
+:root {
+  --bg: #15161c;
+  --card: #20222b;
+  --ink: #f2f2f5;
+  --muted: #9a9cab;
+  --line: #30323d;
+  --working: #ffd166;
+  --needs: #ef476f;
+  --done: #06d6a0;
+  --idle: #7a7d8c;
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink); }
+body { font: 600 clamp(14px, 1.6vw, 26px)/1.3 Nunito, ui-rounded, system-ui, -apple-system, sans-serif; overflow: hidden; }
+#tv { display: flex; flex-direction: column; height: 100%; padding: clamp(12px, 2.4vw, 48px); gap: clamp(10px, 1.6vw, 28px); }
+.tv-top { display: flex; align-items: center; gap: 0.8em; flex-wrap: wrap; }
+.tv-top h1 { margin: 0; font-size: 2.2em; font-weight: 900; letter-spacing: -0.01em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%; }
+.tv-top .grow { flex: 1; }
+.badge { display: inline-flex; align-items: center; gap: 0.3em; padding: 0.2em 0.7em; border-radius: 999px; background: var(--card); border: 2px solid var(--line); font-weight: 900; white-space: nowrap; }
+.badge.needs { background: var(--needs); border-color: var(--needs); color: #fff; }
+.badge.busy { color: var(--working); }
+.badge.off { background: #5a1f2c; border-color: var(--needs); }
+.tv-desks { flex: 1; min-height: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(clamp(150px, 17vw, 340px), 1fr)); gap: clamp(8px, 1.2vw, 22px); align-content: start; overflow: hidden; }
+.desk { background: var(--card); border: 2px solid var(--line); border-radius: 0.8em; padding: 0.6em 0.8em; min-width: 0; }
+.desk.needs { border-color: var(--needs); box-shadow: 0 0 0 3px rgba(239, 71, 111, 0.25); }
+.desk-name { color: var(--muted); font-weight: 800; font-size: 0.85em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; margin-bottom: 0.4em; }
+.desk-empty { color: var(--idle); font-size: 0.85em; }
+.fig { display: flex; align-items: center; gap: 0.5em; padding: 0.15em 0; min-width: 0; }
+.dot { flex: none; width: 1.3em; height: 1.3em; border-radius: 50%; border: 3px solid var(--idle); }
+.fig .who { font-weight: 900; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.fig .what { margin-left: auto; font-size: 0.8em; font-weight: 800; white-space: nowrap; }
+.s-working .dot { border-color: var(--working); }
+.s-working .what { color: var(--working); }
+.s-needs_input .dot { border-color: var(--needs); animation: pulse 1.4s ease-in-out infinite; }
+.s-needs_input .what { color: var(--needs); }
+.s-done .dot { border-color: var(--done); }
+.s-done .what { color: var(--done); }
+.s-idle .what { color: var(--idle); }
+@keyframes pulse { 50% { transform: scale(1.25); } }
+@media (prefers-reduced-motion: reduce) { .s-needs_input .dot { animation: none; } }
+.tv-floors { display: flex; gap: 0.5em; overflow: hidden; flex-wrap: nowrap; }
+.chip { flex: none; display: inline-flex; gap: 0.4em; align-items: center; padding: 0.3em 0.8em; border-radius: 0.6em; background: var(--card); border: 2px solid var(--line); color: var(--ink); font: inherit; font-size: 0.85em; cursor: pointer; }
+.chip.on { border-color: var(--ink); }
+.chip .n { color: var(--needs); font-weight: 900; }
+.tv-empty { flex: 1; display: grid; place-items: center; color: var(--muted); font-size: 1.4em; text-align: center; }
+.tv-foot { color: var(--muted); font-size: 0.75em; display: flex; gap: 1em; }
+.tv-foot .grow { flex: 1; }
+.progress { height: 4px; background: var(--line); border-radius: 2px; overflow: hidden; }
+.progress > i { display: block; height: 100%; width: 0; background: var(--muted); }
+/* A phone held upright: one column, the page scrolls, the floors wrap. */
+@media (max-width: 640px) {
+  body { overflow: auto; font-size: 16px; }
+  #tv { height: auto; min-height: 100%; }
+  .tv-top h1 { font-size: 1.6em; }
+  .tv-desks { grid-template-columns: 1fr; overflow: visible; }
+  .tv-floors { flex-wrap: wrap; }
+}

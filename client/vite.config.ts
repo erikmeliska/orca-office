@@ -28,6 +28,8 @@ export default defineConfig({
       input: {
         main: resolve(root, 'index.html'),
         live: resolve(root, 'live.html'),
+        // The read-only LAN view (#39), served only by the bridge's LAN port.
+        tv: resolve(root, 'tv.html'),
       },
     },
   },

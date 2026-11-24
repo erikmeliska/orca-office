@@ -22,8 +22,12 @@ import { BotChats } from './live/bots.js';
 import { TerminalWatch } from './live/terminals.js';
 import { ForgeBoards, ghAdapter, gitRemote, glabAdapter, runCli } from './live/forge.js';
 import { pageLimits } from './rate.js';
+import { lanConfig, lanHostAllowed, lanReply, lanStaticPath, lanUpgradeAllowed, lanView } from './lan.js';
+import { LAN_LIMITS } from '@orca-office/shared/office/protocol/lan';
 
 const config = loadConfig();
+// The read-only LAN view (#39): off unless ORCA_OFFICE_LAN_PORT and ORCA_OFFICE_LAN_HOST are set.
+const lan = lanConfig(process.env, config.port);
 // The page from Vite (developing) or from the bridge itself (the built page, static.ts).
 const clientOrigins = allowedClientOrigins(config.clientPort, config.port);
 const link = new PluginLink();
@@ -199,6 +203,7 @@ function broadcastPlugin() {
   for (const c of clients) c.send(out);
   const orca = JSON.stringify({ t: 'orca', online: link.connected });
   for (const s of liveSessions.keys()) if (s.readyState === s.OPEN) s.send(orca);
+  pushLan();
 }
 
 // ---- Live office (M2): Orca's workspaces and agents on the 3D client's protocol -------------------
@@ -292,6 +297,7 @@ function flush() {
   const b = model.building();
   actions.tick();
   for (const [ws, s] of liveSessions) for (const m of s.update(b)) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
+  pushLan(b);
   // Deliveries (#34): to the pages on the floor each happens on.
   for (const h of model.takeHandoffs()) {
     const out = JSON.stringify({ t: 'orca.handoff', from: h.from, to: h.to, kind: h.kind, subject: h.subject });
@@ -392,6 +398,61 @@ function onStubClient(ws: WebSocket, url: string | undefined) {
     }
   });
   ws.on('close', () => clearInterval(timer));
+}
+
+// ---- Read-only LAN view (#39) -------------------------------------------------------------------
+// A separate server on its own port: the TV page and `/lan`, which only sends lan.view and takes pings.
+
+const lanSockets = new Set<WebSocket>();
+let lanSent = '';
+
+function pushLan(b = model.building()) {
+  if (!lan || !lanSockets.size) return;
+  const view = lanView(b, link.connected, Date.now());
+  const key = JSON.stringify({ ...view, at: 0 });
+  if (key === lanSent) return;
+  lanSent = key;
+  const out = JSON.stringify(view);
+  for (const ws of lanSockets) if (ws.readyState === ws.OPEN) ws.send(out);
+}
+
+if (lan) {
+  const lanWss = new WebSocketServer({ noServer: true, maxPayload: LAN_LIMITS.frame });
+  const lanServer = createServer((req, res) => {
+    if (!lanHostAllowed(req.headers.host, lan)) return void res.writeHead(421).end();
+    if (req.method !== 'GET' && req.method !== 'HEAD') return void res.writeHead(405, PAGE_HEADERS).end();
+    const path = lanStaticPath(req.url ?? '/');
+    const file = path ? resolveStatic(DEFAULT_DIST, path) : null;
+    if (!file) return void res.writeHead(404, PAGE_HEADERS).end();
+    res.writeHead(200, { ...PAGE_HEADERS, 'Content-Type': file.type, 'Cache-Control': file.immutable ? 'public, max-age=31536000, immutable' : 'no-cache' });
+    res.end(req.method === 'HEAD' ? undefined : readStatic(file));
+  });
+  lanServer.on('upgrade', (req, socket, head) => {
+    if (config.stub || !lanUpgradeAllowed(req.url, req.headers, lan) || lanSockets.size >= LAN_LIMITS.sockets) {
+      socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+      socket.destroy();
+      return;
+    }
+    lanWss.handleUpgrade(req, socket, head, (ws) => {
+      lanSockets.add(ws);
+      ws.send(JSON.stringify(lanView(model.building(), link.connected, Date.now())));
+      let count = 0;
+      let windowStart = Date.now();
+      ws.on('message', (data, isBinary) => {
+        const now = Date.now();
+        if (now - windowStart > 60_000) {
+          windowStart = now;
+          count = 0;
+        }
+        const r = isBinary || ++count > LAN_LIMITS.messagesPerMinute ? ({ close: true } as const) : lanReply(String(data), now);
+        if ('close' in r) return void ws.close(1008, 'read only');
+        ws.send(r.reply);
+      });
+      ws.on('close', () => lanSockets.delete(ws));
+      ws.on('error', () => lanSockets.delete(ws));
+    });
+  });
+  lanServer.listen(lan.port, lan.host, () => console.log(`read-only LAN view on http://${lan.host}:${lan.port}/ (no actions, no terminals)`));
 }
 
 server.listen(config.port, config.host, () => {
