@@ -6,6 +6,8 @@ import type { Net } from '../net';
 import { store } from '../state';
 import { h, openModal, timeAgo, toast, type Modal } from './dom';
 import { confirmDialog } from './prompt';
+import { elevatorStops, stopBadges } from './elevator-groups';
+import { isOrca } from './orca';
 
 // The elevator's panel: a button for every floor (every project), and "add a project", which clones
 // one of the repositories the office's gh login can see and makes it a new floor. The first time
@@ -70,7 +72,8 @@ export function openElevator(opts: ElevatorOptions): void {
   let seen = false;
   let startTimer: number | undefined;
   let error = '';
-  let showAdd = setup || !store.floors.length;
+  // On Orca the floors are Orca's projects: add one in Orca, not by cloning here.
+  let showAdd = !isOrca() && (setup || !store.floors.length);
   /** The search box and list are in place (rebuilding them would lose the focus mid-typing). */
   let built = false;
 
@@ -117,7 +120,7 @@ export function openElevator(opts: ElevatorOptions): void {
   /** What "Add floor" would add: the row picked, else what's typed if it's owner/name. */
   const choice = (): string | undefined => selected ?? normalizeRepo(filter);
 
-  const floorButton = (f: FloorInfo, i: number) => {
+  const floorButton = (f: FloorInfo, no: number | null) => {
     // Down in the garage, your floor is somewhere to go back up to.
     const mine = f.id === store.floor;
     const here = mine && !opts.downstairs();
@@ -125,15 +128,17 @@ export function openElevator(opts: ElevatorOptions): void {
     const stats: (HTMLElement | string)[] = [];
     if (f.cloning) stats.push(h('span', { title: f.clone?.detail ?? 'Being cloned' }, cloneLabel(f.clone)));
     else {
-      if (f.busy) stats.push(h('span', { title: 'Working' }, `👷 ${f.busy}`));
-      if (f.waiting) stats.push(h('span.waiting', { title: 'Waiting on someone' }, `🙋 ${f.waiting}`));
-      stats.push(h('span', { title: 'Workers at desks' }, `💻 ${f.workers}`));
+      // The badges (#31): who needs you there, then who is working.
+      const b = stopBadges(f);
+      if (b.needsYou) stats.push(h('span.badge.needs', { title: `${b.needsYou} waiting for you` }, `🙋 ${b.needsYou}`, h('span.badge-word', {}, ' needs you')));
+      if (b.working) stats.push(h('span.badge.working', { title: `${b.working} working` }, `👷 ${b.working}`, h('span.badge-word', {}, ' working')));
+      if (!b.needsYou && !b.working) stats.push(h('span', { title: f.room === 'project' ? 'Seats in this room' : 'Workers at desks' }, `💻 ${f.workers}`));
       if (f.people) stats.push(h('span', { title: 'People on this floor' }, `🧑 ${f.people}`));
     }
     const btn = h(
       'button.floor-btn',
       { type: 'button', class: here ? 'here' : '', disabled: f.cloning || here, title: here ? "You're on this floor" : f.cloning ? 'Still being cloned' : `Ride ${mine ? 'back up ' : ''}to ${f.name}` },
-      h('span.floor-no', { style: `background:${p.trim}` }, String(i + 1)),
+      h('span.floor-no', { style: `background:${f.room ? '#2b2d42' : p.trim}` }, f.room === 'project' ? '🏗️' : f.room === 'staff' ? '🤖' : String(no ?? '')),
       h(
         'span.floor-text',
         {},
@@ -152,15 +157,16 @@ export function openElevator(opts: ElevatorOptions): void {
   };
 
   /** The floor's button, with a 🗑 beside it for admins to take it off the building (⏹ to stop it while it's cloned). */
-  const floorRow = (f: FloorInfo, i: number) => {
-    const btn = floorButton(f, i);
+  const floorRow = (f: FloorInfo, no: number | null) => {
+    const btn = floorButton(f, no);
     if (f.cloning) {
       if (!store.me.admin && !(adding && sameRepo(f.repo, adding))) return btn;
       const stop = h('button.btn.floor-off', { type: 'button', title: `Stop cloning ${f.repo ?? f.name}`, 'aria-label': `Stop cloning ${f.name}` }, '⏹️');
       stop.addEventListener('click', () => confirmDialog(`Stop cloning ${f.repo ?? f.name}?`, "What's come down so far is thrown away. You can add it again any time.", '⏹️ Stop cloning', () => net.send({ t: 'floor.cancel', floor: f.id })));
       return h('div.floor-row', {}, btn, stop);
     }
-    if (!store.me.admin) return btn;
+    // Orca's floors come and go with Orca: nothing to take off here.
+    if (!store.me.admin || isOrca()) return btn;
     const off = h('button.btn.floor-off', { type: 'button', title: `Take ${f.name} off the building`, 'aria-label': `Remove ${f.name}` }, '🗑');
     off.addEventListener('click', () => confirmRemove(f));
     return h('div.floor-row', {}, btn, off);
@@ -220,7 +226,7 @@ export function openElevator(opts: ElevatorOptions): void {
     // Top floor first, the way an elevator's buttons stack, with the roof over them, floor 1 and then the garage at the bottom.
     floorsEl.replaceChildren(
       ...(built ? [roofButton()] : []),
-      ...(floors.length ? floors.map(floorRow).reverse() : [h('p.empty', {}, 'No floors yet.')]),
+      ...(floors.length ? elevatorStops(floors).flatMap((s) => [...(s.heading ? [h('h4.stop-group', {}, s.heading)] : []), floorRow(s.floor, s.no)]) : [h('p.empty', {}, 'No floors yet.')]),
       ...(built ? [garageButton()] : []),
     );
   };
@@ -255,6 +261,11 @@ export function openElevator(opts: ElevatorOptions): void {
   };
 
   const renderAdd = () => {
+    if (isOrca()) {
+      addEl.replaceChildren();
+      addBtn.classList.add('hidden');
+      return;
+    }
     if (!showAdd) {
       const open = h('button.btn', { type: 'button' }, '➕ Add a project');
       open.addEventListener('click', () => {

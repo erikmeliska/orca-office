@@ -266,6 +266,8 @@ describe('paired environments and bots', () => {
     const b = m.building();
     expect(b.floors.map((f) => f.info.id)).toEqual([STAFF_FLOOR]);
     const staff = b.floors[0]!;
+    // The elevator groups it apart from the repositories' floors (#31).
+    expect(staff.info.room).toBe('staff');
     const byName = Object.fromEntries(staff.workers.map((w) => [w.name, w]));
     expect(byName.ReleaseBot!.status).toBe('working');
     expect(byName.ReleaseBot!.task?.summary).toBe('Tagging v1.2');
