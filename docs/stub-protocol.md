@@ -63,3 +63,18 @@ GitHub details) are not served either: Vite answers them with its own 404 or ind
 
 What replaces the stub: M2 (#13) feeds the same messages from Orca's workspaces and
 agents; M3 adds terminals and actions.
+
+## Live mode (M2)
+
+Without `ORCA_OFFICE_STUB`, `/client` gets the same messages from Orca (`bridge/src/live/`):
+
+| Source | What it gives the office |
+|--------|--------------------------|
+| Plugin snapshot (`workspace.list`, every 10 s and on connect) | Floors (Orca projects) and desks (open worktrees, with a sign over the desk; an open worktree without agents is an empty desk). |
+| `orca agent list --json` (every 5 s, and ~0.3 s after an event names an unknown agent) | Figures: one per agent session (terminal or chat), its state and its last message cut to a 120-char bubble (`toBubble`), never stored or logged. |
+| `orca agent list --json --environment <name>` for each paired environment `hostScope` names | Remote agents on their repo's floor, tagged `🌐 <environment>`. |
+| `orca bot list --json` (every 15 s) and the bots' chat agents | The Staff floor: one desk per bot, nameplate, `idle` / `working` / needs you. |
+| Plugin `agent.status.changed` | State at once (de-duplicated; done after a 1 s debounce); an agent not listed yet sits down at once. |
+| Plugin `agent.tool.after` (`action`, `failed` worked out in the worker) | `action` / `activity` on working terminal agents: read, edit, test, web, failing after 2 failed runs in a row. |
+
+Mapping: floor = repository, desk = worktree (1–4 seats side by side in one cluster, `+N` on the sign past 4), figure = agent session. Messages: `welcome`, `floor.enter`, `floors`, `plan` (desk signs), `worker.update`, `worker.remove`, and `{ t: 'orca', online }` (the page shows "Orca offline" while the plugin isn't connected). The 2D list (`live.html`) connects with `?list=1` and still gets the plugin's messages, redacted.

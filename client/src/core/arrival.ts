@@ -39,7 +39,17 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
   let bootVersion = '';
   let upgradePhase = '';
 
-  net.onStatus((up) => $('conn').classList.toggle('hidden', up));
+  // The bridge is down (Reconnecting…), or up without Orca behind it (Orca offline: its plugin isn't connected).
+  let orcaOnline = true;
+  const showOrca = () => $('orca-offline').classList.toggle('hidden', orcaOnline || !net.up);
+  net.onStatus((up) => {
+    $('conn').classList.toggle('hidden', up);
+    showOrca();
+  });
+  ctx.messages.on('orca', (msg) => {
+    orcaOnline = msg.online;
+    showOrca();
+  });
   net.onMessage((msg) => ctx.messages.dispatch(msg));
   /** The floor you asked to come back to (see Net.connect), to tell if the office put you somewhere else. */
   let wasOn: string | null = null;

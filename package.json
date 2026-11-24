@@ -14,6 +14,8 @@
   ],
   "scripts": {
     "dev": "concurrently -k -n bridge,client -c blue,green \"npm run dev:stub\" \"npm run dev:client\"",
+    "dev:live": "concurrently -k -n bridge,client -c blue,green \"npm run dev:bridge\" \"npm run dev:client\"",
+    "dev:fake": "concurrently -k -n bridge,client,orca -c blue,green,magenta \"ORCA_BIN=./fake/orca.mjs npm run dev -w bridge\" \"npm run dev:client\" \"node bridge/fake/plugin.mjs\"",
     "dev:stub": "ORCA_OFFICE_STUB=1 npm run dev -w bridge",
     "dev:bridge": "npm run dev -w bridge",
     "dev:client": "npm run dev -w client",
