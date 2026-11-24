@@ -4,6 +4,8 @@ export interface BridgeConfig {
   port: number;
   /** Port of the office page, the only Origin allowed on `/client`. */
   clientPort: number;
+  /** ORCA_OFFICE_STUB=1: `/client` gets made-up office data instead of Orca's (see stub.ts). */
+  stub: boolean;
 }
 
 export const DEFAULT_PORT = 4317;
@@ -24,5 +26,6 @@ export function loadConfig(env: Record<string, string | undefined> = process.env
     host: '127.0.0.1',
     port: readPort(env, 'ORCA_OFFICE_PORT', DEFAULT_PORT),
     clientPort: readPort(env, 'ORCA_OFFICE_CLIENT_PORT', DEFAULT_CLIENT_PORT),
+    stub: env.ORCA_OFFICE_STUB === '1',
   };
 }

@@ -25,6 +25,9 @@ Changed here:
   - imports of src/shared point at @orca-office/shared/office/*;
   - features dropped by design.md decision 16 are removed: voice, accounts,
     login/claim/join pages, meetings, whiteboard (Excalidraw), queue, jukebox,
-    cars, golf and the client side of the GitHub integration;
+    cars, golf and the client side of the GitHub integration (the board
+    windows and issue cards; the per-desk PR and issue windows stay), and
+    with them the 2D /lite view, the board agents at the kiosks and the
+    character select before entering;
   - the client talks to the orca-office bridge instead of the agent-office
     server, without a session or sign-in.

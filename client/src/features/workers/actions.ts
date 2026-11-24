@@ -4,7 +4,7 @@
  * at a desk; and what the hint bar says at a desk or a board agent's kiosk. Also what the boards'
  * buttons do with a worker.
  */
-import { STATION_AGENT, deskSeat, type DeskDef } from '@orca-office/shared/office/layout';
+import { deskSeat, type DeskDef } from '@orca-office/shared/office/layout';
 import { canLabel } from '@orca-office/shared/office/floorplan';
 import { officeFull, pressureNote } from '@orca-office/shared/office/machine';
 import type { AgentEffort, AgentProvider, WorkerInfo } from '@orca-office/shared/office/protocol';
@@ -166,37 +166,6 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
       ? `This stops its ${session} for everyone, and it forgets what it was asked. The next prompt at the ${where} starts a fresh one.`
       : `This stops the ${session} at ${where} for everyone and frees the desk.`;
     confirmDialog(`Send ${w.name} home?`, body, 'Send home', () => net.send({ t: 'worker.kill', workerId: id }));
-  }
-
-  /** E at a board agent: type it a request. It's hired with it when nobody is there yet. */
-  function askStation(deskId: string) {
-    const kind = plan().byId.get(deskId)?.station;
-    if (!kind) return;
-    const w = store.workerAtDesk(deskId);
-    const name = STATION_AGENT[kind].name;
-    const info = STATION_INFO[kind];
-    // A prompt typed into a question it's asking would answer it.
-    if (w?.status === 'needs_input') {
-      toast(`The ${name} is waiting on an answer — here's its terminal`, 'warn');
-      return openWorkerTerminal(w.id);
-    }
-    // Nobody there yet: asking hires the agent.
-    if (!w && officeIsFull()) return;
-    const subtitle = !w
-      ? `${info.does}, in a terminal of my own: press O at the kiosk to watch.`
-      : isAsleep(w.status)
-        ? `The ${name} is asleep: this wakes it up, and it carries on where it left off.`
-        : isBusy(w.status)
-          ? `The ${name} is busy. Your prompt waits in its input box until it's done.`
-          : undefined;
-    openPrompt({
-      title: `${info.icon} Ask the ${name}`,
-      subtitle,
-      placeholder: `e.g. ${info.example}`,
-      submitLabel: 'Send ✨',
-      warning: w ? undefined : pressureNote(store.machine),
-      onSubmit: (text) => net.send({ t: 'station.prompt', deskId, prompt: text }),
-    });
   }
 
   function resumeWorker(w: WorkerInfo) {
@@ -405,18 +374,8 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     if (!kind) return { k: '', parts: [] };
     const w = store.workerAtDesk(deskId);
     const info = STATION_INFO[kind];
-    if (!w) {
-      const m = store.machine;
-      const full = officeFull(m);
-      return {
-        k: `${full}|${m.workers}|${m.limit}`,
-        parts: [
-          h('span.title', {}, `${info.icon} ${STATION_AGENT[kind].name}`),
-          aside(info.offer.replace(/^Ask me /, '')),
-          full ? h('span.cost', {}, `🚫 Office full · ${m.workers} of ${m.limit} workers`) : key('E', 'Prompt'),
-        ],
-      };
-    }
+    // Nobody at the kiosk: orca-office has no board agents to ask (see core/stations.ts).
+    if (!w) return { k: 'empty', parts: [h('span.title', {}, `${info.icon} Kiosk`)] };
     const doing = w.activity ? clip(w.activity, 48) : '';
     const provider = resolvedProvider(w.provider, store.project);
     const spent = w.usage ? usageLabel(w.usage, provider) : '';
@@ -455,7 +414,6 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     use: (it, key) => {
       if (!it.deskId) return;
       const w = store.workerAtDesk(it.deskId);
-      if (key === 'E' || key === 'P') return askStation(it.deskId);
       if (key === 'O' && w) return openWorkerTerminal(w.id);
       if (key === 'X' && w) return killWorker(w.id);
     },

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { appendFileSync, mkdirSync } from 'node:fs';
 import { createServer, type IncomingMessage } from 'node:http';
 import { dirname, join } from 'node:path';
@@ -8,6 +9,7 @@ import { hostAllowed, isNonce, loadOrCreateToken, newNonce, proof, tokenMatches 
 import { loadConfig } from './config.js';
 import { allowedClientOrigins, checkUpgrade } from './origin.js';
 import { PluginLink } from './plugin-link.js';
+import { StubSession } from './stub.js';
 
 const config = loadConfig();
 const clientOrigins = allowedClientOrigins(config.clientPort);
@@ -49,7 +51,7 @@ const server = createServer(async (req, res) => {
     res.end(JSON.stringify(value));
   };
   if (req.method === 'GET' && req.url === '/health') {
-    return json(200, { ok: true, protocol: PROTOCOL_VERSION, plugin: link.connected, lastSnapshotAt, hello: lastPluginHello });
+    return json(200, { ok: true, protocol: PROTOCOL_VERSION, stub: config.stub, plugin: link.connected, lastSnapshotAt, hello: lastPluginHello });
   }
   // Spike-only: drive host calls from the shell. Off unless ORCA_OFFICE_SPIKE_CALLS=1,
   // needs the token as a bearer and is refused for browsers (any Origin).
@@ -79,7 +81,7 @@ server.on('upgrade', (req, socket, head) => {
     socket.destroy();
     return;
   }
-  wss.handleUpgrade(req, socket, head, (ws) => (peer === 'plugin' ? onPlugin(ws) : onClient(ws)));
+  wss.handleUpgrade(req, socket, head, (ws) => (peer === 'plugin' ? onPlugin(ws) : onClient(ws, req.url)));
 });
 
 function onPlugin(ws: WebSocket) {
@@ -147,13 +149,45 @@ function broadcastPlugin() {
   for (const c of clients) c.send(out);
 }
 
-function onClient(ws: WebSocket) {
+/** How often a stub session's working workers move on to their next action. */
+const STUB_TICK_MS = 4_000;
+
+function onClient(ws: WebSocket, url: string | undefined) {
+  if (config.stub) return onStubClient(ws, url);
   clients.add(ws);
   ws.send(JSON.stringify({ type: 'hello', role: 'bridge', protocol: PROTOCOL_VERSION, plugin: link.connected }));
   if (lastSnapshot && link.connected) ws.send(lastSnapshot);
   ws.on('close', () => clients.delete(ws));
 }
 
+/**
+ * Stub mode (#12): the 3D office talks to made-up data (stub.ts), not to Orca. The plugin side is
+ * unchanged; what it sends goes to no stub page.
+ */
+function onStubClient(ws: WebSocket, url: string | undefined) {
+  const session = new StubSession(randomUUID().slice(0, 10), new URL(url ?? '/client', 'http://127.0.0.1').searchParams);
+  const send = (msgs: unknown[]) => {
+    for (const m of msgs) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
+  };
+  send([session.welcome()]);
+  const timer = setInterval(() => send(session.tick()), STUB_TICK_MS);
+  ws.on('message', (data) => {
+    let msg: unknown;
+    try {
+      msg = JSON.parse(String(data));
+    } catch {
+      return;
+    }
+    if (typeof msg !== 'object' || msg === null || typeof (msg as { t?: unknown }).t !== 'string') return;
+    try {
+      send(session.handle(msg as never));
+    } catch {
+      // A malformed message from the page: ignore it, as the stub ignores what it doesn't know.
+    }
+  });
+  ws.on('close', () => clearInterval(timer));
+}
+
 server.listen(config.port, config.host, () => {
-  console.log(`orca-office bridge on http://${config.host}:${config.port}${spikeLog ? ` (spike log ${spikeLog})` : ''}${spikeCalls ? ' (spike calls on)' : ''}`);
+  console.log(`orca-office bridge on http://${config.host}:${config.port}${config.stub ? ' (stub: made-up office data on /client)' : ''}${spikeLog ? ` (spike log ${spikeLog})` : ''}${spikeCalls ? ' (spike calls on)' : ''}`);
 });
