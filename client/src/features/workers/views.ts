@@ -30,7 +30,7 @@ import { Drifters } from './adrift';
 import { Jail } from './jail';
 import { Helpers } from './helpers';
 import { Laptop } from './laptop';
-import { Arrivals, Departures } from './leaving';
+import { Arrivals, Departures, ElevatorExits } from './leaving';
 import { Sendoffs } from './sendhome';
 
 // The kinds of thing you can use that this defines (see InteractKinds in world/types.ts).
@@ -48,6 +48,8 @@ export interface WorkerView {
   acked: boolean;
   /** Its Claude Code subagents, as small helpers around it (WorkerInfo.helpers). */
   helpers?: Helpers;
+  /** An Orca bot (M5, #33): when it goes off to work on another floor it walks to the elevator. */
+  bot?: boolean;
 }
 
 /** How close (meters) you stop a worker jumping, and how far you go before it starts again. */
@@ -104,6 +106,14 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     (x, y, z) => sound.stepAt(x, z, y),
     () => ctx.world().ways,
   );
+  // Bots off to another floor (a project room they coordinate, #33, and back): to the elevator and in.
+  const exits = new ElevatorExits(
+    scene,
+    groundHere,
+    (x, y, z) => sound.stepAt(x, z, y),
+    () => ctx.world().ways,
+    (model) => (model.root.removeFromParent(), model.dispose()),
+  );
   /** Set while a floor's workers arrive with it (a welcome, an elevator ride): they're in their seats already. */
   let seatedAlready = false;
   /** A floor arriving (a welcome, a floor.enter): nobody's still leaving or coming in, and its workers are seated already. */
@@ -111,6 +121,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     departures.clear();
     sendoffs.clear();
     arrivals.clear();
+    exits.clear();
     seatedAlready = true;
   }
 
@@ -134,14 +145,15 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
         const beside = desk.def.station ? new THREE.Vector3(0.62, 0.9, 0) : new THREE.Vector3(0.64, 0.5, -0.1);
         model.setPropSpot(model.root.worldToLocal(desk.laptopAnchor.localToWorld(beside)));
         // Called to a meeting just now: out of the elevator and over to the table, one after another.
-        if (desk.def.room && !seatedAlready) arrivals.add(model, desk);
+        // A bot back from (or off to) work on another floor walks in from the elevator too (#33).
+        if ((desk.def.room || !!w.orca?.bot) && !seatedAlready) arrivals.add(model, desk);
         // In the castle, a worker at the tables gets up and walks about (see Court): a new one runs in to its seat.
         else if (court && inCourt(w)) court.add(w.id, model, desk, seatedAlready ? undefined : cameFrom(w));
         const laptop = new Laptop(world.device);
         desk.laptopAnchor.add(laptop.root);
         noOutline(desk.group);
         desk.chair.rotation.y = 0;
-        v = { model, laptop, deskId: w.deskId, status: '', acked: true };
+        v = { model, laptop, deskId: w.deskId, status: '', acked: true, bot: !!w.orca?.bot };
         workerViews.set(w.id, v);
       }
       if (v.status !== w.status || v.acked !== w.acked) {
@@ -175,7 +187,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
       // Keys clack while it types, not while it reads, watches its tests or browses.
       if (deskDef) sound.setTyping(w.id, deskDef.x, deskDef.z, w.status === 'working' && (!w.action || w.action === 'edit'));
       const again = w.kind === 'shell' ? 'restart' : 'resume';
-      v.laptop.setPlaceholder(w.orca ? (w.orca.remote ? `🌐 ${w.name} works on another host` : w.orca.terminal ? `${w.name}'s terminal — press E` : `💬 ${w.name} chats in Orca — press E`) : w.lost ? `🌿 ${w.name}'s worktree was deleted — press E to fix it` : w.status === 'offline' ? `💤 ${w.name} is asleep — press R to ${again}` : w.status === 'exited' ? `${w.name} exited` : 'booting…');
+      v.laptop.setPlaceholder(w.orca ? (w.orca.remote ? `🌐 ${w.name} works on another host` : w.orca.terminal ? `${w.name}'s terminal — press E` : w.orca.bot ? `🤖 ${w.name} — press E to chat` : `💬 ${w.name} chats in Orca — press E`) : w.lost ? `🌿 ${w.name}'s worktree was deleted — press E to fix it` : w.status === 'offline' ? `💤 ${w.name} is asleep — press R to ${again}` : w.status === 'exited' ? `${w.name} exited` : 'booting…');
     }
     for (const [id, v] of workerViews) {
       if (store.workers.has(id)) continue;
@@ -187,7 +199,13 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
       // Sent home: it packs up and walks out, and the seat shows as free once it's up (see departures), or
       // on a map with its own way of seeing workers off, that (the castle's dungeon, for one it locks up).
       const send = plan().sendHome;
-      if (desk && sentHome.has(id) && send && (!send.keeps || store.jail.prisoners.some((p) => p.id === id))) sendoffs.add(id, v.model, v.laptop, desk, up);
+      // A bot is never sent home: gone from this floor (off to a project room it coordinates, or back
+      // from one, #33) it walks to the elevator. Not when it's gone because you changed floors.
+      if (desk && v.bot && !seatedAlready && !up) {
+        exits.add(v.model, desk);
+        v.laptop.root.removeFromParent();
+        v.laptop.dispose();
+      } else if (desk && sentHome.has(id) && send && (!send.keeps || store.jail.prisoners.some((p) => p.id === id))) sendoffs.add(id, v.model, v.laptop, desk, up);
       else if (desk && sentHome.has(id)) departures.add(v.model, v.laptop, desk, up);
       else {
         v.model.root.removeFromParent();
@@ -305,6 +323,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
       adrift.update(dt, t, camera.position);
     }
     arrivals.update(dt);
+    exits.update(dt, t);
     parts.worlds.court()?.update(dt);
   });
   // The full frame rate while a worker's doing something new (see Worker.lively), its helpers too, and
@@ -318,6 +337,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     yield* departures.positions();
     yield* sendoffs.positions();
     yield* arrivals.positions();
+    yield* exits.positions();
     yield* parts.worlds.court()?.positions() ?? [];
   });
 
@@ -424,6 +444,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     adrift,
     sendoffs,
     arrivals,
+    exits,
     seatedOnArrival,
     /** A `worker.remove` is taking `id` out of the store: it walks out of the building. */
     sendingHome: (id: string) => void sentHome.add(id),
