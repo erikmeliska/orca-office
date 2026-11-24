@@ -18,7 +18,8 @@
     "build": "npm run build -w client",
     "typecheck": "tsc -b",
     "test": "vitest run",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "typecheck:plugin": "tsc -p plugin"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
