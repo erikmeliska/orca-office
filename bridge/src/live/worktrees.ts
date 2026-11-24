@@ -25,6 +25,8 @@ export interface OrcaWorktree {
   hostId: string;
   /** Orca's name for it (the desk sign shows it already). */
   name: string;
+  /** Its branch without `refs/heads/` (null: detached or unknown); the repo board matches pull requests by it (#38). */
+  branch: string | null;
   links: OrcaLink[];
   parentId: string | null;
   childIds: string[];
@@ -134,6 +136,7 @@ export function parseWorktreeList(json: unknown): OrcaWorktree[] {
       path,
       hostId: str(w.hostId) ?? 'local',
       name: str(w.displayName) ?? path.split('/').pop() ?? id,
+      branch: (str(w.branch) ?? str(obj(w.git)?.branch))?.replace(/^refs\/heads\//, '') ?? null,
       links,
       parentId: str(w.parentWorktreeId) ?? str(obj(w.lineage)?.parentWorktreeId),
       childIds: Array.isArray(w.childWorktreeIds) ? w.childWorktreeIds.filter((c): c is string => typeof c === 'string' && c !== '') : [],

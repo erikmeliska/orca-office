@@ -1,8 +1,9 @@
 /**
  * The boards on the walls: the issues board, the PR board, the services board and the machine monitor.
  * orca-office dropped agent-office's GitHub board windows, issue cards and task queue (design.md #16);
- * the repo-wide boards come back through a ForgeAdapter (design.md #17), so for now the issues and PR
- * boards only show what the store has, and the queue board stays blank.
+ * the repo-wide boards came back through the bridge's ForgeAdapter (design.md #17, #38): the issues
+ * and PR boards show the repository's open items (else what Orca links to the desks), and the queue
+ * whiteboard what no worktree works on yet. E lists them; each opens on its forge.
  */
 import type * as THREE from 'three';
 import type { Ctx } from '../../core/context';
@@ -12,6 +13,7 @@ import { openServices } from '../../ui/services';
 import { floorLinks, openLinks } from '../../ui/links';
 import { isOrca } from '../../ui/orca';
 import { currentProject, openProjectBoard } from '../../ui/project';
+import { hasForge, onForge, openForgeBoard, queueState, type ForgeWall } from '../../ui/forge';
 import { BoardTexture, ServicesBoardTexture } from './world';
 import { MachineTexture } from './machine';
 import type { World } from '../../world/world';
@@ -60,15 +62,21 @@ export function installBoards(ctx: Ctx) {
   // On Orca the boards carry what Orca links to this floor's desks (#32); E lists them, to open in the browser.
   const linksOf = (kinds: string[]) => floorLinks().filter((l) => kinds.includes(l.kind));
   // In a project room the walls hold its decisions and tasks: E opens its board (#30).
-  const orcaBoard = (title: string, kinds: string[]) => (currentProject() ? openProjectBoard() : isOrca() && openLinks(title, linksOf(kinds)));
-  ctx.interactions.define('issues', { reach: 9, hint: () => boardHint('📌 Issues board'), use: onE(() => orcaBoard('📌 Issues linked on this floor', ['issue', 'item'])) });
-  ctx.interactions.define('pulls', { reach: 9, hint: () => boardHint('🔀 Pull request board'), use: onE(() => orcaBoard('🔀 Pull requests linked on this floor', ['pr', 'mr'])) });
+  // With a forge board (#38) its lists, else the desks' links.
+  const orcaBoard = (title: string, kinds: string[], wall: ForgeWall) => (currentProject() ? openProjectBoard() : hasForge() ? openForgeBoard(wall) : isOrca() && openLinks(title, linksOf(kinds)));
+  ctx.interactions.define('issues', { reach: 9, hint: () => boardHint('📌 Issues board'), use: onE(() => orcaBoard('📌 Issues linked on this floor', ['issue', 'item'], 'issues')) });
+  ctx.interactions.define('pulls', { reach: 9, hint: () => boardHint('🔀 Pull request board'), use: onE(() => orcaBoard('🔀 Pull requests linked on this floor', ['pr', 'mr'], 'pulls')) });
   ctx.interactions.define('services', {
     reach: 9,
     hint: () => boardHint('🌐 Services board'),
     use: onE(() => openServices()),
   });
-  ctx.interactions.define('queue', { reach: 9, hint: () => boardHint('📋 Task queue'), use: () => {} });
+  // The queue (#38): open issues and pull/merge requests no worktree works on yet.
+  const queueTex = new BoardTexture('queue');
+  const renderQueueBoard = () => queueTex.render(queueState());
+  mountBoard(office.boardMeshes.queue, queueTex.texture, renderQueueBoard, ['floor']);
+  onForge(renderQueueBoard);
+  ctx.interactions.define('queue', { reach: 9, hint: () => boardHint('📋 Queue · no worktree yet'), use: onE(() => (currentProject() ? openProjectBoard() : hasForge() && openForgeBoard('queue'))) });
   // The machine monitor on the west wall.
   const machineTex = new MachineTexture();
   mountBoard(office.machineScreen, machineTex.texture, () => machineTex.render(store.machine), ['machine']);
@@ -77,6 +85,7 @@ export function installBoards(ctx: Ctx) {
     showOn(w.boardMeshes.issues, issuesTex.texture);
     showOn(w.boardMeshes.pulls, pullsTex.texture);
     showOn(w.boardMeshes.services, servicesTex.texture);
+    if (w.boardMeshes.queue) showOn(w.boardMeshes.queue, queueTex.texture);
   }
 
   return { issuesTex, renderPullsBoard, renderServicesBoard, dressBoards };

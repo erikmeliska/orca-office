@@ -42,7 +42,7 @@ export class BoardTexture {
   private lifted: number | null = null;
   private last: [GhState<GhIssue> | GhState<GhPull>, Map<string, WorkerInfo> | undefined] | null = null;
 
-  constructor(private kind: 'issues' | 'pulls') {
+  constructor(private kind: 'issues' | 'pulls' | 'queue') {
     this.canvas.width = 1200;
     this.canvas.height = 600;
     this.ctx = this.canvas.getContext('2d')!;
@@ -98,7 +98,7 @@ export class BoardTexture {
     }
     const open = (state.items as (GhIssue | GhPull)[]).filter((i) => i.state === 'OPEN');
     if (!open.length) {
-      const note = state.error ? `⚠️ ${state.error}` : state.loading && !state.fetchedAt ? 'Loading…' : this.kind === 'issues' ? 'No open issues 🎉' : 'No open PRs';
+      const note = state.error ? `⚠️ ${state.error}` : state.loading && !state.fetchedAt ? 'Loading…' : this.kind === 'issues' ? 'No open issues 🎉' : this.kind === 'queue' ? 'Queue is empty 🎉' : 'No open PRs';
       g.font = '800 40px Nunito, ui-rounded, system-ui, sans-serif';
       const lines = wrap(g, note.replace(/`/g, ''), 760, 4);
       const boxH = 60 + lines.length * 50;
