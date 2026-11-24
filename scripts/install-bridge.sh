@@ -72,5 +72,12 @@ plutil -lint "$PLIST" >/dev/null
 DOMAIN="gui/$(id -u)"
 # Installed before: replace it.
 launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
+# bootout returns before the old job is gone; bootstrapping too early fails with
+# "Bootstrap failed: 5: Input/output error". Wait up to 10 s for it to go.
+i=0
+while launchctl print "$DOMAIN/$LABEL" >/dev/null 2>&1 && [ "$i" -lt 50 ]; do
+  sleep 0.2
+  i=$((i + 1))
+done
 launchctl bootstrap "$DOMAIN" "$PLIST"
 echo "installed $LABEL ($PLIST): the office on http://127.0.0.1:$PORT/, logs in $LOGS/bridge.log"
