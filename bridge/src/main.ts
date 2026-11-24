@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { PROTOCOL_VERSION, redactForLog } from '@orca-office/shared';
 import { hostAllowed, isNonce, loadOrCreateToken, newNonce, proof, tokenMatches } from './auth.js';
-import { CLIENT_PROTOCOL, clientAuthorized, loadOrCreateClientToken } from './client-auth.js';
+import { CLIENT_PROTOCOL, clientAuthorized, loadOrCreateClientToken, mayHaveToken } from './client-auth.js';
+import { DEFAULT_DIST, PAGE_HEADERS, distReady, readStatic, resolveStatic } from './static.js';
 import { loadConfig } from './config.js';
 import { allowedClientOrigins, checkUpgrade } from './origin.js';
 import { PluginLink } from './plugin-link.js';
@@ -20,7 +21,8 @@ import { TerminalWatch } from './live/terminals.js';
 import { pageLimits } from './rate.js';
 
 const config = loadConfig();
-const clientOrigins = allowedClientOrigins(config.clientPort);
+// The page from Vite (developing) or from the bridge itself (the built page, static.ts).
+const clientOrigins = allowedClientOrigins(config.clientPort, config.port);
 const link = new PluginLink();
 const token = loadOrCreateToken();
 // The office page's token (client-auth.ts): made now if Vite hasn't yet, read again on each upgrade.
@@ -79,7 +81,31 @@ const server = createServer(async (req, res) => {
       return json(400, { ok: false, error: String(err) });
     }
   }
-  res.writeHead(404).end();
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    const path = (req.url ?? '/').split('?')[0] ?? '/';
+    const one = (v: string | string[] | undefined) => (Array.isArray(v) ? v[0] : v);
+    // The page's token for the built page served from here, on the same terms as Vite's (client-auth.ts).
+    if (path === '/__orca-office/token') {
+      res.setHeader('Cache-Control', 'no-store');
+      if (!mayHaveToken({ host: one(req.headers.host), origin: one(req.headers.origin), fetchSite: one(req.headers['sec-fetch-site']) }, config.port)) {
+        res.writeHead(403).end();
+        return;
+      }
+      return json(200, { token: loadOrCreateClientToken() });
+    }
+    const file = resolveStatic(DEFAULT_DIST, path);
+    if (file) {
+      res.writeHead(200, { ...PAGE_HEADERS, 'Content-Type': file.type, 'Cache-Control': file.immutable ? 'public, max-age=31536000, immutable' : 'no-cache' });
+      res.end(req.method === 'HEAD' ? undefined : readStatic(file));
+      return;
+    }
+    if (path === '/' && !distReady(DEFAULT_DIST)) {
+      res.writeHead(503, { ...PAGE_HEADERS, 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('The office page is not built: run `npm run build` in the orca-office checkout (or use Vite: npm run dev:client).\n');
+      return;
+    }
+  }
+  res.writeHead(404, PAGE_HEADERS).end();
 });
 
 const wss = new WebSocketServer({
@@ -207,6 +233,9 @@ function feedModel(msg: { type?: string; name?: unknown; payload?: unknown; [k: 
   } else if (msg.type === 'event' && (msg.name === 'workspace.created' || msg.name === 'workspace.removed')) {
     // The next snapshot has it; ask for one now.
     link.send({ type: 'resync' });
+  } else if (msg.type === 'hook' && msg.name === 'agent.tool.before') {
+    const h = parseToolHook(msg.payload, now);
+    if (h) model.applySubagentStart(h);
   } else if (msg.type === 'hook' && msg.name === 'agent.tool.after') {
     const h = parseToolHook(msg.payload, now);
     if (h) model.applyHook(h);
@@ -318,5 +347,6 @@ function onStubClient(ws: WebSocket, url: string | undefined) {
 }
 
 server.listen(config.port, config.host, () => {
+  if (!distReady(DEFAULT_DIST)) console.warn(`office page not built (${DEFAULT_DIST}): run npm run build, or use Vite (npm run dev:client)`);
   console.log(`orca-office bridge on http://${config.host}:${config.port}${config.stub ? ' (stub: made-up office data on /client)' : ''}${spikeLog ? ` (spike log ${spikeLog})` : ''}${spikeCalls ? ' (spike calls on)' : ''}`);
 });

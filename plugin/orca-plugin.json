@@ -25,7 +25,7 @@
       { "on": "workspace.removed" },
       { "on": "workspace.changed" }
     ],
-    "hooks": [{ "event": "agent.tool.after" }],
+    "hooks": [{ "event": "agent.tool.before" }, { "event": "agent.tool.after" }],
     "commands": [{ "id": "office.reconnect", "title": "orca-office: Reconnect to bridge" }],
     "statusBarItems": [
       { "id": "office", "text": "Office", "icon": "blocks", "tone": "neutral", "tooltip": "orca-office bridge", "command": "office.reconnect" }

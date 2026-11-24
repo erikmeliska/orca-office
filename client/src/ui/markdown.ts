@@ -9,6 +9,9 @@ import { h } from './dom';
 // In issue and PR comments GitHub turns a single newline into a line break, unlike in .md files.
 const md = new Marked({ gfm: true, breaks: true });
 const mdFile = new Marked({ gfm: true });
+// Agent chats (ui/orca.ts): pictures stay their alt text, so nothing is ever fetched from a link in one.
+const escapeHtml = (t: string) => t.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+const mdChat = new Marked({ gfm: true, breaks: true, renderer: { image: ({ text }) => escapeHtml(text ? `[${text}]` : '[picture]') } });
 
 const purify = DOMPurify(window);
 purify.addHook('afterSanitizeAttributes', (node) => {
@@ -120,4 +123,15 @@ export function markdownFile(src: string): HTMLElement {
 /** https://github.com/owner/repo from an issue or PR URL. */
 export function repoUrlOf(itemUrl: string): string {
   return itemUrl.replace(/\/(pull|issues)\/\d+.*$/, '');
+}
+
+const CHAT_TAGS = ['p', 'br', 'hr', 'a', 'code', 'pre', 'em', 'strong', 'del', 's', 'b', 'i', 'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'kbd', 'sup', 'sub'];
+
+/** An agent's chat message as markdown, sanitized, without pictures (see mdChat). */
+export function markdownChat(src: string): HTMLElement {
+  const el = h('div.md');
+  // An allowlist: text and formatting only, links the only attribute-bearing tag (href, title).
+  // Nothing that can load anything (no src anywhere, no media, frames, forms, SVG or MathML).
+  el.append(purify.sanitize(mdChat.parse(src, { async: false }) as string, { RETURN_DOM_FRAGMENT: true, ALLOWED_TAGS: CHAT_TAGS, ALLOWED_ATTR: ['href', 'title'], ALLOW_DATA_ATTR: false }));
+  return el;
 }
