@@ -125,10 +125,13 @@ export function repoUrlOf(itemUrl: string): string {
   return itemUrl.replace(/\/(pull|issues)\/\d+.*$/, '');
 }
 
+const CHAT_TAGS = ['p', 'br', 'hr', 'a', 'code', 'pre', 'em', 'strong', 'del', 's', 'b', 'i', 'blockquote', 'ul', 'ol', 'li', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'table', 'thead', 'tbody', 'tr', 'th', 'td', 'span', 'kbd', 'sup', 'sub'];
+
 /** An agent's chat message as markdown, sanitized, without pictures (see mdChat). */
 export function markdownChat(src: string): HTMLElement {
   const el = h('div.md');
-  // Raw HTML in a message can't bring media in either: DOMPurify drops it before anything is built.
-  el.append(purify.sanitize(mdChat.parse(src, { async: false }) as string, { RETURN_DOM_FRAGMENT: true, FORBID_TAGS: ['style', 'form', 'button', 'select', 'textarea', 'img', 'picture', 'source', 'video', 'audio', 'iframe', 'object', 'embed', 'svg'], FORBID_ATTR: ['style', 'srcset', 'background', 'poster'] }));
+  // An allowlist: text and formatting only, links the only attribute-bearing tag (href, title).
+  // Nothing that can load anything (no src anywhere, no media, frames, forms, SVG or MathML).
+  el.append(purify.sanitize(mdChat.parse(src, { async: false }) as string, { RETURN_DOM_FRAGMENT: true, ALLOWED_TAGS: CHAT_TAGS, ALLOWED_ATTR: ['href', 'title'], ALLOW_DATA_ATTR: false }));
   return el;
 }
