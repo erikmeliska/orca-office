@@ -222,7 +222,7 @@ real-Orca check: [m5-bots.md](m5-bots.md). Bridge: `bridge/src/live/bots.ts`.
 Sending: `orca orchestration send --from orca-office --to bot:<name> --chat <id|new> --type handoff
 --subject=<first line, 60> --body-file - --json`, the text on stdin. Checked first: the page has that
 bot open, the bot is in `orca bot list` and not paused, the chat is one of its open chats read again
-right before sending (or `new`), 1–8000 characters without NUL; 1 message per 5 s and 30 per hour for
+right before sending (or `new`), 1–8000 characters without NUL; 1 message per 5 s and 200 per hour for
 the whole bridge. The page shows *Sending… → Sent → <bot> is working… → <bot> answered* from the
 chat's next reads (`state: working`, then a new answer). Message text and answers are never logged,
 stored, or put in tests or screenshots; the fake CLI (`npm run dev:fake`) answers made-up messages
