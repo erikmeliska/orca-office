@@ -10,7 +10,7 @@ Orca loads the files as they are (no build step) and refuses imports outside
 this folder, so nothing here comes from `../shared`.
 
 ```sh
-orca plugin types plugin        # writes .orca/types (git-ignored)
+orca plugin types plugin        # writes .orca/types (git-ignored), which tsconfig.plugin.json extends
 npm run typecheck:plugin
 orca plugin dev load plugin --json                    # shows what it asks for
 orca plugin dev load plugin --approve <fingerprint>   # after reading it

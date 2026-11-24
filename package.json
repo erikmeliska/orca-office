@@ -23,7 +23,7 @@
     "typecheck": "tsc -b",
     "test": "vitest run",
     "lint": "eslint .",
-    "typecheck:plugin": "tsc -p plugin"
+    "typecheck:plugin": "tsc -p plugin/tsconfig.plugin.json"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
