@@ -7,7 +7,7 @@
 import type { ChangesClientMsg, ChangesServerMsg } from './protocol/changes.js';
 import type { FloorClientMsg, FloorServerMsg, PlanClientMsg } from './protocol/floors.js';
 import type { GitHubClientMsg, GitHubServerMsg } from './protocol/github.js';
-import type { OrcaServerMsg } from './protocol/orca.js';
+import type { OrcaClientMsg, OrcaServerMsg } from './protocol/orca.js';
 import type { PresenceClientMsg, PresenceServerMsg } from './protocol/presence.js';
 import type { RooftopClientMsg, RooftopServerMsg } from './protocol/rooftop.js';
 import type { SettingsClientMsg, SettingsServerMsg } from './protocol/settings.js';
@@ -41,7 +41,8 @@ export type ClientMsg =
   | DecorClientMsg
   | CabinetClientMsg
   | BallClientMsg
-  | DogClientMsg;
+  | DogClientMsg
+  | OrcaClientMsg;
 
 export type ServerMsg =
   | PresenceServerMsg

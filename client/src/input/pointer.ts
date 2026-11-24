@@ -13,6 +13,7 @@ import { interactionAvailable, type DeskKey } from '../interaction';
 import { EYE_HEIGHT } from '../player';
 import { store } from '../state';
 import { modalOpen, toast } from '../ui/dom';
+import { isOrca } from '../ui/orca';
 import type { Interactable } from '../world/types';
 
 export type PointerParts = Pick<Parts, 'worlds' | 'rooftop' | 'place' | 'you' | 'boards' | 'seating' | 'hoops' | 'emotes' | 'hanging' | 'telescope' | 'hintbar'>;
@@ -70,7 +71,7 @@ export function installPointer(ctx: Ctx, core: CoreState, parts: PointerParts) {
   function use(it: Interactable | null, key: DeskKey, note = aimedNote): boolean {
     const worker = it?.deskId ? store.workerAtDesk(it.deskId) : undefined;
     const room = !!(it?.deskId && plan().byId.get(it.deskId)?.room);
-    if (!interactionAvailable(it, key, { worker, room, note })) return false;
+    if (!interactionAvailable(it, key, { worker, room, note, orca: isOrca() })) return false;
     reach();
     interact(it, key, note);
     return true;

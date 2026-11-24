@@ -10,6 +10,8 @@ export interface InteractionState {
   worker?: WorkerInfo;
   room: boolean;
   note: GhIssue | null;
+  /** On Orca (M3): the desk keys are Orca's light control (features/workers/actions.ts). */
+  orca?: boolean;
 }
 
 /** Whether a desk key has an action at the interaction currently in reach. */
@@ -19,6 +21,14 @@ export function interactionAvailable(it: Interactable | null, key: DeskKey, stat
   if (it.kind === 'desk') {
     if (!it.deskId) return false;
     // Any desk can have a sign hung over it, whoever sits there (not a bean bag).
+    // On Orca: E terminal / last message / new task, P prompt, O open in Orca, R mark read, C comment.
+    if (state.orca) {
+      const w = state.worker;
+      if (key === 'E' || key === 'C' || key === 'O') return true;
+      if (key === 'P') return !!w?.orca?.terminal;
+      if (key === 'R') return !!w && !w.acked;
+      return false;
+    }
     if (key === 'L') return canLabel(it.deskId);
     if (!state.worker && state.room) return key === 'E';
     if (key === 'B') return !state.worker;

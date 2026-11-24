@@ -71,6 +71,12 @@ export interface TerminalOptions {
    * take the focus as it opens either, so a phone's keyboard stays down until you tap into it.
    */
   keypad?: boolean;
+  /**
+   * An Orca agent's terminal (orca-office): its text comes as plain snapshots read from Orca, so the
+   * window keeps its own size, holds still while you scroll back, takes no dropped files, and has
+   * "Open in Orca", which this opens.
+   */
+  orca?: () => void;
 }
 
 /** The keypad's keys: what each types, or a function of the terminal for the ones that depend on its mode. */
@@ -126,6 +132,7 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     'aria-label': 'Send Esc to the terminal',
   }, '⎋ Esc');
   const changesBtn = h('button.btn', { type: 'button', title: 'What this worker changed: files, diff, commit, open a PR (C at the desk)' }, '🌿 Changes');
+  const orcaBtn = opts.orca ? h('button.btn.term-orca', { type: 'button', title: 'Show this agent in Orca, its terminal focused' }, '↗ Open in Orca') : null;
   const hideBtn = h('button.btn.term-hide', { type: 'button', title: 'Hide this terminal; the worker keeps running at its desk', 'aria-label': 'Hide terminal' }, 'Hide');
   const closeBtn = h('button.btn.close', { title: 'Hide terminal (Esc or Ctrl+]) · the worker keeps running; ⎋ Esc or Ctrl+[ sends Esc to the terminal', 'aria-label': 'Hide terminal' }, '✕');
   const host = h('div.term-host', { 'data-drop': '📎 Drop screenshots or files here to put them in the terminal' });
@@ -149,7 +156,7 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
   );
   host.append(mic.live);
   // The keypad has an Esc of its own, and a 🎤 on its prompt box.
-  const el = h('div.modal.term', { role: 'dialog', 'aria-label': `${info.name} terminal` }, h('header', {}, dot, title, pill, cost, viewers, typed, modelsBtn, keypad ? null : mic.button, keypad ? null : escBtn, onChanges ? changesBtn : null, hideBtn, closeBtn), tabs.bar, host, tabs.pages, keypad);
+  const el = h('div.modal.term', { role: 'dialog', 'aria-label': `${info.name} terminal` }, h('header', {}, dot, title, pill, cost, viewers, typed, modelsBtn, keypad ? null : mic.button, keypad ? null : escBtn, onChanges ? changesBtn : null, orcaBtn, hideBtn, closeBtn), tabs.bar, host, tabs.pages, keypad);
 
   const term = new Terminal({
     fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
@@ -185,6 +192,8 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     } catch {
       return;
     }
+    // Orca sizes its own terminals: this window only fits the text it's shown.
+    if (opts.orca) return;
     const key = `${term.cols}x${term.rows}`;
     const w = store.workers.get(workerId);
     if (w && (w.cols !== term.cols || w.rows !== term.rows) && key !== lastSentSize) {
@@ -272,7 +281,7 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     // Someone else resized the shared PTY (the latest typist wins): follow it so this view renders
     // correctly. Typing here fits the terminal back to this window and reclaims the size.
     const ptySize = `${w.cols}x${w.rows}`;
-    if (ready && ptySize !== `${term.cols}x${term.rows}` && ptySize !== lastSentSize) {
+    if (!opts.orca && ready && ptySize !== `${term.cols}x${term.rows}` && ptySize !== lastSentSize) {
       term.resize(w.cols, w.rows);
       lastSentSize = '';
     }
@@ -305,6 +314,25 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     }, 8000);
   };
   let pendingFind = find;
+  /** The newest Orca text not shown yet (you were scrolled back). */
+  let heldSnapshot: string | null = null;
+  const showOrcaText = (data: string) => {
+    heldSnapshot = null;
+    term.reset();
+    term.write(data, () => {
+      term.scrollToBottom();
+      if (ready) return;
+      ready = true;
+      try {
+        fit.fit();
+      } catch {
+        // Not laid out yet.
+      }
+      refresh();
+      if (pendingFind) jumpTo(pendingFind);
+      pendingFind = undefined;
+    });
+  };
 
   const onMsg = (msg: ServerMsg) => {
     if (msg.t === 'term.data' && msg.workerId === workerId) term.write(msg.data);
@@ -312,6 +340,15 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
       typing.set(msg.id, Date.now() + TYPING_SHOWS_MS);
       const w = store.workers.get(workerId);
       if (w) renderPresence(w);
+    } else if (msg.t === 'term.snapshot' && msg.workerId === workerId && msg.cols === 0) {
+      // From Orca: the whole text again, as plain lines. Held while you're scrolled back, so the
+      // page doesn't jump under you; the newest is shown once you're at the bottom again.
+      const buf = term.buffer.active;
+      if (ready && buf.viewportY < buf.baseY) {
+        heldSnapshot = msg.data;
+        return;
+      }
+      showOrcaText(msg.data);
     } else if (msg.t === 'term.snapshot' && msg.workerId === workerId) {
       term.reset();
       term.resize(msg.cols, msg.rows);
@@ -360,6 +397,11 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     },
   };
   hideBtn.addEventListener('click', () => modal.close());
+  orcaBtn?.addEventListener('click', () => opts.orca?.());
+  if (opts.orca) term.onScroll(() => {
+    const buf = term.buffer.active;
+    if (heldSnapshot !== null && buf.viewportY >= buf.baseY) showOrcaText(heldSnapshot);
+  });
   closeBtn.addEventListener('click', () => modal.close());
   changesBtn.addEventListener('click', () => {
     onChanges?.();
@@ -400,7 +442,10 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     }
     return true;
   });
+  // The key that opened the window (E at the desk) must not land in the terminal too.
+  const openedAt = performance.now();
   term.onData((data) => {
+    if (opts.orca && performance.now() - openedAt < 250) return;
     sendSize(true);
     net.send({ t: 'term.input', workerId, data });
   });
@@ -414,6 +459,8 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
   let uploading = 0;
   const insertFiles = async (files: File[]) => {
     if (!files.length) return;
+    // Orca's terminals take no uploads from the office.
+    if (opts.orca) return void toast('Drop files into the terminal in Orca itself', 'warn');
     el.classList.toggle('uploading', ++uploading > 0);
     try {
       const paths = await Promise.all(files.map((f) => uploadDrop(workerId, f)));

@@ -28,3 +28,29 @@ export const BOTS = [
   { id: 'b-support', name: 'SupportBot', agent: 'claude', paused: false, specialty: 'Answers support tickets', chats: { count: 1 } },
   { id: 'b-review', name: 'ReviewBot', agent: 'codex', paused: false, specialty: 'Reviews pull requests', chats: { count: 0 } },
 ];
+
+// Terminal handles by pane, as `orca terminal list` gives them.
+export const TERMINALS = AGENTS.filter((a) => a.kind === 'terminal').map((a) => ({ handle: `term_${a.paneKey.slice(2)}`, tabId: a.paneKey, leafId: 'leaf', executionHostId: 'local' }));
+for (const a of AGENTS) if (a.kind === 'terminal') a.paneKey = `${a.paneKey}:leaf`;
+
+/** What a made-up terminal shows. */
+export function screen(name) {
+  return [
+    `~/code/demo-web/${name} (${name})`,
+    '',
+    '╭──────────────────────────────────────────────╮',
+    '│ ✻ Welcome to the made-up agent               │',
+    '╰──────────────────────────────────────────────╯',
+    '',
+    '> Fix the login redirect after the session expires',
+    '',
+    '● Read(src/auth/session.ts)',
+    '  ⎿  Read 84 lines',
+    '● Edit(src/auth/session.ts)',
+    '  ⎿  Updated with 3 additions and 1 removal',
+    '● Bash(npm test)',
+    '  ⎿  Test Files  12 passed (12)',
+    '',
+    '✶ Thinking… (esc to interrupt)',
+  ];
+}

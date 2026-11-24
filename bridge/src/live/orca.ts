@@ -18,6 +18,8 @@ export interface OrcaWorkspace {
   /** Orca's display name of the worktree (or folder). */
   name: string;
   project: string | null;
+  /** Orca's project id (what `workspace.create` takes), for a worktree. */
+  projectId: string | null;
   path: string;
   branch: string | null;
   hostId: string | null;
@@ -114,6 +116,7 @@ export function parseWorkspaces(snapshot: unknown): OrcaWorkspace[] {
       kind,
       name: str(o.name) ?? id,
       project: str(o.project),
+      projectId: str(o.projectId),
       path: str(o.path) ?? '',
       branch: str(o.branch),
       hostId: str(o.hostId),
@@ -195,4 +198,30 @@ export function parseBots(json: unknown): OrcaBot[] {
 export function worktreePath(worktreeId: string): string | null {
   const i = worktreeId.indexOf('::');
   return i < 0 ? null : worktreeId.slice(i + 2);
+}
+
+/** A terminal from `orca terminal list --json`: its handle and the pane it is in (`paneKey` = `<tabId>:<leafId>`). */
+export interface CliTerminal {
+  handle: string;
+  paneKey: string;
+}
+
+/**
+ * `orca terminal list --json` (this machine): which terminal handle each pane has, so a figure that
+ * has sent no status event since the bridge started still gets its terminal. Titles and previews
+ * are never read.
+ */
+export function parseTerminals(json: unknown): CliTerminal[] {
+  const r = result(json);
+  const out: CliTerminal[] = [];
+  for (const t of Array.isArray(r?.terminals) ? r.terminals : []) {
+    const o = obj(t);
+    const handle = str(o?.handle);
+    const tab = str(o?.tabId);
+    const leaf = str(o?.leafId);
+    if (!handle || !/^term_[A-Za-z0-9_-]{1,120}$/.test(handle) || !tab || !leaf) continue;
+    if (o?.executionHostId !== undefined && o.executionHostId !== 'local') continue;
+    out.push({ handle, paneKey: `${tab}:${leaf}` });
+  }
+  return out;
 }

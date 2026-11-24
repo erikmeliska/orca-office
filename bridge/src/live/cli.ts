@@ -7,7 +7,7 @@
  * bubble right there) and handed to the model; errors are logged by kind only.
  */
 import { execFile } from 'node:child_process';
-import { parseAgentList, parseBots, type CliAgentList, type OrcaBot } from './orca.js';
+import { parseAgentList, parseBots, parseTerminals, type CliAgentList, type CliTerminal, type OrcaBot } from './orca.js';
 
 export const AGENTS_EVERY_MS = 5_000;
 export const BOTS_EVERY_MS = 15_000;
@@ -34,6 +34,8 @@ export function orcaCli(bin = process.env.ORCA_BIN || 'orca', timeoutMs = 8_000)
 export interface PollSink {
   agents(hostId: string, list: CliAgentList): void;
   bots(bots: OrcaBot[]): void;
+  /** This machine's terminal handles by pane (`orca terminal list`), for the office's live terminal. */
+  terminals?(list: CliTerminal[]): void;
   /** A poll failed (Orca not running, CLI missing): the kind of failure only. */
   error(what: string): void;
 }
@@ -85,6 +87,13 @@ export class CliPoller {
       this.environments = local.environments;
     } catch (err) {
       this.sink.error((err as Error).message);
+    }
+    if (this.sink.terminals) {
+      try {
+        this.sink.terminals(parseTerminals(await this.run(['terminal', 'list', '--json'])));
+      } catch (err) {
+        this.sink.error((err as Error).message);
+      }
     }
     for (const env of this.environments) {
       try {

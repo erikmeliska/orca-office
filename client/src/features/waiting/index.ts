@@ -16,6 +16,7 @@ import { Compass, type Bearing } from '../../ui/compass';
 import { $, closeAllModals, h, modalOpen, toast } from '../../ui/dom';
 import { openSearch } from '../../ui/search';
 import { openTerminal, type TerminalFind } from '../../ui/terminal';
+import { isOrca, openChatAgent, openInOrca } from '../../ui/orca';
 
 /** Registers N (and the Workers panel's count), the compass's tick ('render') and / (search). */
 export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'worlds' | 'views' | 'actions'>) {
@@ -113,6 +114,11 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     const w = store.workers.get(id);
     if (!w) return;
     const { actions } = parts;
+    // On Orca: a terminal agent's live terminal, or a chat agent's last words (no terminal to open).
+    if (isOrca() && w.orca) {
+      if (!w.orca.terminal) return openChatAgent(net, w);
+      return openTerminal(net, id, undefined, find, { orca: () => openInOrca(net, { workerId: id }) });
+    }
     if (w.lost) return actions.fixLostWorktree(w);
     if (isAsleep(w.status)) actions.resumeWorker(w);
     openTerminal(net, id, () => openWorkerChanges(id), find);

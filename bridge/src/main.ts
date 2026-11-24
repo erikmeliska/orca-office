@@ -15,6 +15,9 @@ import { CliPoller, orcaCli } from './live/cli.js';
 import { LiveModel } from './live/model.js';
 import { parseStatusEvent, parseToolHook, parseWorkspaces } from './live/orca.js';
 import { LiveSession } from './live/session.js';
+import { Actions } from './live/actions.js';
+import { TerminalWatch } from './live/terminals.js';
+import { pageLimits } from './rate.js';
 
 const config = loadConfig();
 const clientOrigins = allowedClientOrigins(config.clientPort);
@@ -175,11 +178,16 @@ const model = new LiveModel();
 const liveSessions = new Map<WebSocket, LiveSession>();
 let sentVersion = -1;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
-const poller = new CliPoller(orcaCli(), {
+const cli = orcaCli();
+const poller = new CliPoller(cli, {
   agents: (host, list) => (model.applyAgents(host, list.agents, Date.now()), changed()),
   bots: (bots) => (model.applyBots(bots), changed()),
+  terminals: (list) => model.applyTerminals(list),
   error: (what) => logOnce(what),
 });
+
+const terminals = new TerminalWatch((terminalId, maxLines) => link.call('terminal.read', { terminalId, maxLines }));
+const actions = new Actions(model, { call: (m, p, t) => link.call(m, p, t), cli, resync: () => link.send({ type: 'resync' }), now: Date.now }, terminals);
 
 /** One line per kind of failure, not one every 5 s. */
 const logged = new Set<string>();
@@ -217,6 +225,7 @@ function flush() {
   if (model.version === sentVersion) return;
   sentVersion = model.version;
   const b = model.building();
+  actions.tick();
   for (const [ws, s] of liveSessions) for (const m of s.update(b)) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
 }
 
@@ -252,6 +261,8 @@ function onLiveClient(ws: WebSocket, query: URLSearchParams) {
     for (const m of msgs) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
   };
   send(session.welcome(model.building(), `live-${PROTOCOL_VERSION}`, link.connected));
+  // What the page may make Orca do (actions.ts); the socket is the office page's (client-auth.ts).
+  const page = { floor: () => session.peer.floor, send, limits: pageLimits() };
   ws.on('message', (data) => {
     let msg: unknown;
     try {
@@ -260,13 +271,22 @@ function onLiveClient(ws: WebSocket, query: URLSearchParams) {
       return;
     }
     if (typeof msg !== 'object' || msg === null || typeof (msg as { t?: unknown }).t !== 'string') return;
+    const t = (msg as { t: string }).t;
+    if (Actions.handles(t)) {
+      // Never logged: what is typed, prompts and comments are private.
+      actions.handle(page, msg as never).catch(() => send([{ t: 'orca.result', action: 'type', ok: false, error: 'failed' }]));
+      return;
+    }
     try {
       send(session.handle(msg as never, model.building()));
     } catch {
       // A malformed message from the page: ignored.
     }
   });
-  ws.on('close', () => liveSessions.delete(ws));
+  ws.on('close', () => {
+    liveSessions.delete(ws);
+    actions.closed(page);
+  });
 }
 
 /**

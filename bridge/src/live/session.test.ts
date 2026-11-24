@@ -4,7 +4,7 @@ import type { OrcaWorkspace } from './orca.js';
 import { LiveSession } from './session.js';
 
 // Made-up data only.
-const ws = (id: string): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo', path: `/code/demo/${id}`, branch: id, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1 });
+const ws = (id: string): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo', projectId: 'proj-demo', path: `/code/demo/${id}`, branch: id, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1 });
 const agent = (paneKey: string, state: 'working' | 'done' | 'blocked') => ({ paneKey, kind: 'terminal' as const, agent: 'claude', state, worktreeId: 'r::/code/demo/a', workspace: 'a', repo: 'demo', hostId: 'local', bubble: null, updatedAt: 1 });
 
 test('a page arrives on the busiest floor and then hears only what changed there', () => {

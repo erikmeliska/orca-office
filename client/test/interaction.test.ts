@@ -45,3 +45,17 @@ test('L hangs a sign over any desk, empty or not, but not over a bean bag or a m
   assert.equal(interactionAvailable(interaction('expand'), 'E', state()), true);
   assert.equal(interactionAvailable(null, 'L', state()), false);
 });
+
+test('on Orca the desk keys are its light control', () => {
+  const desk = interaction('desk', { deskId: 'desk-1' });
+  const base = { id: 'w', status: 'working' } as NonNullable<InteractionState['worker']>;
+  const term = { ...base, acked: false, orca: { terminal: true, remote: false } };
+  const chat = { ...base, acked: true, orca: { terminal: false, remote: false } };
+  const orca = (over: Partial<InteractionState> = {}) => ({ ...state(over), orca: true });
+  for (const k of ['E', 'C', 'O'] as const) assert.equal(interactionAvailable(desk, k, orca()), true, k);
+  assert.equal(interactionAvailable(desk, 'P', orca({ worker: term })), true);
+  assert.equal(interactionAvailable(desk, 'P', orca({ worker: chat })), false);
+  assert.equal(interactionAvailable(desk, 'R', orca({ worker: term })), true);
+  assert.equal(interactionAvailable(desk, 'R', orca({ worker: chat })), false);
+  for (const k of ['X', 'B', 'L'] as const) assert.equal(interactionAvailable(desk, k, orca({ worker: term })), false, k);
+});
