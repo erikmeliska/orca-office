@@ -17,6 +17,8 @@ const spikeCalls = process.env.ORCA_OFFICE_SPIKE_CALLS === '1';
 const clients = new Set<WebSocket>();
 let lastPluginHello: unknown = null;
 let lastSnapshotAt: number | null = null;
+/** Redacted copy of the newest snapshot, sent to each client as it connects. */
+let lastSnapshot: string | null = null;
 
 // M0 spike: every plugin message is appended here, redacted, to study payload shapes.
 const spikeLog = process.env.ORCA_OFFICE_SPIKE_LOG === '1'
@@ -113,7 +115,9 @@ function onPlugin(ws: WebSocket) {
     if (msg.type === 'hello') lastPluginHello = msg;
     if (msg.type === 'snapshot') lastSnapshotAt = Date.now();
     if (msg.type === 'result') return void link.settle(msg as never);
-    for (const c of clients) c.send(JSON.stringify(redactForLog(msg)));
+    const out = JSON.stringify(redactForLog(msg));
+    if (msg.type === 'snapshot') lastSnapshot = out;
+    for (const c of clients) c.send(out);
   });
 
   function verifyPlugin(given: string) {
@@ -124,6 +128,7 @@ function onPlugin(ws: WebSocket) {
     verified = true;
     clearTimeout(authTimer);
     link.attach(ws);
+    broadcastPlugin();
     console.log('plugin connected (verified)');
   }
 
@@ -131,14 +136,21 @@ function onPlugin(ws: WebSocket) {
     clearTimeout(authTimer);
     if (verified) {
       link.detach(ws);
+      broadcastPlugin();
       console.log('plugin disconnected');
     }
   });
 }
 
+function broadcastPlugin() {
+  const out = JSON.stringify({ type: 'bridge', plugin: link.connected });
+  for (const c of clients) c.send(out);
+}
+
 function onClient(ws: WebSocket) {
   clients.add(ws);
   ws.send(JSON.stringify({ type: 'hello', role: 'bridge', protocol: PROTOCOL_VERSION, plugin: link.connected }));
+  if (lastSnapshot && link.connected) ws.send(lastSnapshot);
   ws.on('close', () => clients.delete(ws));
 }
 
