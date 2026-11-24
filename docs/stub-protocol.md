@@ -128,3 +128,12 @@ The page renders the text as sanitized markdown without pictures or media (nothi
 The text goes only to that panel over the authenticated `/client`: never logged, stored or put
 in tests or screenshots (those use `npm run dev:fake`'s made-up chat). Writing to a chat is not
 possible (Orca has no API); the panel has a slot for it for M5 (bots, `orchestration send`).
+
+## Projects and navigation (M4)
+
+Elevator (#31): every stop wears two badges, 🙋 *needs you* (figures waiting on you) and 👷 *working*,
+from `FloorInfo.waiting` / `busy`; a quiet stop shows its seat count. Top to bottom: project rooms on
+the roof (`room: 'project'`, the one needing you most first), the bots' Staff floor (`room: 'staff'`),
+then the repositories' floors (numbered from the bottom), then the garage. Clicking a stop rides there.
+The elevator's hint says how many need you on other floors. On Orca the panel neither clones projects
+nor takes floors off: Orca's projects are the floors.

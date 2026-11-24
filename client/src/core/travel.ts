@@ -3,6 +3,7 @@
  * down to the garage), straight to another floor from the floor list, through the ceiling up the
  * ladder or down a pole; and arriving, up on the roof or on a floor, with the doors opening onto it.
  */
+import { needsYouElsewhere } from '../ui/elevator-groups';
 import { inElevator, roofDrop, streetBelow } from '@orca-office/shared/office/layout';
 import { ROOF } from '@orca-office/shared/office/rooftop';
 import type { Arrival, Grip } from '../features/climbing/controller';
@@ -85,7 +86,9 @@ export function installTravel(ctx: Ctx, core: CoreState, parts: TravelParts) {
       const f = store.currentFloor();
       const n = store.floors.length;
       if (it === office.garageLift.interactable) return { k: `garage|${f?.name}|${n}`, parts: [hintTitle('🛗 Elevator'), aside(f ? `Garage · up to ${clip(f.name, 24)}` : 'Garage'), key('E', 'Choose a floor')] };
-      return { k: `${f?.name}|${n}`, parts: [hintTitle('🛗 Elevator'), f ? aside(`${f.name} · ${n} floor${n === 1 ? '' : 's'}`) : '', key('E', n > 1 ? 'Choose a floor' : 'Floors & projects')] };
+      // Who needs you on other floors (#31): the panel shows where.
+      const away = needsYouElsewhere(store.floors, store.floor);
+      return { k: `${f?.name}|${n}|${away}`, parts: [hintTitle('🛗 Elevator'), f ? aside(`${f.name} · ${n} floor${n === 1 ? '' : 's'}`) : '', away ? aside(`🙋 ${away} need${away === 1 ? 's' : ''} you elsewhere`) : '', key('E', n > 1 ? 'Choose a floor' : 'Floors & projects')] };
     },
     use: onE(() => showElevator()),
   });
