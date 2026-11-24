@@ -87,15 +87,18 @@ Mapping: floor = repository, desk = worktree (1–4 seats side by side in one cl
 
 ## Light control (M3)
 
-On the live bridge the page can act on Orca (`bridge/src/live/actions.ts`, design #14). Every call
+On the live bridge the page can act on Orca (`bridge/src/live/actions.ts`, design #14). Typing goes through the CLI: on Orca 1.4.272 the plugin's `terminal.sendText` is refused for any
+terminal outside the workspace active in Orca ("terminal is outside the active worktree"). Orca's
+read leaves out what sits in an agent's input box until it is sent, so the terminal window shows
+what you typed since the last Enter under it. Every other call
 the bridge makes goes through the plugin's allowlist with exact param shapes
 (`plugin/src/worker.ts` `validParams`); `orca worktree set` runs as the CLI.
 
 | Page → bridge | What Orca does | Answer |
 |---------------|----------------|--------|
 | `worker.attach` / `worker.detach` (terminal agent on this machine) | `terminal.read` (500 lines) every 250 ms while the page has it open | `term.snapshot` with `cols: 0` when the text changed |
-| `term.input` (only into the open terminal) | `terminal.sendText`, raw, ≤4096 chars a send, in order | `orca.result` on errors |
-| `worker.prompt` | `terminal.sendText` with `enter: true` | `orca.result` on errors |
+| `term.input` (only into the open terminal) | `orca terminal send --terminal <id> --text=<raw>`, in order, keystrokes merged while a send runs, ≤4096 chars a send | `orca.result` on errors |
+| `worker.prompt` | `orca terminal send … --text=<prompt> --enter` (Orca submits it as a prompt) | `orca.result` on errors |
 | `orca.open` | `workspace.open`, then `terminal.focus` for a terminal agent | `orca.result` |
 | `orca.read` | `orca worktree set --worktree <id> --read` | `orca.result` |
 | `orca.comment` / `orca.desk` | `orca worktree set --comment=<text>` / `orca worktree show` | `orca.result` / `orca.desk` |

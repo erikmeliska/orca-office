@@ -118,3 +118,24 @@ export class CliPoller {
     }
   }
 }
+
+/**
+ * Types into a terminal through the CLI (see ActionDeps.send): one argument per value, never a
+ * shell; the text is never logged, and a failure says only its kind.
+ */
+export function orcaSend(bin = process.env.ORCA_BIN || 'orca', timeoutMs = 8_000) {
+  return (terminalId: string, text: string, enter: boolean): Promise<true | string> =>
+    new Promise((resolve) => {
+      if (!/^term_[A-Za-z0-9_-]{1,120}$/.test(terminalId)) return resolve('invalid');
+      const args = ['terminal', 'send', '--terminal', terminalId, `--text=${text}`, ...(enter ? ['--enter'] : []), '--json'];
+      execFile(bin, args, { timeout: timeoutMs, maxBuffer: 1024 * 1024, env: process.env }, (err, stdout) => {
+        if (err) return resolve('cli_failed');
+        try {
+          const r = JSON.parse(stdout) as { ok?: boolean; result?: { send?: { accepted?: boolean } } };
+          resolve(r.ok !== false && r.result?.send?.accepted !== false ? true : 'not_accepted');
+        } catch {
+          resolve('cli_failed');
+        }
+      });
+    });
+}

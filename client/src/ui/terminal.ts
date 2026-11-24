@@ -132,6 +132,27 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     'aria-label': 'Send Esc to the terminal',
   }, '⎋ Esc');
   const changesBtn = h('button.btn', { type: 'button', title: 'What this worker changed: files, diff, commit, open a PR (C at the desk)' }, '🌿 Changes');
+  // Orca's read of an agent's terminal leaves out what sits in its input box until it's sent, so
+  // what you've typed since the last Enter shows here, kept in this page only.
+  const pending = opts.orca ? h('div.term-pending', { title: 'What you typed and have not sent yet (Orca shows it in the terminal once you press Enter)', hidden: true }) : null;
+  let pendingText = '';
+  const trackPending = (data: string) => {
+    if (!pending) return;
+    for (let i = 0; i < data.length; i++) {
+      const c = data[i];
+      if (c === '\r' || c === '\n' || c === '\x03' || c === '\x15') pendingText = '';
+      else if (c === '\x7f' || c === '\b') pendingText = Array.from(pendingText).slice(0, -1).join('');
+      else if (c === '\x1b') {
+        // An escape sequence (an arrow) moves within the line: skip it; a lone Esc clears it.
+        const m = /^\x1b(?:\[[0-9;?]*[ -/]*[@-~]|O.)/.exec(data.slice(i));
+        if (m) i += m[0].length - 1;
+        else pendingText = '';
+      } else if (c >= ' ') pendingText += c;
+    }
+    pendingText = pendingText.slice(-400);
+    pending.hidden = !pendingText;
+    pending.textContent = pendingText ? `⌨️ ${pendingText}` : '';
+  };
   const orcaBtn = opts.orca ? h('button.btn.term-orca', { type: 'button', title: 'Show this agent in Orca, its terminal focused' }, '↗ Open in Orca') : null;
   const hideBtn = h('button.btn.term-hide', { type: 'button', title: 'Hide this terminal; the worker keeps running at its desk', 'aria-label': 'Hide terminal' }, 'Hide');
   const closeBtn = h('button.btn.close', { title: 'Hide terminal (Esc or Ctrl+]) · the worker keeps running; ⎋ Esc or Ctrl+[ sends Esc to the terminal', 'aria-label': 'Hide terminal' }, '✕');
@@ -156,7 +177,7 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
   );
   host.append(mic.live);
   // The keypad has an Esc of its own, and a 🎤 on its prompt box.
-  const el = h('div.modal.term', { role: 'dialog', 'aria-label': `${info.name} terminal` }, h('header', {}, dot, title, pill, cost, viewers, typed, modelsBtn, keypad ? null : mic.button, keypad ? null : escBtn, onChanges ? changesBtn : null, orcaBtn, hideBtn, closeBtn), tabs.bar, host, tabs.pages, keypad);
+  const el = h('div.modal.term', { role: 'dialog', 'aria-label': `${info.name} terminal` }, h('header', {}, dot, title, pill, cost, viewers, typed, modelsBtn, keypad ? null : mic.button, keypad ? null : escBtn, onChanges ? changesBtn : null, orcaBtn, hideBtn, closeBtn), tabs.bar, host, pending, tabs.pages, keypad);
 
   const term = new Terminal({
     fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',
@@ -446,6 +467,7 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
   const openedAt = performance.now();
   term.onData((data) => {
     if (opts.orca && performance.now() - openedAt < 250) return;
+    trackPending(data);
     sendSize(true);
     net.send({ t: 'term.input', workerId, data });
   });
