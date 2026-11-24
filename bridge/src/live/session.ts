@@ -6,7 +6,7 @@
  */
 import { lookFromSeed, sanitizeLook } from '@orca-office/shared/office/avatar';
 import { elevatorSpot } from '@orca-office/shared/office/layout';
-import type { ClientMsg, FloorView, GhIssue, GhPull, GhState, OrcaForgeBoard, OrcaForgeItem, OrcaLink, OrcaProject, PeerInfo, ServerMsg } from '@orca-office/shared/office/protocol';
+import type { ClientMsg, FloorView, GhIssue, GhPull, GhState, OrcaForgeBoard, OrcaForgeItem, OrcaLink, OrcaProject, PeerInfo, PlanLimits, ServerMsg } from '@orca-office/shared/office/protocol';
 import { ROOF } from '@orca-office/shared/office/rooftop';
 import type { Building, LiveFloor } from './model.js';
 
@@ -129,7 +129,7 @@ export class LiveSession {
     };
   }
 
-  welcome(b: Building, version: string, online: boolean): ServerMsg[] {
+  welcome(b: Building, version: string, online: boolean, limits: PlanLimits = { providers: [], at: 0 }): ServerMsg[] {
     const view = this.view(b);
     return [
       {
@@ -142,7 +142,7 @@ export class LiveSession {
         version,
         upgrade: { available: false, phase: 'idle' },
         usage: { total: zeroUsage(), today: zeroUsage(), day: new Date().toISOString().slice(0, 10), pauseHiring: false },
-        limits: { windows: [], at: Date.now() },
+        limits,
         me: { admin: true },
         notify: {},
         machine: { cpu: 0, cores: 0, memUsed: 0, memTotal: 0, history: [], workers: b.floors.reduce((s, f) => s + f.workers.length, 0) },

@@ -3,6 +3,7 @@ import { store, type HudPanel, type Settings, type Topic } from '../state';
 import { waitingOnSomeone } from '../notify';
 import { DESK_BY_ID } from '@orca-office/shared/office/layout';
 import { $, h, openModal, type Modal } from './dom';
+import { limitsChip } from './limits';
 
 /** One thing the ☰ menu does. Any of them can be pinned to the top bar. */
 export interface HudAction {
@@ -35,7 +36,7 @@ const PANELS: { id: HudPanel; icon: string; label: string; what: string }[] = [
   { id: 'workers', icon: '🤖', label: 'Workers', what: 'Every desk and what it’s up to' },
   { id: 'people', icon: '👥', label: 'People', what: 'Who’s here, on which floor' },
   { id: 'spend', icon: '💸', label: 'Spend', what: 'Today, the budget, all time' },
-  { id: 'limits', icon: '⏳', label: 'Claude limits', what: 'The plan’s 5-hour and week' },
+  { id: 'limits', icon: '⏳', label: 'Usage', what: 'Plan limits: Claude, Codex' },
   { id: 'chat', icon: '💬', label: 'Chat', what: 'T opens it either way' },
   { id: 'floor', icon: '🏢', label: 'Floor details', what: 'Branch, folder, default agent' },
 ];
@@ -135,6 +136,16 @@ export function mountHud(actions: HudAction[], settings: Settings, save: () => v
     const workersTitle = hired || waiting ? `${hired} worker${hired === 1 ? '' : 's'} on this floor${waiting ? `, ${waiting} waiting on someone` : ''}` : 'No workers on this floor yet';
     // Who's waiting has its own button on the bar (the 'waiting' action), so this just counts them.
     items.push(panelChip('workers', '🤖', 'Workers', hired, workersTitle));
+    // The plan limit closest to running out (Claude, Codex), coloured like Orca's; a click shows them all.
+    const meter = limitsChip();
+    if (meter) {
+      const chip = panelChip('limits', '⏳', '', 0, meter.title);
+      chip.classList.add('dock-limits');
+      if (meter.level) chip.classList.add(`lim-${meter.level}`);
+      // On a phone only the number stays.
+      chip.querySelector('.lbl')!.replaceChildren(h('span.lim-name', {}, `${meter.name} `), h('b', { class: meter.pct === null ? 'none' : '' }, meter.pct === null ? '—' : `${meter.pct}%`));
+      items.push(chip);
+    }
     // Redrawn only when it looks different, so a busy worker's updates don't swap a button out from under a click.
     const next = h('div', {}, ...items);
     if (next.innerHTML !== [...dock.children].filter((c) => c !== menuBtn).map((c) => c.outerHTML).join('')) dock.replaceChildren(...items, menuBtn);
@@ -278,7 +289,7 @@ export function mountHud(actions: HudAction[], settings: Settings, save: () => v
     },
     true,
   );
-  for (const t of ['workers', 'peers', 'issues', 'pulls', 'services', 'queue', 'meeting', 'upgrade', 'me', 'floors', 'signins'] as Topic[]) store.on(t, render);
+  for (const t of ['workers', 'limits', 'peers', 'issues', 'pulls', 'services', 'queue', 'meeting', 'upgrade', 'me', 'floors', 'signins'] as Topic[]) store.on(t, render);
   applyPanels();
   render();
   return { refresh: render, toggleMenu };

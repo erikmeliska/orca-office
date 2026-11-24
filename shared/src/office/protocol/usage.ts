@@ -1,4 +1,4 @@
-// What workers spend: session usage, the office ledger and the Claude plan limits.
+// What workers spend: session usage, the office ledger and the providers' plan limits.
 
 /** Session usage. The persistent office ledger continues to cover Claude Code only. */
 export interface Usage {
@@ -63,7 +63,7 @@ export interface UsageState {
   pauseHiring: boolean;
 }
 
-/** One of the Claude plan's usage windows: the 5-hour session, the week, or a model's week. */
+/** One usage window of a provider's plan: the 5-hour session, the week, or a model's week. */
 export interface PlanWindow {
   /** e.g. "5h session", "Week", "Fable week". */
   label: string;
@@ -73,21 +73,63 @@ export interface PlanWindow {
   resetsAt?: number;
 }
 
+/** The providers whose plan limits the office reads, the way Orca's status bar shows them (docs/usage.md). */
+export type LimitsProviderId = 'claude' | 'codex';
+
 /**
- * The Claude plan limits of the account the office's Claude workers run on, as Claude Code's
- * /usage shows them (see server/limits.ts). One account for the whole building.
+ * Why a provider shows windows or not:
+ * - `ok`: read; `windows` may still be empty when no window has started;
+ * - `loading`: not read yet;
+ * - `no-plan`: signed in with an API key (or Bedrock, Vertex), which has no plan limits;
+ * - `signed-out`: the CLI is not signed in (the office never signs in for it);
+ * - `missing`: the CLI is not installed on the office's machine;
+ * - `error`: the last read failed (timeout, no network, a CLI too old to answer).
  */
-export interface PlanLimits {
-  /** 'pro', 'max', 'team', 'enterprise'…, when known. */
+export type LimitsStatus = 'ok' | 'loading' | 'no-plan' | 'signed-out' | 'missing' | 'error';
+
+/** One provider's plan limits: numbers and the plan's name only, never the account. */
+export interface ProviderLimits {
+  id: LimitsProviderId;
+  /** "Claude", "Codex". */
+  name: string;
+  status: LimitsStatus;
+  /** 'max', 'pro', 'plus', 'team'…, when known. */
   plan?: string;
-  /** The 5-hour session first, then the week, then per-model weeks. Empty until first read, or when there is no plan. */
+  /** The 5-hour session first, then the week, then per-model weeks. */
   windows: PlanWindow[];
+  /** Codex: free rate-limit resets the account has earned and not used yet. */
+  resets?: number;
   /** When the numbers were read (ms since epoch); 0 before the first read. */
   at: number;
 }
 
+/**
+ * The plan limits of the accounts the office's workers run on, per provider, as Orca's usage view
+ * shows them (bridge/src/live/limits.ts). One account per provider for the whole building.
+ */
+export interface PlanLimits {
+  providers: ProviderLimits[];
+  /** When any provider was last read (ms since epoch); 0 before the first read. */
+  at: number;
+}
+
+/** The window closest to its limit across every provider that was read, or null when none was. */
+export function worstWindow(l: PlanLimits): { provider: ProviderLimits; window: PlanWindow } | null {
+  let best: { provider: ProviderLimits; window: PlanWindow } | null = null;
+  for (const p of l.providers) {
+    if (p.status !== 'ok') continue;
+    for (const w of p.windows) if (!best || w.pct > best.window.pct) best = { provider: p, window: w };
+  }
+  return best;
+}
+
+/** Orca's colours: 80% used turns the meter amber, 90% red. */
+export function limitLevel(pct: number): 'over' | 'near' | '' {
+  return pct >= 90 ? 'over' : pct >= 80 ? 'near' : '';
+}
+
 export type UsageClientMsg =
-  /** Read the Claude plan limits again now, instead of at the next poll. */
+  /** Read the plan limits again now, instead of at the next poll. */
   | { t: 'limits.refresh' };
 
 export type UsageServerMsg =

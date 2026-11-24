@@ -18,7 +18,13 @@ from upstream are cherry-picked by hand. What came from where:
   tests/*.test.ts, tests/glb.ts  client/test/ (only tests of kept client and
                                  shared code, moved from node:test to vitest)
 
-Not copied: the server (src/server), its agent providers, bin/, deploy/,
+Also taken from that commit, by hand (design.md, decision 22):
+
+  src/server/limits.ts           bridge/src/live/limits.ts (Claude Code's
+                                 get_usage control request and its parsing;
+                                 Codex is read through codex app-server instead)
+
+Not copied: the rest of the server (src/server), its agent providers, bin/, deploy/,
 blender/ sources, install scripts and docs.
 
 Changed here:
