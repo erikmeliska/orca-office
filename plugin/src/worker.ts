@@ -54,6 +54,8 @@ export const ALLOWED_CALLS = new Set([
 /** Agents the office may start in a new workspace (bridge/src/live/actions.ts offers the same). */
 export const LAUNCH_AGENTS = new Set(['claude', 'codex', 'gemini', 'opencode', 'copilot', 'cursor', 'pi']);
 export const MAX_SEND_CHARS = 4096;
+/** Claude Code's subagent tools (design #12): shown as helpers around their parent. */
+export const SUBAGENT_TOOLS = new Set(['task', 'agent']);
 export const MAX_PROMPT_CHARS = 8000;
 
 function readToken(): string | null {
@@ -235,6 +237,16 @@ export default function activate(orca: OrcaWorkerApi) {
         failed: action === 'test' && outputFailed(event.output),
       },
     });
+  });
+
+  // Claude Code waits for this hook (it may deny a tool call), so it only notes that a subagent
+  // (Task/Agent tool) started and returns at once, deciding nothing: the office shows a small
+  // helper by its parent until the matching agent.tool.after. Nothing of the input leaves.
+  orca.hooks.on('agent.tool.before', (event) => {
+    if (SUBAGENT_TOOLS.has(String(event.tool).toLowerCase()) && event.callId) {
+      send({ type: 'hook', name: 'agent.tool.before', at: Date.now(), payload: { agent: event.agent, workspaceId: event.workspaceId, terminalId: event.terminalId ?? null, tool: event.tool, callId: event.callId } });
+    }
+    return undefined;
   });
 
   orca.commands.register('office.reconnect', () => {

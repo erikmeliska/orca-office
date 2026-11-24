@@ -9,4 +9,15 @@
 .toast.orca-progress.ok { border-color: var(--good, #06d6a0); }
 .toast.orca-progress.bad { border-color: var(--bad, #ef476f); }
 .term .term-orca { white-space: nowrap; }
+.orca-chat { width: min(760px, 100%); }
+.orca-log { flex: 1; min-height: 180px; overflow: auto; padding: 14px 16px; display: flex; flex-direction: column; gap: 10px; background: var(--paper); }
+.orca-msg { border: 3px solid var(--ink); border-radius: 14px; padding: 8px 12px; background: #fff; max-width: 92%; overflow-wrap: anywhere; }
+.orca-msg.user { align-self: flex-end; background: #fff1de; }
+.orca-msg.assistant { align-self: flex-start; }
+.orca-who { font-size: 12px; font-weight: 900; color: var(--muted); margin-bottom: 2px; }
+.orca-md { font-size: 14px; line-height: 1.45; }
+.orca-md pre { overflow: auto; max-width: 100%; }
+.orca-md p { margin: 4px 0; }
+.orca-tool { align-self: flex-start; font-size: 12px; font-weight: 800; color: var(--muted); padding: 2px 10px; border: 2px dashed var(--muted); border-radius: 999px; }
+.orca-typing { font-style: italic; }
 .term-pending { padding: 6px 14px; font: 13px ui-monospace, "SF Mono", Menlo, monospace; color: #fffaf3; background: #2b2d42; border-top: 2px dashed #6c6f8a; white-space: pre-wrap; overflow-wrap: anywhere; }

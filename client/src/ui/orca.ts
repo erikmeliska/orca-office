@@ -4,6 +4,7 @@ import type { ServerMsg, WorkerInfo } from '@orca-office/shared/office/protocol'
 import type { Net } from '../net';
 import { store } from '../state';
 import { STATUS_LABEL, h, openModal, toast } from './dom';
+import { markdownChat } from './markdown';
 
 /**
  * Light control over Orca from the office (M3, design #14): open a figure in Orca, a chat agent's
@@ -33,6 +34,8 @@ const ERRORS: Record<string, string> = {
   unknown_agent: 'Orca cannot start that agent',
   invalid_prompt: 'The prompt is empty or too long',
   invalid_name: 'The name may use letters, digits, ".", "_" and "-"',
+  no_session: 'Orca has no session id for this chat yet',
+  unreadable: 'Orca returned no conversation',
   no_agent_yet: 'The worktree is there, but no agent has sat down yet — check Orca',
   capability_denied: 'The orca-office plugin is not allowed to do that yet (approve its new capabilities)',
   not_allowed: 'The orca-office plugin does not allow that',
@@ -61,6 +64,8 @@ export function routeOrcaMessage(msg: ServerMsg) {
       typeWarnedAt = Date.now();
     }
     toast(say(msg.error), 'warn');
+  } else if (msg.t === 'orca.chat') {
+    if (chatPanel?.workerId === msg.workerId) chatPanel.show(msg);
   } else if (msg.t === 'orca.desk') {
     deskWaiters.get(msg.deskId)?.(msg.comment);
     deskWaiters.delete(msg.deskId);
@@ -84,19 +89,66 @@ export function openInOrca(net: Net, target: { workerId: string } | { deskId: st
   net.send({ t: 'orca.open', ...target });
 }
 
-/** A chat agent (no terminal): what it said last, and the way to it in Orca. */
+/** The chat panel open now, which hears its `orca.chat` updates. */
+let chatPanel: { workerId: string; show(msg: Extract<ServerMsg, { t: 'orca.chat' }>): void } | null = null;
+
+/**
+ * A chat agent (no terminal): its conversation, read-only (`orca agent read` through the bridge,
+ * while the panel is open), the state of its latest turn, and the way to it in Orca. The text is
+ * markdown, sanitized, with pictures left as their alt text so nothing is fetched from elsewhere.
+ * Writing into a chat isn't possible (Orca has no API for it); the footer has room for it (M5, bots).
+ */
 export function openChatAgent(net: Net, w: WorkerInfo) {
-  const said = w.task?.summary ?? '';
+  const remote = !!w.orca?.remote;
   const open = h('button.btn.primary', { type: 'button', onclick: () => (openInOrca(net, { workerId: w.id }), modal.close()) }, '↗ Open in Orca');
+  const pill = h('span.pill', { class: w.status }, STATUS_LABEL[w.status] ?? w.status);
+  const log = h('div.orca-log', { role: 'log', 'aria-live': 'polite', 'aria-label': 'Conversation' }, h('p.orca-note', {}, remote ? 'This chat runs on another host.' : 'Loading the conversation…'));
+  // Where a reply box goes once the office can write to a chat (M5); empty and hidden until then.
+  const compose = h('div.orca-compose', { hidden: true });
   const el = h(
     'div.modal.orca-chat',
     { role: 'dialog', 'aria-label': `${w.name}, chat agent` },
-    h('header', {}, h('span.dot', { style: `background:${w.color}` }), h('h2', {}, `💬 ${w.name}`), h('span.pill', { class: w.status }, STATUS_LABEL[w.status] ?? w.status)),
-    h('div.body', {}, h('p.orca-note', {}, `A chat in Orca on ${w.task?.name ?? 'its worktree'}: it has no terminal to open here.`), said ? h('blockquote.orca-said', {}, said) : h('p.orca-note', {}, 'Nothing said yet.')),
-    h('footer', {}, w.orca?.remote ? h('span.grow', {}, 'Runs on another host') : h('span.grow', {}), w.orca?.remote ? null : open),
+    h('header', {}, h('span.dot', { style: `background:${w.color}` }), h('h2', {}, `💬 ${w.name} · ${w.task?.name ?? ''}`), pill),
+    log,
+    compose,
+    h('footer', {}, h('span.grow', {}, remote ? 'Runs on another host' : 'Read-only: answer it in Orca'), remote ? null : open),
   );
-  const modal = openModal(el, { doing: `💬 with ${w.name}` });
-  if (!w.orca?.remote) open.focus();
+  const modal = openModal(el, {
+    doing: `💬 reading ${w.name}`,
+    onClose: () => {
+      if (chatPanel?.workerId === w.id) chatPanel = null;
+      if (!remote) net.send({ t: 'orca.chat.close', workerId: w.id });
+    },
+  });
+  if (remote) return;
+  chatPanel = {
+    workerId: w.id,
+    show: (msg) => {
+      const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
+      pill.className = `pill ${msg.state === 'working' ? 'working' : (store.workers.get(w.id)?.status ?? w.status)}`;
+      pill.textContent = msg.state === 'working' ? 'working' : (STATUS_LABEL[store.workers.get(w.id)?.status ?? w.status] ?? msg.state ?? '');
+      log.replaceChildren(
+        ...(msg.limited ? [h('p.orca-note', {}, 'Older messages are in Orca.')] : []),
+        ...msg.entries.map((e) =>
+          'tool' in e
+            ? h('div.orca-tool', {}, `🔧 ${e.tool}${e.state && e.state !== 'completed' ? ` · ${e.state}` : ''}`)
+            : h(`div.orca-msg.${e.role}`, {}, h('div.orca-who', {}, e.role === 'user' ? 'You' : w.name), chatText(e.text), e.shortened ? h('p.orca-note', {}, '…shortened; the rest is in Orca') : null),
+        ),
+        ...(msg.state === 'working' ? [h('p.orca-note.orca-typing', {}, `${w.name} is working…`)] : []),
+        ...(msg.entries.length ? [] : [h('p.orca-note', {}, 'Nothing said yet.')]),
+      );
+      if (atBottom) log.scrollTop = log.scrollHeight;
+    },
+  };
+  net.send({ t: 'orca.chat.open', workerId: w.id });
+  open.focus();
+}
+
+/** A message's markdown, sanitized and without pictures (markdown.ts). */
+function chatText(text: string): HTMLElement {
+  const el = markdownChat(text);
+  el.classList.add('orca-md');
+  return el;
 }
 
 /** Edits the comment Orca keeps on a desk's worktree. */

@@ -5,7 +5,8 @@
 #   scripts/install-bridge.sh            # bridge on 127.0.0.1:4317
 #   ORCA_OFFICE_PORT=4417 scripts/install-bridge.sh
 #
-# The bridge runs from this checkout, so keep it where it is (or install again after moving it).
+# The bridge runs from this checkout and serves its built page (client/dist, built here first), so
+# keep it where it is (or install again after moving it), and install again after pulling changes.
 set -eu
 
 LABEL="${ORCA_OFFICE_LABEL:-com.orca-office.bridge}"
@@ -25,6 +26,19 @@ TSX="$REPO/node_modules/.bin/tsx"
 xml() { printf '%s' "$1" | sed -e 's/&/\&amp;/g' -e 's/</\&lt;/g' -e 's/>/\&gt;/g'; }
 
 mkdir -p "$HOME/Library/LaunchAgents" "$LOGS"
+
+# The bridge serves the built office page on its own port (design #21), so build it first, against
+# this port. ORCA_OFFICE_SKIP_BUILD=1 keeps the dist that's there (it must exist).
+if [ "${ORCA_OFFICE_SKIP_BUILD:-}" != 1 ]; then
+  NPM="$(command -v npm || true)"
+  [ -n "$NPM" ] || { echo "npm not found on PATH: can't build the office page (client/dist)" >&2; exit 1; }
+  echo "building the office page (npm run build, log in $LOGS/build.log)…"
+  if ! (cd "$REPO" && ORCA_OFFICE_PORT="$PORT" "$NPM" run build >"$LOGS/build.log" 2>&1); then
+    echo "npm run build failed, see $LOGS/build.log; not installing a bridge without its page" >&2
+    exit 1
+  fi
+fi
+[ -f "$REPO/client/dist/index.html" ] || { echo "client/dist/index.html is missing: run npm run build in $REPO first" >&2; exit 1; }
 cat > "$PLIST" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -59,4 +73,4 @@ DOMAIN="gui/$(id -u)"
 # Installed before: replace it.
 launchctl bootout "$DOMAIN/$LABEL" 2>/dev/null || true
 launchctl bootstrap "$DOMAIN" "$PLIST"
-echo "installed $LABEL ($PLIST), bridge on http://127.0.0.1:$PORT, logs in $LOGS/bridge.log"
+echo "installed $LABEL ($PLIST): the office on http://127.0.0.1:$PORT/, logs in $LOGS/bridge.log"
