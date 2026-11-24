@@ -1,4 +1,5 @@
 import type { ClientMsg, ServerMsg } from '@orca-office/shared/office/protocol';
+import { forgetBridgeToken, openBridge } from './bridge-auth';
 import { lastFloor, store, type Profile, type Spot } from './state';
 
 type Handler = (msg: ServerMsg) => void;
@@ -48,9 +49,24 @@ export class Net {
       for (const k of ['x', 'y', 'z'] as const) q.set(k, at[k].toFixed(2));
       q.set('rotY', at.facing.toFixed(3));
     }
-    const ws = new WebSocket(`${BRIDGE_URL}?${q}`);
+    void openBridge(`${BRIDGE_URL}?${q}`).then((ws) => {
+      if (!ws) return this.retryLater();
+      this.attach(ws);
+    });
+  }
+
+  /** No socket (no token, or it closed): try again, backing off. */
+  private retryLater() {
+    if (this.closedByUs) return;
+    const delay = this.restartExpected ? 1000 : Math.min(8000, 500 * 2 ** this.retry++);
+    setTimeout(() => this.connect(), delay);
+  }
+
+  private attach(ws: WebSocket) {
     this.ws = ws;
+    let opened = false;
     ws.onopen = () => {
+      opened = true;
       this.retry = 0;
       this.up = true;
       this.statusHandlers.forEach((h) => h(true));
@@ -66,11 +82,11 @@ export class Net {
     };
     ws.onclose = () => {
       if (this.ws !== ws) return;
+      // Turned away before it opened: the token may be stale (made anew), so fetch it again.
+      if (!opened) forgetBridgeToken();
       this.up = false;
       this.statusHandlers.forEach((h) => h(false));
-      if (this.closedByUs) return;
-      const delay = this.restartExpected ? 1000 : Math.min(8000, 500 * 2 ** this.retry++);
-      setTimeout(() => this.connect(), delay);
+      this.retryLater();
     };
   }
 

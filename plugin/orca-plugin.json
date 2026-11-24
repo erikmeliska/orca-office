@@ -3,7 +3,7 @@
   "execution": "trusted-worker",
   "id": "office-feed",
   "name": "orca-office feed",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Feeds workspaces, agent status and tool hooks to the local orca-office bridge on 127.0.0.1.",
   "license": "MIT",
   "repository": "https://github.com/erikmeliska/orca-office",
@@ -13,7 +13,10 @@
     { "kind": "workspace:read" },
     { "kind": "agent:read" },
     { "kind": "terminal:read" },
-    { "kind": "terminal:send" }
+    { "kind": "terminal:send" },
+    { "kind": "workspace:write" },
+    { "kind": "workspace:create" },
+    { "kind": "agent:launch" }
   ],
   "contributes": {
     "events": [

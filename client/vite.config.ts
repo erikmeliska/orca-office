@@ -1,5 +1,6 @@
 import { resolve } from 'node:path';
 import { defineConfig } from 'vite';
+import { officeToken } from './vite-token';
 
 const root = import.meta.dirname;
 
@@ -15,6 +16,7 @@ const clientPort = port('ORCA_OFFICE_CLIENT_PORT', 5317);
 
 export default defineConfig({
   root,
+  plugins: [officeToken(clientPort)],
   define: {
     __ORCA_OFFICE_BRIDGE_PORT__: JSON.stringify(bridgePort),
   },
@@ -31,4 +33,5 @@ export default defineConfig({
   },
   // The bridge accepts /client only from this exact origin, so the port is fixed (strictPort).
   server: { host: '127.0.0.1', port: clientPort, strictPort: true },
+  preview: { host: '127.0.0.1', port: clientPort, strictPort: true },
 });

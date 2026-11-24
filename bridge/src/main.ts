@@ -6,6 +6,7 @@ import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { PROTOCOL_VERSION, redactForLog } from '@orca-office/shared';
 import { hostAllowed, isNonce, loadOrCreateToken, newNonce, proof, tokenMatches } from './auth.js';
+import { CLIENT_PROTOCOL, clientAuthorized, loadOrCreateClientToken } from './client-auth.js';
 import { loadConfig } from './config.js';
 import { allowedClientOrigins, checkUpgrade } from './origin.js';
 import { PluginLink } from './plugin-link.js';
@@ -19,6 +20,8 @@ const config = loadConfig();
 const clientOrigins = allowedClientOrigins(config.clientPort);
 const link = new PluginLink();
 const token = loadOrCreateToken();
+// The office page's token (client-auth.ts): made now if Vite hasn't yet, read again on each upgrade.
+loadOrCreateClientToken();
 const spikeCalls = process.env.ORCA_OFFICE_SPIKE_CALLS === '1';
 const clients = new Set<WebSocket>();
 let lastPluginHello: unknown = null;
@@ -76,12 +79,22 @@ const server = createServer(async (req, res) => {
   res.writeHead(404).end();
 });
 
-const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 1024 });
+const wss = new WebSocketServer({
+  noServer: true,
+  maxPayload: 8 * 1024 * 1024,
+  // The page asks for the office protocol plus its token; the answer names only the protocol.
+  handleProtocols: (protocols) => (protocols.has(CLIENT_PROTOCOL) ? CLIENT_PROTOCOL : false),
+});
 
 server.on('upgrade', (req, socket, head) => {
   const peer = hostAllowed(req.headers.host, config.port) ? checkUpgrade(req.url, req.headers.origin, clientOrigins) : null;
   if (!peer) {
     socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
+    socket.destroy();
+    return;
+  }
+  if (peer === 'client' && !clientAuthorized(loadOrCreateClientToken(), req.headers['sec-websocket-protocol'])) {
+    socket.write('HTTP/1.1 401 Unauthorized\r\n\r\n');
     socket.destroy();
     return;
   }

@@ -9,6 +9,10 @@ The wire format is agent-office's: one JSON object per WebSocket frame, typed by
 `ServerMsg` / `ClientMsg` in `shared/src/office/protocol.ts`. The page connects to
 `ws://127.0.0.1:<ORCA_OFFICE_PORT>/client` (default 4317); `/client` accepts only the office
 page's origin, `http://127.0.0.1:<ORCA_OFFICE_CLIENT_PORT>` or `localhost` (default 5317).
+Since M3 the socket must also present the page's token (`bridge/src/client-auth.ts`): the page
+fetches it from its own server at `/__orca-office/token` (Vite hands it only to a same-origin fetch,
+`client/vite-token.ts`) and asks for the subprotocols `orca-office` and `token.<hex>`; without it the
+upgrade gets 401. The token lives in `~/.orca-office/client-token` (0600), apart from the plugin's key.
 
 | Variable | Default | What |
 |----------|---------|------|
