@@ -10,8 +10,11 @@ export interface OrcaWorkerInfo {
 }
 
 /** Agents the office can start in a new workspace; Orca's plugin worker allows the same (plugin/src/worker.ts). */
-export const ORCA_AGENTS = ['claude', 'codex', 'gemini', 'opencode', 'copilot', 'cursor', 'pi'] as const;
+export const ORCA_AGENTS = ['claude', 'codex', 'antigravity', 'opencode', 'copilot', 'cursor', 'pi'] as const;
 export type OrcaAgent = (typeof ORCA_AGENTS)[number];
+
+/** How the New task picker names an agent; Orca's id where it differs from the CLI people know. */
+export const ORCA_AGENT_LABELS: Partial<Record<OrcaAgent, string>> = { antigravity: 'agy (Antigravity)' };
 
 /** Bounds the bridge holds the page's messages to (and the worker its calls). */
 export const ORCA_LIMITS = { send: 4096, prompt: 8000, comment: 2000, name: 60 } as const;

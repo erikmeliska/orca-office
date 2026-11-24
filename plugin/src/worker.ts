@@ -52,7 +52,7 @@ export const ALLOWED_CALLS = new Set([
 ]);
 
 /** Agents the office may start in a new workspace (bridge/src/live/actions.ts offers the same). */
-export const LAUNCH_AGENTS = new Set(['claude', 'codex', 'gemini', 'opencode', 'copilot', 'cursor', 'pi']);
+export const LAUNCH_AGENTS = new Set(['claude', 'codex', 'antigravity', 'opencode', 'copilot', 'cursor', 'pi']);
 export const MAX_SEND_CHARS = 4096;
 /** Claude Code's subagent tools (design #12): shown as helpers around their parent. */
 export const SUBAGENT_TOOLS = new Set(['task', 'agent']);

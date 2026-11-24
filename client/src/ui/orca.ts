@@ -1,5 +1,5 @@
 import './orca.css';
-import { ORCA_AGENTS, ORCA_LIMITS, type OrcaActionKind } from '@orca-office/shared/office/protocol/orca';
+import { ORCA_AGENTS, ORCA_AGENT_LABELS, ORCA_LIMITS, type OrcaActionKind } from '@orca-office/shared/office/protocol/orca';
 import type { ServerMsg, WorkerInfo } from '@orca-office/shared/office/protocol';
 import type { Net } from '../net';
 import { store } from '../state';
@@ -184,7 +184,7 @@ export function openNewTask(net: Net, deskName: string) {
   const floors = store.floors.filter((f) => f.orcaCreate);
   if (!floors.length) return toast(say('no_project'), 'warn');
   const repo = h('select', { 'aria-label': 'Repository' }, ...floors.map((f) => h('option', { value: f.id, selected: f.id === store.floor }, f.name))) as HTMLSelectElement;
-  const agent = h('select', { 'aria-label': 'Agent' }, ...ORCA_AGENTS.map((a) => h('option', { value: a }, a))) as HTMLSelectElement;
+  const agent = h('select', { 'aria-label': 'Agent' }, ...ORCA_AGENTS.map((a) => h('option', { value: a }, ORCA_AGENT_LABELS[a] ?? a))) as HTMLSelectElement;
   const name = h('input', { type: 'text', maxlength: ORCA_LIMITS.name, placeholder: 'Optional: worktree name', 'aria-label': 'Worktree name', autocomplete: 'off', pattern: '[A-Za-z0-9][A-Za-z0-9._\\-]*' }) as HTMLInputElement;
   const prompt = h('textarea', { rows: 6, maxlength: ORCA_LIMITS.prompt, placeholder: 'What should the agent work on?', 'aria-label': 'Prompt', required: true }) as HTMLTextAreaElement;
   const go = h('button.btn.primary', { type: 'submit' }, '✨ Start');
