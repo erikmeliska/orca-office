@@ -40,9 +40,21 @@ const ICON: Record<OrcaLink['kind'], string> = { pr: '🔀', mr: '🔀', issue: 
 const NAME: Record<OrcaLink['provider'], string> = { github: 'GitHub', gitlab: 'GitLab', linear: 'Linear', jira: 'Jira', bitbucket: 'Bitbucket', azure: 'Azure DevOps', gitea: 'Gitea', other: '' };
 const KIND: Record<OrcaLink['kind'], string> = { pr: 'pull request', mr: 'merge request', issue: 'issue', item: 'item' };
 
+/** The link's address if it is plain https (no credentials), else undefined; the bridge checks the same. */
+export function httpsUrl(url: string | undefined): string | undefined {
+  if (!url) return undefined;
+  try {
+    const u = new URL(url);
+    return u.protocol === 'https:' && !u.username && !u.password ? u.toString() : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 /** Opens a link in a new tab (https only, without the office as its opener). */
 export function openLink(url: string | undefined): boolean {
-  if (!url || !/^https:\/\//.test(url)) return false;
+  url = httpsUrl(url);
+  if (!url) return false;
   window.open(url, '_blank', 'noopener,noreferrer');
   return true;
 }
@@ -50,8 +62,9 @@ export function openLink(url: string | undefined): boolean {
 function row(l: OrcaLink): HTMLElement {
   const what = [NAME[l.provider], KIND[l.kind]].filter(Boolean).join(' ');
   const body = [h('span.link-ref', {}, `${ICON[l.kind]} ${l.ref}`), h('span.link-title', {}, l.title ?? what), h('span.link-where', {}, l.url ? `${what} ↗` : `${what} · no address from Orca`)];
-  if (!l.url) return h('div.link-row.off', { title: 'Orca linked it without an address' }, ...body);
-  return h('a.link-row', { href: l.url, target: '_blank', rel: 'noopener noreferrer' }, ...body);
+  const href = httpsUrl(l.url);
+  if (!href) return h('div.link-row.off', { title: 'Orca linked it without an https address' }, ...body);
+  return h('a.link-row', { href, target: '_blank', rel: 'noopener noreferrer' }, ...body);
 }
 
 /** The board of a desk (or of the whole floor): its links, each opening in the browser. */
