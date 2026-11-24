@@ -10,6 +10,8 @@ export interface DeskLabel {
   color: string;
   by: string;
   at: number;
+  /** A strip pinned under the sign (Orca mode): what Orca links to the desk, "🔀 #12 · 📌 #34" (#32). */
+  pins?: string;
 }
 
 export interface FloorPlan {

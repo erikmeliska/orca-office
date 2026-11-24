@@ -41,6 +41,8 @@ import { installGallery, installHanging } from './features/hanging';
 import { installHerald } from './features/herald';
 import { installHud } from './features/hud';
 import { installNeedsYou } from './features/needsyou';
+import { installHandoffs } from './features/handoffs';
+import { installProjectBoard } from './ui/project';
 import { installPalette } from './features/palette';
 import { installPeers } from './features/peers';
 import { installRooftop } from './features/rooftop';
@@ -122,6 +124,9 @@ parts.views = installWorkerViews(ctx, core, parts);
 parts.actions = installWorkerActions(ctx, core, parts);
 parts.waiting = installWaiting(ctx, core, parts);
 parts.needsYou = installNeedsYou(ctx, parts);
+// M4: deliveries between agents (#34) and the project room's board (#29, #30).
+const handoffs = installHandoffs(ctx);
+installProjectBoard(ctx.net);
 installPalette(ctx, parts);
 parts.bookshelf = installBookshelf(ctx);
 installHerald(ctx, parts);
@@ -176,6 +181,6 @@ function boot() {
 
 // Debug handle for quick checks from the console / headless screenshots.
 const { worlds, views, rooftop, bar, coffee, bargames, hanging, climbing, emotes, hoops } = parts;
-(window as unknown as Record<string, unknown>).__office = { world: () => worlds.world(), court: () => worlds.court(), sendoffs: views.sendoffs, jail: views.jail, adrift: views.adrift, plan: worlds.plan, applyMap: parts.maps.applyMap, roof: rooftop.roof, booze: bar.booze, dj: () => djFrame(rooftop.djAt()), store, player: parts.player, caffeine: coffee.caffeine, camera: ctx.camera, arcade: parts.arcade, cabinet: parts.cabinet, workerViews: views.workerViews, departures: views.departures, arrivals: views.arrivals, scene: ctx.scene, net: parts.net, renderer: ctx.renderer, hands: parts.hands, me: parts.me, remotes: parts.peers.remotes, settings: parts.settings, gallery: parts.gallery, hanger: hanging.hanger, office: ctx.office, ride: parts.travel.ride, switchFloor: parts.travel.switchFloor, climber: climbing.climber, thrower: bargames.thrower, elevatorPanelOpen, confetti: parts.confetti, dog: parts.dog, sky: ctx.sky, holiday: parts.stage.holiday, emoteWheel: emotes.emoteWheel, emote: emotes.emote, ball: hoops.ball };
+(window as unknown as Record<string, unknown>).__office = { handoffs, world: () => worlds.world(), court: () => worlds.court(), sendoffs: views.sendoffs, jail: views.jail, adrift: views.adrift, plan: worlds.plan, applyMap: parts.maps.applyMap, roof: rooftop.roof, booze: bar.booze, dj: () => djFrame(rooftop.djAt()), store, player: parts.player, caffeine: coffee.caffeine, camera: ctx.camera, arcade: parts.arcade, cabinet: parts.cabinet, workerViews: views.workerViews, departures: views.departures, arrivals: views.arrivals, scene: ctx.scene, net: parts.net, renderer: ctx.renderer, hands: parts.hands, me: parts.me, remotes: parts.peers.remotes, settings: parts.settings, gallery: parts.gallery, hanger: hanging.hanger, office: ctx.office, ride: parts.travel.ride, switchFloor: parts.travel.switchFloor, climber: climbing.climber, thrower: bargames.thrower, elevatorPanelOpen, confetti: parts.confetti, dog: parts.dog, sky: ctx.sky, holiday: parts.stage.holiday, emoteWheel: emotes.emoteWheel, emote: emotes.emote, ball: hoops.ball };
 (window as unknown as Record<string, unknown>).__sound = parts.sound;
 (window as unknown as Record<string, unknown>).__notify = parts.notifier;

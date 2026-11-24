@@ -19,6 +19,10 @@ import { cleanLabel, type FloorPlan } from '@orca-office/shared/office/floorplan
 import { FLOOR_PALETTES } from '@orca-office/shared/office/floors';
 import { BEANBAGS, DESKS, WING_DESKS } from '@orca-office/shared/office/layout';
 import type { FloorInfo, WorkerAction, WorkerInfo, WorkerStatus } from '@orca-office/shared/office/protocol';
+import type { OrcaLink, OrcaProject } from '@orca-office/shared/office/protocol/orca';
+import { pinsText, type OrcaWorktree } from './worktrees.js';
+import { isLive, type HandoffKind, type InboxMessage, type OrcaRun, type RunGate, type RunTask, type TaskStatus } from './runs.js';
+import { RECENT_MS } from './runs-poller.js';
 import { worktreePath, type CliAgent, type CliTerminal, type OrcaBot, type OrcaState, type OrcaWorkspace, type StatusEvent, type ToolHook } from './orca.js';
 
 export const DONE_DEBOUNCE_MS = 1_000;
@@ -100,10 +104,46 @@ export interface LiveFloor {
   info: FloorInfo;
   workers: WorkerInfo[];
   plan: FloorPlan;
+  /** What Orca links to each desk, by the seat with its sign (#32). */
+  links: Record<string, OrcaLink[]>;
 }
 
 export interface Building {
   floors: LiveFloor[];
+  /** The board of each project room, by its floor id (#29, #30). */
+  projects: Record<string, ProjectBoard>;
+}
+
+/** A project room's board (on the page as `orca.project`): private texts already cut to 60. */
+export type ProjectBoard = OrcaProject;
+
+/** A delivery the office animates (#34): from one seat to another on a floor; null = off the floor (the roof, or down from it). */
+export interface Handoff {
+  floor: string;
+  from: string | null;
+  to: string | null;
+  kind: HandoffKind;
+  subject: string | null;
+}
+
+interface RoomSeat {
+  /** The worktree (`<repoId>::<path>` or a workspace path) whose desk this mirrors. */
+  path: string | null;
+  name: string;
+  status: TaskStatus | null;
+  dispatchId: string | null;
+  taskId: string | null;
+}
+
+interface RoomSpec {
+  key: string;
+  source: 'run' | 'lineage';
+  runId: string | null;
+  objective: string | null;
+  head: { bot: OrcaBot } | { agent: AgentRec } | { path: string; name: string } | null;
+  seats: RoomSeat[];
+  tasks: RunTask[];
+  gates: RunGate[];
 }
 
 const STATUS: Record<OrcaState, WorkerStatus> = { working: 'working', blocked: 'needs_input', waiting: 'needs_input', done: 'done' };
@@ -125,6 +165,25 @@ export class LiveModel {
   private botFolders = new Set<string>();
   /** Seats per floor and desk, kept while the desk stays, so figures don't jump about. */
   private seats = new Map<string, Map<string, string[]>>();
+  /** What Orca links to each worktree on this machine, by path (`orca worktree list`, #32). */
+  private linksByPath = new Map<string, OrcaLink[]>();
+  private linksKey = '';
+  /** Every worktree on this machine as `orca worktree list` gave it (lineage, #29 fallback). */
+  private worktreeRows: OrcaWorktree[] = [];
+  private lineageKey = '';
+  /** Orchestration Runs (`orca orchestration …`), and who coordinates each, learned from its mail. */
+  private runs: OrcaRun[] = [];
+  private runsKey = '';
+  private coordinators = new Map<string, string>();
+  /** Mail and dispatches seen so far (null until the first read: what was there before isn't news). */
+  private seenMail: Set<string> | null = null;
+  private seenDispatch: Set<string> | null = null;
+  private pendingHandoffs: { kind: HandoffKind; subject: string | null; runId: string | null; dispatchId: string | null; toHead: boolean }[] = [];
+  /** Where each room's people sit, as last built: by Run (or lineage) key. */
+  private roomSeats = new Map<string, { floor: string; head: string; byDispatch: Map<string, string> }>();
+  /** Bots away from the Staff floor, coordinating a Run in a project room (#33): bot id → room floor id. */
+  private botAway = new Map<string, string>();
+  private now = 0;
   /** Bumped on every change the office would show. */
   version = 0;
 
@@ -210,6 +269,103 @@ export class LiveModel {
     rec.actionAt = h.at;
     rec.activity = h.tool;
     this.version++;
+  }
+
+  /** `orca worktree list --json` (this machine): the links on each worktree. */
+  applyWorktrees(list: OrcaWorktree[]): void {
+    const local = list.filter((w) => w.hostId === LOCAL);
+    this.worktreeRows = local;
+    const lineage = JSON.stringify(local.filter((w) => w.parentId || w.childIds.length).map((w) => [w.id, w.parentId, w.childIds]));
+    if (lineage !== this.lineageKey) {
+      this.lineageKey = lineage;
+      this.version++;
+    }
+    const next = new Map(local.filter((w) => w.links.length).map((w) => [w.path, w.links]));
+    const key = JSON.stringify([...next]);
+    if (key === this.linksKey) return;
+    this.linksKey = key;
+    this.linksByPath = next;
+    this.version++;
+  }
+
+  /** The Runs as last read: new dispatches are handoffs from the head to the worker (#34). */
+  applyRuns(runs: OrcaRun[], now: number): void {
+    this.now = now;
+    const dispatches = runs.flatMap((r) => r.workers.map((w) => ({ run: r, w })));
+    if (this.seenDispatch) {
+      for (const { run, w } of dispatches) {
+        if (this.seenDispatch.has(w.dispatchId)) continue;
+        const task = run.tasks.find((t) => t.id === w.taskId);
+        this.pendingHandoffs.push({ kind: 'dispatch', subject: task?.title ?? null, runId: run.id, dispatchId: w.dispatchId, toHead: false });
+      }
+    }
+    this.seenDispatch = new Set(dispatches.map((d) => d.w.dispatchId));
+    const key = JSON.stringify(runs);
+    if (key === this.runsKey) return;
+    this.runsKey = key;
+    this.runs = runs;
+    this.version++;
+  }
+
+  /**
+   * The mailbox (`orca orchestration inbox`): who coordinates which Run (the sender of mail to one
+   * of its dispatches), and, for mail not seen before, a delivery to animate.
+   */
+  applyInbox(messages: InboxMessage[], now: number): void {
+    this.now = now;
+    const runOf = (dispatchId: string | null) => (dispatchId ? this.runs.find((r) => r.workers.some((w) => w.dispatchId === dispatchId))?.id : undefined) ?? null;
+    let learned = false;
+    for (const m of messages) {
+      const toDispatch = m.to.startsWith('dispatch:') ? m.to.slice(9) : null;
+      if (toDispatch && m.from.startsWith('orca_session_id:')) {
+        const run = runOf(toDispatch);
+        if (run && this.coordinators.get(run) !== m.from.slice(16)) {
+          this.coordinators.set(run, m.from.slice(16));
+          learned = true;
+        }
+      }
+    }
+    if (this.seenMail) {
+      for (const m of messages) {
+        if (this.seenMail.has(m.id) || !m.kind) continue;
+        const toRun = m.to.startsWith('run:') ? m.to.slice(4) : null;
+        const dispatchId = (m.to.startsWith('dispatch:') ? m.to.slice(9) : null) ?? m.dispatchId;
+        this.pendingHandoffs.push({ kind: m.kind, subject: m.subject, runId: toRun ?? runOf(dispatchId), dispatchId, toHead: !!toRun });
+      }
+    }
+    this.seenMail = new Set(messages.map((m) => m.id));
+    if (learned || this.pendingHandoffs.length) this.version++;
+  }
+
+  /**
+   * Deliveries to animate since last asked, placed on floors by the building just made: in the
+   * project room from seat to seat, and at the worker's own desk on its repository's floor (up to the
+   * roof, or down from it).
+   */
+  takeHandoffs(): Handoff[] {
+    const out: Handoff[] = [];
+    for (const h of this.pendingHandoffs.splice(0)) {
+      const room = h.runId ? this.roomSeats.get(`run:${h.runId}`) : undefined;
+      const seat = h.dispatchId ? (room?.byDispatch.get(h.dispatchId) ?? null) : null;
+      if (room) out.push({ floor: room.floor, from: h.toHead ? seat : room.head, to: h.toHead ? room.head : seat, kind: h.kind, subject: h.subject });
+      const run = this.runs.find((r) => r.id === h.runId);
+      const w = run?.workers.find((x) => x.dispatchId === h.dispatchId);
+      const desk = w?.workspace ? this.deskOfWorktree(w.workspace) : null;
+      if (desk) out.push({ floor: desk.floor, from: h.toHead ? desk.seat : null, to: h.toHead ? null : desk.seat, kind: h.kind, subject: h.subject });
+    }
+    return out;
+  }
+
+  /** The floor and a seat of a worktree's desk (`<repoId>::<path>`), as last built. */
+  private deskOfWorktree(worktreeId: string): { floor: string; seat: string } | null {
+    const path = worktreePath(worktreeId) ?? worktreeId;
+    const ws = this.byPath.get(`${LOCAL}|${path}`);
+    if (!ws) return null;
+    for (const [floor, seats] of this.deskSeats) {
+      if (floor.startsWith('p-')) continue;
+      for (const [seat, key] of seats) if (key === ws.id) return { floor, seat };
+    }
+    return null;
   }
 
   /** `orca terminal list --json`: each local pane's terminal handle. */
@@ -314,9 +470,181 @@ export class LiveModel {
     }
     const out: LiveFloor[] = [];
     for (const [name, f] of [...floors].sort(([a], [b]) => a.localeCompare(b))) out.push(this.floor(name, f.desks, f.agents));
+    // Project rooms on the roof (#29, #30): Runs first, worktree lineage where no Run covers it.
+    const rooms = this.roomSpecs();
+    this.botAway = new Map(rooms.flatMap((r) => (r.head && 'bot' in r.head ? [[r.head.bot.id, roomFloorId(r.key)] as [string, string]] : [])));
     if (this.bots.length) out.push(this.staffFloor());
+    const projects: Building['projects'] = {};
+    this.roomSeats.clear();
+    for (const r of rooms) {
+      const { floor, board } = this.roomFloor(r);
+      out.push(floor);
+      projects[floor.info.id] = board;
+    }
     for (const id of this.seats.keys()) if (!out.some((f) => f.info.id === id)) this.seats.delete(id);
-    return { floors: out };
+    return { floors: out, projects };
+  }
+
+  /** The project rooms there are now: one per live Run, then lineages across repos no Run covers. */
+  private roomSpecs(): RoomSpec[] {
+    const specs: RoomSpec[] = [];
+    const covered = new Set<string>();
+    const byId = new Map(this.worktreeRows.map((w) => [w.id, w]));
+    const nameOf = (worktreeId: string) => byId.get(worktreeId)?.name ?? this.byPath.get(`${LOCAL}|${worktreePath(worktreeId) ?? ''}`)?.name ?? (worktreePath(worktreeId) ?? worktreeId).split('/').pop() ?? 'worktree';
+    for (const run of this.runs) {
+      if (!isLive(run, this.now, RECENT_MS)) continue;
+      // One seat per task that has (or had) a worker; the newest dispatch of each task.
+      const seats: RoomSeat[] = [];
+      const seen = new Set<string>();
+      for (const w of [...run.workers].reverse()) {
+        const k = w.taskId ?? w.dispatchId;
+        if (seen.has(k)) continue;
+        seen.add(k);
+        const task = run.tasks.find((t) => t.id === w.taskId);
+        if (w.workspace) covered.add(w.workspace);
+        seats.push({ path: w.workspace, name: w.workspace ? nameOf(w.workspace) : 'worker', status: task?.status ?? null, dispatchId: w.dispatchId, taskId: w.taskId });
+      }
+      seats.reverse();
+      specs.push({ key: `run:${run.id}`, source: 'run', runId: run.id, objective: run.objective, head: this.coordinatorOf(run), seats, tasks: run.tasks, gates: run.gates });
+    }
+    // Lineage: a parent worktree and its children, when they span repositories or there are 2+ children.
+    const children = (w: OrcaWorktree): OrcaWorktree[] => w.childIds.map((c) => byId.get(c)).filter((c): c is OrcaWorktree => !!c);
+    for (const root of this.worktreeRows) {
+      if (root.parentId && byId.has(root.parentId)) continue;
+      const desc: OrcaWorktree[] = [];
+      const walk = (w: OrcaWorktree, depth: number) => {
+        for (const c of children(w)) {
+          if (desc.includes(c) || depth > 4) continue;
+          desc.push(c);
+          walk(c, depth + 1);
+        }
+      };
+      walk(root, 0);
+      if (!desc.length) continue;
+      const members = [root, ...desc];
+      const repos = new Set(members.map((m) => m.repoId ?? m.id.split('::')[0]));
+      if (repos.size < 2 && desc.length < 2) continue;
+      if (members.some((m) => covered.has(m.id))) continue;
+      // Only while someone works there or Orca has one of them open.
+      const busy = members.some((m) => {
+        const ws = this.byPath.get(`${LOCAL}|${m.path}`);
+        return (ws && ws.state !== 'inactive') || [...this.agents.values()].some((a) => ws && a.deskKey === ws.id);
+      });
+      if (!busy) continue;
+      const rootAgent = this.agentsAtPath(root.path)[0];
+      specs.push({
+        key: `lin:${root.id}`,
+        source: 'lineage',
+        runId: null,
+        objective: root.name,
+        head: rootAgent ? { agent: rootAgent } : { path: root.id, name: root.name },
+        seats: desc.map((d) => ({ path: d.id, name: d.name, status: null, dispatchId: null, taskId: null })),
+        tasks: [],
+        gates: [],
+      });
+    }
+    return specs;
+  }
+
+  /** Who coordinates a Run: its coordinator handle's terminal, else the sender of its dispatches' mail (a bot's chat or an agent). */
+  private coordinatorOf(run: OrcaRun): RoomSpec['head'] {
+    if (run.coordinatorHandle) {
+      const pane = [...this.paneTerminals].find(([, h]) => h === run.coordinatorHandle)?.[0] ?? [...this.terminals].find(([t]) => t === run.coordinatorHandle)?.[1];
+      const a = pane ? this.agents.get(pane) : undefined;
+      if (a) return { agent: a };
+    }
+    const session = this.coordinators.get(run.id);
+    if (!session) return null;
+    for (const [name, chats] of this.botChats) {
+      if (!chats.some((c) => c.sessionId === session)) continue;
+      const bot = this.bots.find((b) => b.name.toLowerCase() === name);
+      if (bot) return { bot };
+    }
+    const a = [...this.agents.values()].find((x) => x.sessionId === session);
+    return a ? { agent: a } : null;
+  }
+
+  private agentsAtPath(worktreeIdOrPath: string): AgentRec[] {
+    const path = worktreePath(worktreeIdOrPath) ?? worktreeIdOrPath;
+    const ws = this.byPath.get(`${LOCAL}|${path}`);
+    if (!ws) return [];
+    return [...this.agents.values()].filter((a) => a.deskKey === ws.id).sort((a, b) => RANK[a.shown] - RANK[b.shown] || a.firstSeen - b.firstSeen);
+  }
+
+  /** A project room: the head of the table and a seat per worker, each mirroring its desk downstairs. */
+  private roomFloor(r: RoomSpec): { floor: LiveFloor; board: ProjectBoard } {
+    const id = roomFloorId(r.key);
+    const [head, ...rest] = ROOM_SEATS;
+    const workers: WorkerInfo[] = [];
+    const labels: FloorPlan['labels'] = {};
+    const deskSeats = new Map<string, string>();
+    const byDispatch = new Map<string, string>();
+    let coordinator: ProjectBoard['coordinator'] = null;
+    const h = r.head;
+    if (h && 'bot' in h) {
+      workers.push(this.botWorker(h.bot, head!));
+      coordinator = { name: h.bot.name, bot: true };
+      labels[head!] = { text: cleanLabel(`👑 ${h.bot.name}`), color: '#9b5de5', by: 'orca', at: 0 };
+      const folder = [...this.botFolders].find((f) => this.workspaces.get(f)?.name.toLowerCase() === h.bot.name.toLowerCase());
+      if (folder) deskSeats.set(head!, folder);
+    } else if (h && 'agent' in h) {
+      workers.push(this.mirror(r.key, h.agent, head!));
+      const ws = this.workspaces.get(h.agent.deskKey);
+      coordinator = { name: ws?.name ?? 'coordinator', bot: false };
+      labels[head!] = { text: cleanLabel(`👑 ${ws?.name ?? 'Coordinator'}`), color: signColor([h.agent]), by: 'orca', at: 0 };
+      if (ws) deskSeats.set(head!, ws.id);
+    } else if (h && 'path' in h) {
+      coordinator = { name: h.name, bot: false };
+      labels[head!] = { text: cleanLabel(`👑 ${h.name}`), color: '#2b2d42', by: 'orca', at: 0 };
+      const ws = this.byPath.get(`${LOCAL}|${worktreePath(h.path) ?? h.path}`);
+      if (ws) deskSeats.set(head!, ws.id);
+    } else {
+      // Orca doesn't say who coordinates (coordinator_handle is null): the head stays empty, with a sign.
+      labels[head!] = { text: cleanLabel('👑 Coordinator unknown'), color: '#2b2d42', by: 'orca', at: 0 };
+    }
+    r.seats.slice(0, rest.length).forEach((s, i) => {
+      const seat = rest[i]!;
+      if (s.dispatchId) byDispatch.set(s.dispatchId, seat);
+      const ws = s.path ? this.byPath.get(`${LOCAL}|${worktreePath(s.path) ?? s.path}`) : undefined;
+      if (ws) deskSeats.set(seat, ws.id);
+      const here = s.path ? this.agentsAtPath(s.path) : [];
+      if (here[0]) workers.push(this.mirror(r.key, here[0], seat));
+      labels[seat] = { text: cleanLabel(`${s.status ? TASK_ICON[s.status] : '🪑'} ${s.name}`), color: here[0] ? signColor(here) : s.status ? TASK_COLOR[s.status] : '#2b2d42', by: 'orca', at: 0 };
+    });
+    this.deskSeats.set(id, deskSeats);
+    this.roomSeats.set(r.key, { floor: id, head: head!, byDispatch });
+    const taskSeat = (taskId: string | null) => {
+      const s = r.seats.findIndex((x) => x.taskId === taskId);
+      return s >= 0 && s < rest.length && deskSeats.has(rest[s]!) ? rest[s]! : deskSeats.has(head!) ? head! : null;
+    };
+    const busy = workers.filter((w) => w.status === 'working').length;
+    const waiting = workers.filter((w) => w.status === 'needs_input').length + r.gates.length;
+    const name = r.objective ?? (r.source === 'run' ? 'Project' : 'Worktree family');
+    return {
+      floor: {
+        info: { id, name, dir: '', palette: hash(r.key) % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: 1 + r.seats.length, busy, waiting, people: 0, wing: 0, room: 'project' },
+        workers,
+        plan: { wing: 0, labels },
+        links: {},
+      },
+      board: {
+        source: r.source,
+        objective: r.objective,
+        coordinator,
+        tasks: r.tasks.map((t) => ({ id: t.id, title: t.title, status: t.status })),
+        gates: r.gates.map((g) => ({ id: g.id, question: g.question, options: g.options, seat: taskSeat(g.taskId) })),
+        members: r.source === 'lineage' ? r.seats.map((s) => s.name) : [],
+      },
+    };
+  }
+
+  /** A figure from a desk downstairs, mirrored at a seat in a project room (same look, same state; actions reach the same agent). */
+  private mirror(roomKey: string, a: AgentRec, seat: string): WorkerInfo {
+    const ws = this.workspaces.get(a.deskKey);
+    const w = this.worker(a, seat, ws ? deskOf(ws) : remoteDesk(a));
+    const id = `m-${hash(`${roomKey}|${a.paneKey}`).toString(36)}`;
+    this.workerIds.set(id, a.paneKey);
+    return { ...w, id };
   }
 
   // ---- internals ------------------------------------------------------------------------------
@@ -330,6 +658,7 @@ export class LiveModel {
     this.deskSeats.set(id, new Map([...seats].flatMap(([key, at]) => at.map((s) => [s, key] as [string, string]))));
     const workers: WorkerInfo[] = [];
     const labels: FloorPlan['labels'] = {};
+    const links: LiveFloor['links'] = {};
     let wing = 0;
     for (const d of ordered) {
       const at = seats.get(d.key);
@@ -338,7 +667,11 @@ export class LiveModel {
       list.slice(0, at.length).forEach((a, i) => workers.push(this.worker(a, at[i]!, d)));
       const extra = list.length - at.length;
       const sign = at.find((s) => !s.startsWith('beanbag-'));
-      if (sign) labels[sign] = { text: cleanLabel(`${d.hostId !== LOCAL ? '🌐 ' : ''}${d.name}${extra > 0 ? ` +${extra}` : ''}`), color: signColor(list), by: 'orca', at: 0 };
+      const path = d.hostId === LOCAL ? this.workspaces.get(d.key)?.path : undefined;
+      const mine = path ? this.linksByPath.get(path) : undefined;
+      // Every seat of the desk has its links, so the hint finds them wherever you stand.
+      if (mine?.length) for (const s of at) links[s] = mine;
+      if (sign) labels[sign] = { text: cleanLabel(`${d.hostId !== LOCAL ? '🌐 ' : ''}${d.name}${extra > 0 ? ` +${extra}` : ''}`), color: signColor(list), by: 'orca', at: 0, ...(mine?.length ? { pins: pinsText(mine) } : {}) };
       for (const s of at) if (WING_IDS.has(s)) wing = 2;
     }
     const busy = workers.filter((w) => w.status === 'working').length;
@@ -348,6 +681,7 @@ export class LiveModel {
       info: { id, name, dir: dir ? (this.workspaces.get(dir)?.path ?? '') : '', palette: hash(name) % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing, ...(this.floorProject(id) ? { orcaCreate: true } : {}) },
       workers,
       plan: { wing, labels },
+      links,
     };
   }
 
@@ -392,12 +726,35 @@ export class LiveModel {
     for (const b of this.bots) {
       const deskId = seats.get(`bot:${b.id}`)?.[0];
       if (!deskId) continue;
+      // Coordinating a Run (#33): it went up to the project room; its office waits with a note.
+      if (this.botAway.has(b.id)) {
+        if (!deskId.startsWith('beanbag-')) labels[deskId] = { text: cleanLabel(`🤖 ${b.name} → 🏗️ roof`), color: '#9b5de5', by: 'orca', at: 0 };
+        if (WING_IDS.has(deskId)) wing = 2;
+        continue;
+      }
+      workers.push(this.botWorker(b, deskId));
+      if (!deskId.startsWith('beanbag-')) labels[deskId] = { text: cleanLabel(`🤖 ${b.name}`), color: '#9b5de5', by: 'orca', at: 0 };
+      if (WING_IDS.has(deskId)) wing = 2;
+    }
+    const busy = workers.filter((w) => w.status === 'working').length;
+    const waiting = workers.filter((w) => w.status === 'needs_input').length;
+    return {
+      info: { id, name: 'Staff', dir: '', palette: hash('Staff') % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing, room: 'staff' },
+      workers,
+      plan: { wing, labels },
+      links: {},
+    };
+  }
+
+  /** A bot as a figure (on the Staff floor, or at the head of a project room): stable id and look, state from its chats. */
+  private botWorker(b: OrcaBot, deskId: string): WorkerInfo {
+    {
       const chats = this.botChats.get(b.name.toLowerCase()) ?? [];
       const st = chats.reduce<OrcaState | null>((best, c) => (best === null || RANK[c.state] < RANK[best] ? c.state : best), null);
       const status: WorkerStatus = b.paused ? 'offline' : st === 'working' ? 'working' : st === 'blocked' || st === 'waiting' ? 'needs_input' : 'idle';
       const said = chats.find((c) => c.state === st)?.bubble ?? null;
       const h = hash(b.id);
-      workers.push({
+      return {
         id: `bot-${h.toString(36)}`,
         kind: 'agent',
         ...(isAgentProvider(b.agent) ? { provider: b.agent } : {}),
@@ -413,17 +770,8 @@ export class LiveModel {
         viewers: [],
         viewerIds: [],
         task: { name: `🤖 ${b.name}`, summary: b.paused ? '⏸ paused' : status === 'working' && said ? said : (b.specialty ?? 'Bot') },
-      });
-      if (!deskId.startsWith('beanbag-')) labels[deskId] = { text: cleanLabel(`🤖 ${b.name}`), color: '#9b5de5', by: 'orca', at: 0 };
-      if (WING_IDS.has(deskId)) wing = 2;
+      };
     }
-    const busy = workers.filter((w) => w.status === 'working').length;
-    const waiting = workers.filter((w) => w.status === 'needs_input').length;
-    return {
-      info: { id, name: 'Staff', dir: '', palette: hash('Staff') % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing, room: 'staff' },
-      workers,
-      plan: { wing, labels },
-    };
   }
 
   /** The bots' chat agents, by bot name (lowercase): from the local CLI list. */
@@ -492,6 +840,16 @@ export class LiveModel {
     rec.shown = st;
     rec.shownSince = at;
   }
+}
+
+/** Seats of a project room: the head of the table first (the room's first desk), then one per worker. */
+const ROOM_SEATS = [...CLUSTERS.flat()];
+const TASK_ICON: Record<TaskStatus, string> = { pending: '⏳', ready: '🟢', dispatched: '🛠️', in_progress: '🛠️', blocked: '⛔', completed: '✅', failed: '❌' };
+const TASK_COLOR: Record<TaskStatus, string> = { pending: '#2b2d42', ready: '#118ab2', dispatched: '#ffd166', in_progress: '#ffd166', blocked: '#ef476f', completed: '#06d6a0', failed: '#ef476f' };
+
+/** A project room's floor id: `p-…`, never a repository floor's (`f-…`). */
+export function roomFloorId(key: string): string {
+  return `p-${hash(key).toString(36)}`;
 }
 
 const SUMMARY: Record<OrcaState, string> = { working: 'Working…', blocked: 'Waiting for you', waiting: 'Waiting for you', done: 'Done' };
