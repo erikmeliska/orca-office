@@ -13,6 +13,8 @@ Since M3 the socket must also present the page's token (`bridge/src/client-auth.
 fetches it from its own server at `/__orca-office/token` (Vite hands it only to a same-origin fetch,
 `client/vite-token.ts`) and asks for the subprotocols `orca-office` and `token.<hex>`; without it the
 upgrade gets 401. The token lives in `~/.orca-office/client-token` (0600), apart from the plugin's key.
+It keeps out browsers (other sites, other local ports, frames); a program on this machine can forge
+the headers the token endpoint checks, so it is not a defence against local programs or accounts.
 
 | Variable | Default | What |
 |----------|---------|------|

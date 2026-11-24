@@ -20,6 +20,13 @@ import { tokenMatches } from './auth.js';
  * - The page sends it as a WebSocket subprotocol (`token.<hex>` next to `orca-office`), never in
  *   the URL, so it doesn't end up in logs or history; the bridge refuses the upgrade without it.
  *
+ * What this protects against, and what not: it keeps out browsers, i.e. any other website, a page on
+ * another local port, a frame, DNS rebinding (the checked headers are ones page scripts cannot set or
+ * forge). It does not keep out a program running on this machine: such a program can send any
+ * headers it likes to the token endpoint, and one running as this user can read the token file
+ * anyway. Loopback is reachable by other local accounts too, so the office (like the worker's
+ * token) assumes a machine whose accounts you trust; it is not a defence against them.
+ *
  * A cookie was the other option. Cookies are scoped by host, not port, so a cookie set for
  * 127.0.0.1 would ride along with requests from a page on any other local port; a token held in the
  * page's memory, handed only to its own origin, keeps the port boundary.
