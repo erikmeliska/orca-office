@@ -38,6 +38,12 @@ not used.
 | 21 | Bridge process | Standalone Node process under launchd, survives Orca restarts and plugin reloads; shows "Orca offline" when Orca is not running. |
 | 22 | Upstream | One-time copy with attribution. Later improvements from agent-office or its forks are cherry-picked by hand; no `upstream` remote. |
 | 23 | Stack | TypeScript, three.js + Vite (client, as upstream), Node (bridge), vitest. |
+| 24 | Bots = permanent staff | Orca bots (ReleaseBot, SupportBot, Orchestrator, …) are permanent named characters with a stable look, nameplate and specialty icon. Workers (agent sessions) are temporary staff at desks. |
+| 25 | Bots' home | A "Staff" floor with a personal office per bot. When a bot works on a repo or worktree it walks to that floor, desk or project room and returns home when done. Work with no repo target (Slack, Gmail, Obsidian…) happens in its own office. |
+| 26 | Collaboration | Only handoffs are shown: task dispatch, `ask`, `reply`, mailbox messages, as a short delivery animation with a truncated subject. No permanent relationship lines. |
+| 27 | Project room source | Built primarily from an orchestration Run (objective, tasks, gates, workers); worktree lineage is the fallback. Whoever coordinates the Run (bot or session) sits at the head. Open decision gates hang on the board as "waiting for your decision". |
+| 28 | Bot interaction | Read-only in v1 (chats, last asked/answered, last activity, current location). Messaging a bot is milestone M5, after verifying Orca can accept it from outside. |
+| 29 | Bot data source | The plugin API has no `bot.*` methods or events, so the bridge polls `orca bot list/chats --json` and `orca orchestration run-list/run-show/inbox --json`. |
 
 ## Architecture
 
@@ -47,6 +53,8 @@ Orca (local) ──trusted-worker plugin──► bridge (Node, launchd, 127.0.0
    workspace.*, agent.tool.* hooks          │  │ orca agent list --json --environment X
    calls: workspace.list, agents.list,      │  └── paired environments (polling)
    terminal.read/sendText, workspace.create │
+                                            │  ▲
+                                            │  └── orca bot … / orchestration … --json (polling)
                                             ▼
                                   browser: 3D office (WebSocket)
 ```
@@ -55,8 +63,9 @@ Orca (local) ──trusted-worker plugin──► bridge (Node, launchd, 127.0.0
 
 - **M0 Spike**: hello-world worker plugin sends events to a bridge; verify special keys via `sendText`, status events for SSH hosts, filtering of `lastAssistantMessage`, outbound network from the worker.
 - **M1 Client boots**: copied client starts against a stub bridge, without login and dropped features.
-- **M2 Live office**: real floors, desks and figures with states and action animations from Orca, including remote environments.
+- **M2 Live office**: real floors, desks and figures with states and action animations from Orca, including remote environments; Staff floor with bots.
 - **M3 Light control**: terminal with typing, open in Orca, new task, mark read and comment.
-- **M4 Projects and navigation**: project room from lineage, elevator badges, per-desk boards.
+- **M4 Projects and navigation**: project room from orchestration Runs (lineage fallback), decision gates, elevator badges, per-desk boards, bots walking to their work, handoff animations.
+- **M5 Talk to bots**: send messages to bots from the office, once the Orca side is verified.
 
 If M0 breaks an assumption, the plan is adjusted before M1.
