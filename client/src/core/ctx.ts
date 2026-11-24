@@ -65,9 +65,6 @@ export function createCtx(parts: Parts): { ctx: Ctx; core: CoreState } {
     get net() {
       return parts.net;
     },
-    get voice() {
-      return parts.voice;
-    },
     get sound() {
       return parts.sound;
     },

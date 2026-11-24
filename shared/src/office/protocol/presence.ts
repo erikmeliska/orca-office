@@ -1,4 +1,4 @@
-// People in the office: where they are and what they do, chat, voice and the welcome.
+// People in the office: where they are and what they do, chat and the welcome.
 
 import type { Look } from '../avatar.js';
 import type { BarGame } from '../bargames.js';
@@ -26,9 +26,6 @@ export interface PeerInfo {
   z: number;
   rotY: number;
   moving: boolean;
-  voice: boolean;
-  muted: boolean;
-  sharing: boolean;
   /** On a smoke break, cigarette in hand. */
   smoking?: boolean;
   /** At the rooftop bar's dart board or axe lane, a dart or an axe in hand. */
@@ -97,8 +94,6 @@ export type PresenceClientMsg =
   | { t: 'profile'; name: string; color: string; look: Look }
   /** What you have open now (see PeerInfo.doing and PeerInfo.reading); none when you're back in the office. */
   | { t: 'doing'; what?: string; reading?: boolean }
-  | { t: 'voice'; voice: boolean; muted: boolean; sharing: boolean }
-  | { t: 'rtc'; to: string; data: unknown }
   | { t: 'chat'; text: string }
   | { t: 'ping'; at: number };
 
@@ -111,7 +106,6 @@ export type PresenceServerMsg =
       floors: FloorInfo[];
       /** Where new projects are cloned to, on the office's machine. */
       projectsDir: ProjectsDirState;
-      ice: { urls: string | string[]; username?: string; credential?: string }[];
       chat: ChatLine[];
       /** Whether teammates can be invited from the office (see TeamState). */
       invites: boolean;
@@ -139,7 +133,6 @@ export type PresenceServerMsg =
   | { t: 'peer.leave'; id: string }
   | { t: 'peer.act'; id: string; smoke?: boolean; drink?: DrinkId | null; throwing?: BarGame | null }
   | { t: 'peer.emote'; id: string; emote: EmoteId }
-  | { t: 'rtc'; from: string; data: unknown }
   | ({ t: 'chat' } & ChatLine)
   | { t: 'toast'; text: string; level: 'info' | 'warn' | 'error' }
   /** Sent to whoever tried to sit where someone on the floor already is. */

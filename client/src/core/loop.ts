@@ -75,7 +75,7 @@ export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage
 
   /** You as everyone else sees you, your hands as you see them, and the camera's view. */
   function moveMe({ dt, t }: Frame) {
-    const { player, me, hands, voice, camera } = ctx;
+    const { player, me, hands, camera } = ctx;
     me.root.position.copy(player.pos);
     me.root.position.y += player.stepOffset;
     me.root.rotation.y = player.facing;
@@ -83,7 +83,6 @@ export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage
     const grip = ctx.view.grip();
     me.setGrip(grip);
     me.update(dt, t, (player.moving && player.grounded) || (grip === 'ladder' && player.moving), !player.grounded && !grip && !ctx.activities.any('hidesHands'), player.effects.speed);
-    me.setVoiceLevel(voice.inVoice ? voice.localLevel : 0);
     const firstPerson = player.view === 'first';
     // In first person you are the camera; in third, hide yourself when it's zoomed in right behind your head.
     // At the tee the camera's behind the ball, and you're the one holding the club.

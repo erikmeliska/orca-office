@@ -1,6 +1,5 @@
 import { ROOF, ROOF_NAME } from '@orca-office/shared/office/rooftop';
 import { store } from '../state';
-import type { Voice } from '../voice';
 import { $, h } from './dom';
 import { whereabouts } from './whereabouts';
 
@@ -8,7 +7,7 @@ import { whereabouts } from './whereabouts';
 let peopleKey = '';
 
 /** The people list in the sidebar. Click yourself to change your character, or anyone else to walk over to them. */
-export function renderPeople(voice: Voice, onEditProfile: () => void, onWalkTo: (id: string) => void, force = true) {
+export function renderPeople(onEditProfile: () => void, onWalkTo: (id: string) => void, force = true) {
   const peers = [...store.peers.values()].sort((a, b) => (a.id === store.you ? -1 : b.id === store.you ? 1 : a.name.localeCompare(b.name)));
   // What each of them is up to changes as they walk about (onto the balcony, up the stairs).
   const doing = peers.map((p) => (p.id === store.you ? undefined : whereabouts(p)));
@@ -19,7 +18,6 @@ export function renderPeople(voice: Voice, onEditProfile: () => void, onWalkTo: 
   ul.replaceChildren();
   peers.forEach((p, i) => {
     const you = p.id === store.you;
-    const mic = !p.voice ? '' : p.muted ? '🔇' : '🎙️';
     const sub = doing[i];
     const li = h(
       'li',
@@ -34,19 +32,9 @@ export function renderPeople(voice: Voice, onEditProfile: () => void, onWalkTo: 
           ? h('span.where', { title: 'Up on the roof' }, `🍸 ${ROOF_NAME}`)
           : h('span.where', { title: 'On another floor' }, `🛗 ${store.floors.find((f) => f.id === p.floor)?.name ?? 'lobby'}`)
         : null,
-      p.sharing ? h('span', { title: 'Sharing screen' }, '🖥️') : null,
-      h('span.mic', {}, mic),
     );
     li.addEventListener('click', () => (you ? onEditProfile() : onWalkTo(p.id)));
     ul.append(li);
   });
   $('people-count').textContent = String(peers.length);
-  void voice;
-}
-
-export function updateSpeaking(voice: Voice) {
-  for (const li of document.querySelectorAll<HTMLElement>('#people li[data-peer]')) {
-    const lvl = voice.levelOf(li.dataset.peer!);
-    li.classList.toggle('speaking', lvl > 0.04);
-  }
 }

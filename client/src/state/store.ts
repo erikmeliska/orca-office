@@ -105,7 +105,6 @@ export class Store {
   repos: { list: RepoChoice[]; error?: string; loading: boolean; at: number } = { list: [], loading: false, at: 0 };
   issues: GhState<GhIssue> = { items: [], fetchedAt: 0, loading: true };
   pulls: GhState<GhPull> = { items: [], fetchedAt: 0, loading: true };
-  ice: RTCIceServer[] = [];
   chat: ChatLine[] = [];
   /** Whether this office can invite teammates (deployed with deploy/aws.sh). */
   invites = false;

@@ -27,7 +27,7 @@ export type SettingsPane = 'you' | 'sound' | 'notify' | 'building' | 'workers';
 
 const PANES: { id: SettingsPane; icon: string; label: string; blurb: string }[] = [
   { id: 'you', icon: '🧍', label: 'You', blurb: 'How you look, how you see the office, and how you’re signed in.' },
-  { id: 'sound', icon: '🔊', label: 'Sound & voice', blurb: 'How loud the office is for you, and how voice chat works.' },
+  { id: 'sound', icon: '🔊', label: 'Sound', blurb: 'How loud the office is for you.' },
   { id: 'notify', icon: '🔔', label: 'Notifications', blurb: 'Hear about a worker that needs someone, or finished, while you’re somewhere else.' },
   { id: 'building', icon: '🏢', label: 'Building', blurb: 'The map, the decorations, the sky, the dog, and where new floors are cloned.' },
   { id: 'workers', icon: '🤖', label: 'Workers', blurb: 'What workers start on, how many run at once, when they go home and what the office tells them.' },
@@ -115,8 +115,6 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
     settings = { ...settings, ...some };
     onChange(settings);
   };
-  // Voice chat: an open mic, or muted until you hold V.
-  const talkRow = choiceRow('Voice chat', [[false, '🎙️ Open mic'], [true, '✋ Push to talk']], () => settings.pushToTalk, (pushToTalk) => change({ pushToTalk }));
   const musicRow = volumeRow('Music volume', 'music', 'musicMuted');
 
   // The swish of the book's pages at the bookshelf, on or off.
@@ -449,11 +447,10 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
       setting('Signed in', null, h('div.volume', {}, signOut), h('p.setting-note', {}, account ? `As ${account.name}, with your own account (${account.role}).` : 'With the shared office password.')),
     ],
     sound: [
-      setting('Office sounds', 'you', soundRow, h('p.setting-note', {}, 'Workers typing, footsteps, the coffee machine, birds and rain outside, the dog, the ding when a worker is done and the alarm when one needs you. Voice chat isn’t affected.')),
+      setting('Office sounds', 'you', soundRow, h('p.setting-note', {}, 'Workers typing, footsteps, the coffee machine, birds and rain outside, the dog, the ding when a worker is done and the alarm when one needs you.')),
       setting('When a worker needs you', 'you', alarmRow, h('p.setting-note', {}, 'An alarm the moment a worker stops to ask you something or wants a permission. Keep reminding me rings it again, softly, every 30 seconds until someone opens that worker’s terminal. It’s as loud as the office sounds are.')),
       setting('Page turns at the bookshelf', 'you', pagesRow, h('p.setting-note', {}, 'A soft swish each time the book in your hands turns a page, as you open a doc or scroll through one. The 🔈 at the top of the bookshelf turns it off too.')),
       setting('Music', 'you', musicRow, h('p.setting-note', {}, 'The DJ on the roof; this is how loud it is for you alone.')),
-      setting('Voice chat', 'you', talkRow, h('p.setting-note', {}, 'Either way, V joins voice, holding V talks and you’re muted once you let go, and M mutes or unmutes. With push to talk you join muted. Leave voice from the ☰ menu.')),
     ],
     notify: [
       setting('Desktop notifications', 'you', notifyRow, notifyNote),

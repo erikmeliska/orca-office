@@ -10,7 +10,6 @@ import type { DesktopNotifier } from '../notify';
 import type { PlayerController } from '../player';
 import type { OfficeSound } from '../sound';
 import type { Settings } from '../state';
-import type { Voice } from '../voice';
 import type { Person } from '../world/character';
 import type { Confetti } from '../world/confetti';
 import type { Hands } from '../world/hands';
@@ -37,7 +36,6 @@ import type { installSeating } from '../features/seating';
 import type { installSmoke } from '../features/smoke';
 import type { installTelescope } from '../features/telescope';
 import type { installTv } from '../features/tv';
-import type { installVoice } from '../features/voice';
 import type { installWaiting } from '../features/waiting';
 import type { installWalking } from '../features/walking';
 import type { installWorkerActions } from '../features/workers/actions';
@@ -61,7 +59,6 @@ export interface Parts {
   /** The building's map as it's built, and the one it's on (see core/worlds.ts). */
   worlds: Made<typeof createWorlds>;
   net: Net;
-  voice: Voice;
   /** Your own character. */
   me: Person;
   settings: Settings;
@@ -116,6 +113,5 @@ export interface Parts {
   cards: Made<typeof installCarrying>;
   seating: Made<typeof installSeating>;
   emotes: Made<typeof installEmotes>;
-  talk: Made<typeof installVoice>;
   hud: Made<typeof installHud>;
 }

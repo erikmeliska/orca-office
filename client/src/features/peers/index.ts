@@ -16,7 +16,7 @@ import type { Parts } from '../../core/parts';
 import { groundAt } from '../../player';
 import { store } from '../../state';
 import { clip } from '../../ui/dom';
-import { renderPeople, updateSpeaking } from '../../ui/people';
+import { renderPeople } from '../../ui/people';
 import { whereabouts } from '../../ui/whereabouts';
 import { Person } from '../../world/character';
 import { disposeSprite, textSprite } from '../../world/toon';
@@ -41,8 +41,8 @@ export interface RemotePeer {
 }
 
 /** Registers what follows the people in the office (store 'peers'), their ticks, and chat and peer.act. */
-export function installPeers(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'puff' | 'worlds' | 'walking' | 'talk' | 'hud'>) {
-  const { scene, voice, sound, player, office } = ctx;
+export function installPeers(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'puff' | 'worlds' | 'walking' | 'hud'>) {
+  const { scene, sound, player, office } = ctx;
   const { plan, inOffice } = parts.worlds;
   const remotes = new Map<string, RemotePeer>();
   const editProfile = () => parts.hud.editProfile();
@@ -63,10 +63,10 @@ export function installPeers(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'puff
         r = { person, target: new THREE.Vector3(peer.x, peer.y, peer.z), rotY: peer.rotY, moving: false, label: '', look: { ...peer.look }, stepT: 0, speed: 0, grip: null };
         remotes.set(id, r);
       }
-      const label = `${peer.name}|${peer.voice ? (peer.muted ? 'm' : 'v') : '-'}|${peer.color}`;
+      const label = `${peer.name}|${peer.color}`;
       if (label !== r.label) {
         r.label = label;
-        r.person.setLabel(peer.name, peer.voice ? peer.muted : null);
+        r.person.setLabel(peer.name, null);
         r.person.setColor(peer.color);
         noOutline(r.person.root);
       }
@@ -90,8 +90,7 @@ export function installPeers(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'puff
         remotes.delete(id);
       }
     }
-    renderPeople(voice, editProfile, walkTo);
-    parts.talk.refreshShares();
+    renderPeople(editProfile, walkTo);
   }
   store.on('peers', syncPeers);
 
@@ -129,15 +128,12 @@ export function installPeers(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'puff
         r.stepT -= stride;
         sound.stepAt(pos.x, pos.z, pos.y, running ? 1 : 0);
       }
-      r.person.setVoiceLevel(p.voice && !p.muted ? voice.levelOf(id) : 0);
       r.person.emojiLift = r.bubble ? 0.45 : 0;
       if (r.bubble && now > r.bubble.until) {
         r.person.root.remove(r.bubble.sprite);
         disposeSprite(r.bubble.sprite);
         r.bubble = undefined;
       }
-      const d = Math.hypot(pos.x - player.pos.x, pos.z - player.pos.z);
-      voice.setVolume(id, d < 4 ? 1 : Math.max(0.2, 1 - (d - 4) / 16));
     }
   });
   let speakTick = 0;
@@ -149,10 +145,7 @@ export function installPeers(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'puff
         const p = store.peers.get(id);
         if (p) r.person.setDoing(whereabouts(p, plan()));
       }
-      renderPeople(voice, editProfile, walkTo, false);
-      updateSpeaking(voice);
-      // People on other floors can't be heard here (their voice connection stays up for when you meet).
-      for (const p of store.peers.values()) if (p.id !== store.you && !store.onMyFloor(p)) voice.setVolume(p.id, 0);
+      renderPeople(editProfile, walkTo, false);
     }
   });
   ctx.messages.on('chat', (msg) => sayBubble(msg.from, msg.text));

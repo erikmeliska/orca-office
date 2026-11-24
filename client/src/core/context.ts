@@ -13,7 +13,6 @@ import type { PlayerController } from '../player';
 import type { OfficeSound } from '../sound';
 import type { Settings } from '../state';
 import type { Hud } from '../ui/menu';
-import type { Voice } from '../voice';
 import type { Person } from '../world/character';
 import type { Confetti } from '../world/confetti';
 import type { Hands } from '../world/hands';
@@ -83,7 +82,6 @@ export interface Ctx {
   /** Your hands, in first person. */
   readonly hands: Hands;
   readonly net: Net;
-  readonly voice: Voice;
   readonly sound: OfficeSound;
   readonly settings: Settings;
   readonly confetti: Confetti;

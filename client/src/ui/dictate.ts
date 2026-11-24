@@ -31,7 +31,7 @@ const TITLE = 'Dictate: hold to talk (or hold Ctrl+Space) and let go, and what y
 let active: { button: HTMLElement; abort(): void } | null = null;
 const watchers = new Set<(on: boolean) => void>();
 
-/** Hears when dictation starts and stops listening (voice chat mutes you meanwhile, see features/dictation). */
+/** Hears when dictation starts and stops listening. */
 export function onDictating(fn: (on: boolean) => void) {
   watchers.add(fn);
 }
@@ -64,7 +64,7 @@ export function dictation(target: DictateTarget, opts: { label?: string } = {}):
   const start = () => {
     if (listening || target.off?.()) return;
     if (speechSupport() === 'insecure') {
-      toast('Dictation needs HTTPS (or localhost), like voice. Ask whoever runs the office to enable TLS.', 'warn');
+      toast('Dictation needs HTTPS (or localhost).', 'warn');
       return;
     }
     active?.abort();

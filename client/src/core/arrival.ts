@@ -32,7 +32,7 @@ export type ArrivalParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'maps' | 
  * the floors and the project. Install it after core/travel.ts and before anything else hears a welcome.
  */
 export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
-  const { net, voice, player } = ctx;
+  const { net, player } = ctx;
   const { inOffice, plan } = parts.worlds;
   const { placeAt, placeInCar } = parts.place;
 
@@ -52,7 +52,6 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
     'welcome',
     () => {
       wasOn = store.floor ?? lastFloor();
-      voice.reset();
       parts.views.seatedOnArrival();
     },
     'before',
@@ -100,7 +99,6 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
       floorWentWhileAway(wasOn);
     } else if (!store.floor) travel.arrive();
     maps.offTheRoof();
-    if (voice.inVoice || voice.sharing) net.send({ t: 'voice', voice: voice.inVoice, muted: voice.muted, sharing: voice.sharing });
     if (player.seat) net.send({ t: 'sit', seat: player.seat.key });
     const carrying = core.carrying;
     if (carrying) net.send({ t: 'carry', issue: carrying.issue, title: carrying.title });
@@ -122,7 +120,6 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
     if (!bootVersion) bootVersion = msg.version;
     else if (msg.version !== bootVersion || restarting()) showUpgraded(msg.upgrade);
     upgradePhase = msg.upgrade.phase;
-    voice.syncPeers();
   });
   ctx.messages.on('floor.enter', () => {
     const { travel } = parts;

@@ -15,7 +15,7 @@ export interface HudAction {
   key?: string | (() => string | undefined);
   /** A number worth knowing before you open it: open issues, tasks waiting… */
   count?: () => number;
-  /** Pressed, like voice while you're in it. */
+  /** Pressed, like hanging a picture while you're at it. */
   on?: () => boolean;
   /** Stands out: an update to install, a muted mic. */
   tone?: () => 'primary' | 'danger' | undefined;
@@ -51,7 +51,7 @@ export function panelHide(id: HudPanel): HTMLElement {
 }
 
 export interface Hud {
-  /** Redraws the top bar for a change the store doesn't announce (voice, hanging a picture). */
+  /** Redraws the top bar for a change the store doesn't announce (hanging a picture). */
   refresh(): void;
   toggleMenu(): void;
 }

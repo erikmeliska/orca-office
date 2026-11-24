@@ -18,10 +18,6 @@ declare module '../../world/types' {
 }
 
 export interface SeatingDeps {
-  /** The screens shared on this floor, by who's sharing them (see features/voice). */
-  shares(): [string, MediaStream][];
-  /** Watches what's on the TV full screen (see features/voice). */
-  watchShare(): void;
   /** The boss's monitor (see features/arcade). */
   arcade: Arcade;
   /** The bar's menu (see features/bar). */
@@ -49,19 +45,13 @@ export function installSeating(ctx: Ctx, deps: SeatingDeps) {
     return best;
   }
 
-  /** Someone else's screen is up on the TV. */
-  function tvShowing(): boolean {
-    return deps.shares().some(([who]) => who !== 'You');
-  }
-
-  /** E at a seat: sit down on it. Sitting there already, get up, or on the couch facing the TV, watch it. */
+  /** E at a seat: sit down on it. Sitting there already, get up (or play, or order a drink). */
   function useSeat(seatId: string) {
     const seat = ctx.plan().seatingById.get(seatId);
     if (!seat) return;
     const player = ctx.player;
     if (player.seat?.seatId === seatId) {
-      if (seat.tv && tvShowing()) deps.watchShare();
-      else if (seat.game) deps.arcade.play();
+      if (seat.game) deps.arcade.play();
       else if (seat.bar) deps.showBar();
       else standUp();
       return;
@@ -74,8 +64,6 @@ export function installSeating(ctx: Ctx, deps: SeatingDeps) {
     player.sit(place);
     ctx.me.sit(place.hips);
     ctx.net.send({ t: 'sit', seat: place.key });
-    // The couch in front of the TV is where you watch whoever's sharing.
-    if (seat.tv && tvShowing()) deps.watchShare();
   }
 
   function standUp() {
@@ -111,9 +99,8 @@ export function installSeating(ctx: Ctx, deps: SeatingDeps) {
       const seat = ctx.plan().seatingById.get(it.seatId ?? '');
       if (!seat) return { k: '', parts: [] };
       if (ctx.player.seat?.seatId === seat.id) {
-        const tv = !!seat.tv && tvShowing();
-        const use = tv ? 'Watch the TV' : seat.game ? 'Play Minesweeper' : seat.bar ? 'Order a drink' : '';
-        return { k: `${seat.id}|sitting|${tv}`, parts: [hintTitle(seat.label), aside('sitting'), ...(use ? [key('E', use), key('W A S D', 'Get up')] : [key('E', 'Get up')])] };
+        const use = seat.game ? 'Play Minesweeper' : seat.bar ? 'Order a drink' : '';
+        return { k: `${seat.id}|sitting`, parts: [hintTitle(seat.label), aside('sitting'), ...(use ? [key('E', use), key('W A S D', 'Get up')] : [key('E', 'Get up')])] };
       }
       const full = !freePlace(seat);
       return { k: `${seat.id}|${full}`, parts: [hintTitle(seat.label), seat.game ? aside('💣 Minesweeper on the monitor') : '', full ? aside('no room') : key('E', 'Sit down')] };

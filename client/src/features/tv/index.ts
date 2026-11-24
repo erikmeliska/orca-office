@@ -1,10 +1,10 @@
 /**
- * The office TV: the screen someone on the floor is sharing, or its idle card while nobody is. What's
- * shared, and watching it full screen, is features/voice's.
+ * The office TV, showing its idle card. In agent-office it showed a screen someone on the floor shared
+ * over voice; orca-office has no voice (design.md #16).
  */
 import * as THREE from 'three';
 import type { Ctx } from '../../core/context';
-import { hintTitle, key, onE } from '../../core/hint';
+import { hintTitle } from '../../core/hint';
 
 // The kinds of thing you can use that this defines (see InteractKinds in world/types.ts).
 declare module '../../world/types' {
@@ -13,21 +13,7 @@ declare module '../../world/types' {
   }
 }
 
-export interface TvDeps {
-  /** The screens shared on this floor, by who's sharing them (see features/voice). */
-  shares(): [string, MediaStream][];
-  /** Watches what's on the TV full screen, or shares your screen when nobody's sharing (see features/voice). */
-  watch(): void;
-}
-
-export function installTv(ctx: Ctx, deps: TvDeps) {
-  // TV
-  const tvVideo = document.createElement('video');
-  tvVideo.muted = true;
-  tvVideo.playsInline = true;
-  tvVideo.autoplay = true;
-  const tvTexture = new THREE.VideoTexture(tvVideo);
-  tvTexture.colorSpace = THREE.SRGBColorSpace;
+export function installTv(ctx: Ctx) {
   const tvIdle = (() => {
     const c = document.createElement('canvas');
     c.width = 1280;
@@ -43,7 +29,7 @@ export function installTv(ctx: Ctx, deps: TvDeps) {
     g.font = '900 88px Nunito, ui-rounded, system-ui, sans-serif';
     g.fillText('📺 Office TV', 640, 330);
     g.font = '700 44px Nunito, ui-rounded, system-ui, sans-serif';
-    g.fillText('Click “Share screen” to put something up here', 640, 420);
+    g.fillText('orca-office', 640, 420);
     const t = new THREE.CanvasTexture(c);
     t.colorSpace = THREE.SRGBColorSpace;
     return t;
@@ -54,24 +40,9 @@ export function installTv(ctx: Ctx, deps: TvDeps) {
   tvMat.toneMapped = false;
   ctx.interactions.define('tv', {
     reach: 10,
-    hint: () => {
-      const any = deps.shares().length > 0;
-      return { k: String(any), parts: [hintTitle('📺 Office TV'), key('E', any ? 'Watch full screen' : 'Share your screen')] };
-    },
-    use: onE(() => deps.watch()),
+    hint: () => ({ k: 'tv', parts: [hintTitle('📺 Office TV')] }),
+    use: () => {},
   });
 
-  let tvStream: MediaStream | null = null;
-  /** Puts `stream` up on the TV, or the idle card when there's none. */
-  function show(stream: MediaStream | null) {
-    if (stream !== tvStream) {
-      tvStream = stream;
-      tvVideo.srcObject = stream;
-      if (stream) void tvVideo.play().catch(() => {});
-      tvMat.map = stream ? tvTexture : tvIdle;
-      tvMat.needsUpdate = true;
-    }
-  }
-
-  return { show };
+  return {};
 }

@@ -24,13 +24,13 @@ import { openTeam } from '../../ui/team';
 import { openUpgrade } from '../../ui/upgrade';
 import { describeSky } from '../../world/sky';
 
-export type HudParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'you' | 'actions' | 'waiting' | 'meeting' | 'bookshelf' | 'hanging' | 'talk' | 'notifier'>;
+export type HudParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'you' | 'actions' | 'waiting' | 'meeting' | 'bookshelf' | 'hanging' | 'notifier'>;
 
 /** Listens for clicks on the HUD and the project, registers what the HUD follows (see mountHud), and binds Tab, H and F. */
 export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
-  const { net, voice, settings, player, sound } = ctx;
+  const { net, settings, player, sound } = ctx;
   const { inOffice } = parts.worlds;
-  const { travel, waiting, actions, hanging, talk } = parts;
+  const { travel, waiting, actions, hanging } = parts;
 
   // Buttons must not keep focus, or Space (jump) would click them again.
   $('hud').addEventListener('click', (e) => {
@@ -45,7 +45,6 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
 
   // ---- The HUD: a few buttons on the top bar, everything else in the ☰ menu ----------------------------
   const waitingNow = () => waitingInOrder(store.workers.values());
-  const noMedia = () => (window.isSecureContext ? undefined : 'Voice and screen sharing need HTTPS or localhost — use a TLS proxy, --self-signed, or an SSH tunnel');
   const hud = mountHud(
     [
       { id: 'issues', icon: '📌', label: 'Issues', section: 'Open', count: () => store.issues.items.filter((i) => i.state === 'OPEN').length, run: () => openBoard('issues', net, actions.boardActions()) },
@@ -68,23 +67,6 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
       { id: 'docs', icon: '📚', label: 'Docs', section: 'Open', shown: () => !inOffice(), title: () => 'Read the project’s docs', run: parts.bookshelf.showBookshelf },
       { id: 'elevator', icon: '🛗', label: () => (inOffice() ? 'Elevator' : 'Floors'), section: 'Open', count: () => store.floors.reduce((n, f) => n + (f.id === store.floor ? 0 : f.waiting), 0), title: () => (inOffice() ? 'Ride to another project' : 'Go to another project, or add one'), run: travel.showElevator },
       { id: 'roof', icon: '🍸', label: 'Rooftop bar', section: 'Open', shown: () => !core.upTop && inOffice() && builtFloors().length > 0, title: () => 'Ride the elevator up to the roof: a DJ, drinks and the city', run: () => travel.ride(ROOF) },
-      // In voice, V is push to talk, so leaving is only from here.
-      { id: 'voice', icon: '🎙️', label: () => (voice.inVoice ? 'Leave voice' : 'Join voice'), section: 'Together', key: () => (voice.inVoice ? undefined : 'V'), on: () => voice.inVoice, blocked: noMedia, run: () => void talk.toggleVoice() },
-      // While you're in voice, the top bar keeps the mute button handy. Muted is the usual with push to talk, so it doesn't stand out then.
-      {
-        id: 'mute',
-        icon: () => (voice.muted ? '🔇' : '🎙️'),
-        label: () => (voice.muted ? 'Unmute' : 'Mute'),
-        section: 'Together',
-        key: 'M',
-        shown: () => voice.inVoice,
-        status: () => voice.inVoice,
-        on: () => voice.inVoice,
-        tone: () => (voice.muted && !settings.pushToTalk ? 'danger' : undefined),
-        title: () => (voice.muted ? 'Muted: hold V to talk, or M to unmute' : 'Mute (M) · hold V to talk'),
-        run: () => voice.toggleMute(),
-      },
-      { id: 'share', icon: '🖥️', label: () => (voice.sharing ? 'Stop sharing' : 'Share screen'), section: 'Together', on: () => voice.sharing, status: () => voice.sharing, chip: () => 'Sharing', blocked: noMedia, run: () => void talk.toggleShare() },
       { id: 'decor', icon: '🖼️', label: () => (hanging.hanger.active ? 'Stop hanging the picture' : 'Hang a picture'), section: 'Together', key: 'F', shown: () => inOffice(), on: () => hanging.hanger.active, status: () => hanging.hanger.active, run: () => (hanging.hanger.active ? hanging.hanger.cancel() : hanging.startHanging()) },
       { id: 'team', icon: '👥', label: 'Invite teammates', section: 'Together', shown: () => store.invites, run: () => openTeam(net) },
       { id: 'accounts', icon: '🔑', label: 'Accounts', section: 'Together', shown: () => store.me.admin, title: () => 'Invite people, see who has an account, revoke them', run: () => openAccounts(net) },
@@ -148,14 +130,8 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
       net,
       settings,
       (s) => {
-        // Switching to push to talk mutes you now; back to an open mic turns it on.
-        const talkChanged = s.pushToTalk !== settings.pushToTalk;
         Object.assign(settings, s);
         saveSettings(settings);
-        if (talkChanged) {
-          voice.setMuted(settings.pushToTalk);
-          hud.refresh();
-        }
         player.setView(settings.view);
         sound.setVolume(settings.volume, settings.muted);
         sound.setMusicVolume(settings.music, settings.musicMuted);
