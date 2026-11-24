@@ -113,8 +113,9 @@ Answers:
   `escalation`; `ask`/`reply` and dispatch are the same mailbox. New rows in
   `worker-list` mark a dispatch.
 - **Messaging a bot from outside (M5, #36)**: `orca orchestration send --to
-  bot:<name> [--chat <id>] --type question|handoff` mails a bot chat. Still to
-  verify from a process that is not itself an Orca agent.
+  bot:<name> [--chat <id>] --type question|handoff` mails a bot chat. Verified
+  in M5 from a process outside Orca: it needs `--from <handle>`, and the answer
+  is read from the chat; see [m5-bots.md](m5-bots.md).
 
 ## #6 Privacy filter
 

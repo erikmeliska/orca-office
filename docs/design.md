@@ -42,7 +42,7 @@ not used.
 | 25 | Bots' home | A "Staff" floor with a personal office per bot. When a bot works on a repo or worktree it walks to that floor, desk or project room and returns home when done. Work with no repo target (Slack, Gmail, Obsidian…) happens in its own office. |
 | 26 | Collaboration | Only handoffs are shown: task dispatch, `ask`, `reply`, mailbox messages, as a short delivery animation with a truncated subject. No permanent relationship lines. |
 | 27 | Project room source | Built primarily from an orchestration Run (objective, tasks, gates, workers); worktree lineage is the fallback. Whoever coordinates the Run (bot or session) sits at the head. Open decision gates hang on the board as "waiting for your decision". |
-| 28 | Bot interaction | Read-only in v1 (chats, last asked/answered, last activity, working or idle). Messaging a bot is milestone M5; `orca orchestration send --to bot:<name> --type question\|handoff` exists and still has to be verified from outside an agent (M0). |
+| 28 | Bot interaction | Read-only in v1 (chats, last asked/answered, last activity, working or idle). M5: a bot's figure opens its chats; a message goes out with `orca orchestration send --from orca-office --to bot:<name> --chat <id\|new> --type handoff` (body on stdin) and the answer is read from the chat with `orca agent read <chat id>`. Verified from a process outside Orca ([m5-bots.md](m5-bots.md)). |
 | 29 | Bot data source | The plugin API has no `bot.*` methods or events, so the bridge polls `orca bot list/chats --json` and `orca orchestration run-list/run-show/task-list/gate-list/worker-list/inbox --json` (0.1–0.2 s each). A bot's chat is a chat agent in `orca agent list` (folder workspace named after the bot), which gives its live state. Where a bot works is not exposed (`coordinator_handle` was null in every Run), so bots stay in their office and only their dispatched workers appear at desks, until Orca exposes it (M0). M4: the mailbox does tell: a bot chat that mails a Run's dispatch coordinates that Run, so it moves to the head of the project room while the Run is live ([stub-protocol.md](stub-protocol.md#project-rooms-decisions-and-deliveries-m4-29-30-33-34)). |
 
 ## Architecture
@@ -66,7 +66,7 @@ Orca (local) ──trusted-worker plugin──► bridge (Node, launchd, 127.0.0
 - **M2 Live office**: real floors, desks and figures with states and action animations from Orca, including remote environments; Staff floor with bots.
 - **M3 Light control**: terminal with typing, open in Orca, new task, mark read and comment.
 - **M4 Projects and navigation**: project room from orchestration Runs (lineage fallback), decision gates, elevator badges, per-desk boards, bots walking to their work, handoff animations.
-- **M5 Talk to bots**: send messages to bots from the office, once the Orca side is verified.
+- **M5 Talk to bots**: send messages to bots from the office; the Orca route is in [m5-bots.md](m5-bots.md).
 
 If M0 breaks an assumption, the plan is adjusted before M1.
 
