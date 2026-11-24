@@ -145,9 +145,9 @@ export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage
     }
   }
 
-  /** The building and what's in it: its doors, its floors, the jukebox's lights, the smoke and the confetti. */
+  /** The building and what's in it: its doors, its floors, the smoke and the confetti. */
   function updateWorld({ dt, t }: Frame) {
-    const { player, office, camera, sound } = ctx;
+    const { player, office, camera } = ctx;
     const { remotes } = parts.peers;
     const { departures, sendoffs, arrivals } = parts.views;
     const court = parts.worlds.court();
@@ -155,7 +155,6 @@ export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage
       ctx.world().update(t, dt, [player.pos, ...[...remotes.values()].map((r) => r.person.root.position), ...departures.positions(), ...sendoffs.positions(), ...arrivals.positions(), ...(court?.positions() ?? [])]);
       if (ctx.inOffice()) {
         office.stack.update(dt, [{ x: player.pos.x, y: player.pos.y, z: player.pos.z, grip: ctx.view.grip() }, ...[...remotes.values()].map((r) => ({ x: r.person.root.position.x, y: r.person.root.position.y, z: r.person.root.position.z, grip: r.grip }))], camera.position);
-        office.jukebox.update(t, dt, sound.beat());
       }
     }
     ctx.smoke.update(dt, camera);

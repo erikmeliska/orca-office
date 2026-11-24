@@ -1,12 +1,10 @@
-// The toys on every floor: pictures, the jukebox, the arcade, the whiteboard, the ball, the cars and the dog.
+// The toys on every floor: pictures, the arcade, the ball, the cars and the dog.
 
 import type { CabinetFrame, CabinetState } from '../cabinet.js';
 import type { DecorPlacement, Decoration } from '../decor.js';
 import type { DogState } from '../dog.js';
 import type { CarSeat, CarState } from '../garage.js';
 import type { BallState } from '../hoop.js';
-import type { JukeboxState } from '../jukebox.js';
-import type { WbElement, WbPointer } from '../whiteboard.js';
 
 export type DecorClientMsg =
   /** Hang a picture on a wall. */
@@ -15,12 +13,6 @@ export type DecorClientMsg =
   | { t: 'decor.update'; id: string; decor: Partial<DecorPlacement> }
   | { t: 'decor.remove'; id: string };
 
-export type JukeboxClientMsg =
-  /** Put a tune on the jukebox (a JUKEBOX_TUNES id), or a stream; with neither, turn it back on. */
-  | { t: 'jukebox.play'; track?: string; url?: string }
-  /** On to the next tune. */
-  | { t: 'jukebox.skip' }
-  | { t: 'jukebox.stop' };
 
 export type CabinetClientMsg =
   /**
@@ -35,15 +27,6 @@ export type CabinetClientMsg =
    * how your score gets on the high-score table: the office follows the game frame by frame.
    */
   | { t: 'cabinet.frame'; frame: CabinetFrame };
-
-export type WhiteboardClientMsg =
-  /** You opened the whiteboard (or closed it): everyone on the floor sees who's drawing. */
-  | { t: 'wb.open' }
-  | { t: 'wb.close' }
-  /** Elements you added or changed on the whiteboard; pictures go first, by POST /api/whiteboard/file. */
-  | { t: 'wb.update'; elements: WbElement[] }
-  /** Where your mouse is on the whiteboard, and what you have selected there. */
-  | ({ t: 'wb.pointer'; selected?: string[] } & WbPointer);
 
 export type BallClientMsg =
   /** Pick up the floor's basketball (or catch it): yours if nobody else has it. */
@@ -83,14 +66,7 @@ export type ToysServerMsg =
   | { t: 'car.move'; car: number; x: number; z: number; rotY: number; speed: number; steer: number }
   /** Someone in a car on your floor honked its horn. */
   | { t: 'car.honk'; car: number }
-  | { t: 'jukebox'; state: JukeboxState }
   /** Who's at the arcade cabinet on your floor now, and the building's high scores. */
   | { t: 'cabinet'; state: CabinetState }
   /** The game on your floor's cabinet, as its player sees it (sent to everyone else on the floor). */
   | { t: 'cabinet.frame'; frame: CabinetFrame }
-  /** Someone changed these elements on the floor's whiteboard (sent to everyone else on the floor). */
-  | { t: 'wb.update'; elements: WbElement[] }
-  /** Who has the floor's whiteboard open now. */
-  | { t: 'wb.people'; people: string[] }
-  /** Someone's mouse on the whiteboard; only people who have it open get these. */
-  | ({ t: 'wb.pointer'; id: string; selected?: string[] } & WbPointer);

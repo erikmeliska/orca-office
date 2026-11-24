@@ -5,7 +5,6 @@
 import * as THREE from 'three';
 import { OfficeSound } from '../sound';
 import { store, type Profile, type Settings } from '../state';
-import { toast } from '../ui/dom';
 import { Person } from '../world/character';
 import { Smoke } from '../world/smoke';
 import type { Ctx } from './context';
@@ -44,7 +43,6 @@ export function makeSound(settings: Settings): OfficeSound {
   const sound = new OfficeSound();
   sound.setVolume(settings.volume, settings.muted);
   sound.setMusicVolume(settings.music, settings.musicMuted);
-  sound.onMusicError = (text) => toast(text, 'warn');
   return sound;
 }
 

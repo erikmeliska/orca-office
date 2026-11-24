@@ -7,10 +7,8 @@ import { scenic } from '../scenic';
 import { toon, toonUnique } from '../toon';
 import { elevator, garageLift } from '../elevator';
 import { gong } from '../../features/gong/world';
-import { jukebox } from '../../features/jukebox/world';
 import { bookshelf } from '../../features/bookshelf/world';
 import { cabinet } from '../../features/cabinet/world';
-import { whiteboard } from '../../features/whiteboard/world';
 import { green, tee } from '../../features/golf/world';
 import { stack } from '../stack';
 import { tower } from '../tower';
@@ -52,11 +50,10 @@ function floorPlan() {
     beanbags,
     kiosks,
     boards,
-    // The lounge: the TV, the couch and its table and poufs, and the jukebox and the arcade in the corner.
+    // The lounge: the TV, the couch and its table and poufs, and the arcade in the corner.
     tv,
     machineMonitor,
     lounge,
-    jukebox,
     cabinet,
     bookshelf,
     kitchen,
@@ -70,7 +67,6 @@ function floorPlan() {
     garageLift,
     gong,
     hoop,
-    whiteboard,
     clearOfStairs,
   ] as const;
 }

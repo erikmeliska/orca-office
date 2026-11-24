@@ -1,0 +1,2 @@
+/* The bar's window (it borrowed the jukebox's width in agent-office). */
+.modal.skybar { width: min(520px, 100%); }

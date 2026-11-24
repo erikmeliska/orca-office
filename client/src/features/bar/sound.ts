@@ -16,7 +16,7 @@ export class Dj {
 
   constructor(private readonly a: AudioCore) {}
 
-  /** The speakers by the booth, into the jukebox's bus (see Jukebox.connect). */
+  /** The speakers by the booth, into the music bus (see sound/music-bus.ts). */
   connect(musicBus: GainNode) {
     // Loud enough to hear from anywhere on the roof, and loudest on the dance floor.
     this.djIn = this.a.panner({ x: DJ_BOOTH.x, y: 2.2, z: DJ_BOOTH.z }, 7, 0.8);

@@ -31,7 +31,6 @@ import type { installEmotes } from '../features/emotes';
 import type { installGolf } from '../features/golf';
 import type { installGallery, installHanging } from '../features/hanging';
 import type { installHud } from '../features/hud';
-import type { installJukebox } from '../features/jukebox';
 import type { installMeeting } from '../features/meeting';
 import type { installNeedsYou } from '../features/needsyou';
 import type { installPeers } from '../features/peers';
@@ -100,7 +99,6 @@ export interface Parts {
   rooftop: Made<typeof installRooftop>;
   telescope: Made<typeof installTelescope>;
   dog: Made<typeof installDog>;
-  jukebox: Made<typeof installJukebox>;
   cabinet: Made<typeof installCabinet>;
   golf: Made<typeof installGolf>;
   bargames: Made<typeof installBarGames>;

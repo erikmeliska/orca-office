@@ -12,12 +12,12 @@ import { building, floor, me, presence } from '../core';
 import { accounts } from './accounts';
 import { ball } from './ball';
 import { cabinet } from './cabinet';
+import { clock } from './clock';
 import { cars } from './cars';
 import { decor } from './decor';
 import { dog } from './dog';
 import { floorPlan } from './floor-plan';
 import { jail } from './jail';
-import { jukebox } from './jukebox';
 import { leaveOnMerge } from './leave-on-merge';
 import { machine } from './machine';
 import { map } from './map';
@@ -31,7 +31,6 @@ import { team } from './team';
 import { theme } from './theme';
 import { upgrade } from './upgrade';
 import { usage } from './usage';
-import { whiteboard } from './whiteboard';
 
 export const SLICES: readonly Slice[] = [
   presence,
@@ -52,8 +51,7 @@ export const SLICES: readonly Slice[] = [
   floorPlan,
   services,
   dog,
-  jukebox,
-  whiteboard,
+  clock,
   cabinet,
   ball,
   cars,

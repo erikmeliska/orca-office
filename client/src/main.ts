@@ -47,7 +47,6 @@ import { installGong } from './features/gong';
 import { installGallery, installHanging } from './features/hanging';
 import { installHerald } from './features/herald';
 import { installHud } from './features/hud';
-import { installJukebox } from './features/jukebox';
 import { installMeeting } from './features/meeting';
 import { installNeedsYou } from './features/needsyou';
 import { installPalette } from './features/palette';
@@ -61,7 +60,6 @@ import { installTv } from './features/tv';
 import { installVoice } from './features/voice';
 import { installWaiting } from './features/waiting';
 import { installWalking } from './features/walking';
-import { installWhiteboard } from './features/whiteboard';
 import { installWorkerActions } from './features/workers/actions';
 import { installWorkerViews } from './features/workers/views';
 
@@ -96,7 +94,6 @@ installSky(ctx);
 // ---- The install list ---------------------------------------------------------------------------
 parts.boards = installBoards(ctx, { aimedNote: () => parts.pointer.aimedNote(), pickUp: (it) => parts.cards.pickUp(it), boardActions: () => parts.actions.boardActions(), showQueue: () => parts.waiting.showQueue() });
 parts.gallery = installGallery(ctx);
-installWhiteboard(ctx);
 // Onto whatever you're walking on: the office's floor and furniture, or the roof's.
 parts.confetti = new Confetti((x, z, y) => groundAt(ctx.player.colliders, x, z, y, false));
 ctx.scene.add(parts.confetti.mesh);
@@ -123,7 +120,6 @@ parts.reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 parts.sound = makeSound(parts.settings);
 
 parts.dog = installDog(ctx);
-parts.jukebox = installJukebox(ctx, { showSettings: (pane) => parts.hud.showSettings(pane) });
 parts.cabinet = installCabinet(ctx, { openTerminal: (id) => parts.waiting.openWorkerTerminal(id) });
 parts.notifier = new DesktopNotifier(() => parts.settings.notify, (id) => parts.waiting.answerWorker(id));
 const standUp = () => parts.seating.standUp();

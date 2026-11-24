@@ -117,7 +117,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
   };
   // Voice chat: an open mic, or muted until you hold V.
   const talkRow = choiceRow('Voice chat', [[false, '🎙️ Open mic'], [true, '✋ Push to talk']], () => settings.pushToTalk, (pushToTalk) => change({ pushToTalk }));
-  const musicRow = volumeRow('Jukebox volume', 'music', 'musicMuted');
+  const musicRow = volumeRow('Music volume', 'music', 'musicMuted');
 
   // The swish of the book's pages at the bookshelf, on or off.
   const pagesRow = choiceRow('Page turns at the bookshelf', [[true, '📖 On'], [false, 'Off']], () => settings.pageTurns, (pageTurns) => change({ pageTurns }));
@@ -452,7 +452,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
       setting('Office sounds', 'you', soundRow, h('p.setting-note', {}, 'Workers typing, footsteps, the coffee machine, birds and rain outside, the dog, the ding when a worker is done and the alarm when one needs you. Voice chat isn’t affected.')),
       setting('When a worker needs you', 'you', alarmRow, h('p.setting-note', {}, 'An alarm the moment a worker stops to ask you something or wants a permission. Keep reminding me rings it again, softly, every 30 seconds until someone opens that worker’s terminal. It’s as loud as the office sounds are.')),
       setting('Page turns at the bookshelf', 'you', pagesRow, h('p.setting-note', {}, 'A soft swish each time the book in your hands turns a page, as you open a doc or scroll through one. The 🔈 at the top of the bookshelf turns it off too.')),
-      setting('Jukebox', 'you', musicRow, h('p.setting-note', {}, 'The jukebox in the lounge. Everyone on the floor hears the same song, louder the closer they are to it; this is how loud it is for you alone.')),
+      setting('Music', 'you', musicRow, h('p.setting-note', {}, 'The DJ on the roof; this is how loud it is for you alone.')),
       setting('Voice chat', 'you', talkRow, h('p.setting-note', {}, 'Either way, V joins voice, holding V talks and you’re muted once you let go, and M mutes or unmutes. With push to talk you join muted. Leave voice from the ☰ menu.')),
     ],
     notify: [

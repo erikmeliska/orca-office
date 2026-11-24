@@ -6,8 +6,6 @@ import type { DogState } from '../dog.js';
 import type { FloorPlan } from '../floorplan.js';
 import type { CarState } from '../garage.js';
 import type { BallState } from '../hoop.js';
-import type { JukeboxState } from '../jukebox.js';
-import type { WhiteboardView } from '../whiteboard.js';
 import type { AgentProvider } from './agents.js';
 import type { GhIssue, GhPull, GhState } from './github.js';
 import type { MeetingState } from './meetings.js';
@@ -110,12 +108,8 @@ export interface FloorView {
   services: ServicesState;
   /** The floor's dog; null in a building with no floors yet. */
   dog: DogState | null;
-  /** What the lounge jukebox is playing. */
-  jukebox: JukeboxState;
   /** Who's at the arcade cabinet, what's on its screen, and the building's high scores. */
   cabinet: CabinetView;
-  /** What's drawn on this floor's whiteboard, and who's drawing. */
-  whiteboard: WhiteboardView;
   /** The meeting room: who's meeting about what, and the meetings before. */
   meeting: MeetingState;
   /** The basketball by the hoop: who has it, or how it was last thrown. */

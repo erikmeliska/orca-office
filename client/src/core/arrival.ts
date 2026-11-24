@@ -20,7 +20,6 @@ import { needsSigningIn, openSignIns } from '../ui/signins';
 import { routeTeamMessage } from '../ui/team';
 import { openTerminalFor, routeTerminalMessage } from '../ui/terminal';
 import { restarting, showRestarting, showUpgraded } from '../ui/upgrade';
-import { routeWhiteboardMessage } from '../features/whiteboard/ui';
 import type { Ctx } from './context';
 import type { CoreState } from './ctx';
 import { builtFloors, pastTheWing } from './floors';
@@ -68,10 +67,9 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
   ctx.messages.onAny(routeAccountsMessage);
   ctx.messages.onAny(routePullMessage);
   ctx.messages.onAny(routeElevatorMessage);
-  ctx.messages.onAny((msg) => routeWhiteboardMessage(msg, net));
   ctx.messages.on('welcome', (msg) => {
     const { travel, maps } = parts;
-    // A few pings, to line this page's clock up with the office's for the jukebox.
+    // A few pings, to line this page's clock up with the office's (see state/slices/clock.ts).
     for (let i = 0; i < 5; i++) setTimeout(() => net.send({ t: 'ping', at: performance.now() }), 200 + i * 500);
     const mine = store.peers.get(store.you);
     if (firstWelcome && mine) {

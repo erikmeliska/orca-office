@@ -50,7 +50,7 @@ export interface Settings {
   /** Office sounds, 0–1. */
   volume: number;
   muted: boolean;
-  /** The lounge jukebox, 0–1, apart from the office sounds. */
+  /** Music (the rooftop DJ), 0–1, apart from the office sounds. */
   music: number;
   musicMuted: boolean;
   /** The swish of a page turning as you read at the bookshelf. */

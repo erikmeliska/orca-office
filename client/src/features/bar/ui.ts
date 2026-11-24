@@ -1,3 +1,4 @@
+import './ui.css';
 import { DRINKS, type Drink } from '@orca-office/shared/office/rooftop';
 import { h, openModal } from '../../ui/dom';
 
@@ -50,7 +51,7 @@ export function openBar(opts: BarOptions) {
     }),
   );
   const el = h(
-    'div.modal.jukebox',
+    'div.modal.skybar',
     { role: 'dialog', 'aria-label': 'Bar' },
     h('header', {}, h('h2', {}, '🍸 Sky Bar'), close),
     h(

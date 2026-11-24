@@ -15,7 +15,6 @@ import { DESKS } from '@orca-office/shared/office/layout';
 import { buildCabinet } from '../features/cabinet/world';
 import { supercar } from '../features/cars/world';
 import { buildGong } from '../features/gong/world';
-import { buildJukebox } from '../features/jukebox/world';
 import { buildKitchen } from '../world/kitchen';
 import { preloadModels } from '../world/models';
 import { DESK_BOOKS, FLOOR_PLANTS, buildDesk, coffeeTable, deskBooks, deskMug, loungeCouch, plant, pouf } from '../world/office';
@@ -30,11 +29,6 @@ interface Shown {
 
 /** Every prop, built the way the office builds it. Add yours here. */
 const SHOW: Record<string, () => Shown> = {
-  jukebox: () => {
-    const j = buildJukebox();
-    j.show(true, 'Lab tune');
-    return { object: j.group, update: (dt, t) => j.update(t, dt, Math.max(0, 1 - ((t * 2) % 1) * 4)) };
-  },
   gong: () => {
     const g = buildGong();
     g.strike(1);
