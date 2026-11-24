@@ -7,3 +7,4 @@
 .orca-links .link-ref { grid-row: span 2; align-self: center; font-weight: 900; font-size: 15px; white-space: nowrap; }
 .orca-links .link-title { font-weight: 800; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .orca-links .link-where { font-size: 12px; font-weight: 700; color: var(--muted); }
+.forge-board .forge-note { margin: 0 0 10px; padding: 9px 12px; border: 3px dashed var(--ink); border-radius: 14px; background: var(--paper-2); font-weight: 800; }

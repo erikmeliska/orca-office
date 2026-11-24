@@ -23,6 +23,7 @@ import type { OrcaLink, OrcaProject } from '@orca-office/shared/office/protocol/
 import { pinsText, type OrcaWorktree } from './worktrees.js';
 import { isLive, type HandoffKind, type InboxMessage, type OrcaRun, type RunGate, type RunTask, type TaskStatus } from './runs.js';
 import { RECENT_MS } from './runs-poller.js';
+import type { ForgeTarget } from './forge.js';
 import { worktreePath, type CliAgent, type CliTerminal, type OrcaBot, type OrcaState, type OrcaWorkspace, type StatusEvent, type ToolHook } from './orca.js';
 
 export const DONE_DEBOUNCE_MS = 1_000;
@@ -291,6 +292,22 @@ export class LiveModel {
     this.linksKey = key;
     this.linksByPath = next;
     this.version++;
+  }
+
+  /**
+   * What the repo-wide board of a floor needs (#38): one of its local worktrees (git asks it for the
+   * remote), and what the repository's worktrees already work on (their branches, Orca's links).
+   * Null for a floor with no local worktree (folders, remote-only, rooms, Staff).
+   */
+  forgeTarget(floor: string): ForgeTarget | null {
+    const rowsByPath = new Map(this.worktreeRows.map((r) => [r.path, r]));
+    const paths = [...this.workspaces.values()].filter((w) => w.kind === 'worktree' && (w.hostId ?? LOCAL) === LOCAL && w.path && floorId_(floorNameOf(w)) === floor).map((w) => w.path);
+    if (!paths.length) return null;
+    const repoId = paths.map((p) => rowsByPath.get(p)?.repoId).find((r): r is string => !!r) ?? null;
+    const rows = repoId ? this.worktreeRows.filter((r) => r.repoId === repoId) : [];
+    const linked = new Set<string>();
+    for (const r of rows) for (const l of r.links) if ((l.provider === 'github' || l.provider === 'gitlab') && l.kind !== 'item') linked.add(`${l.kind === 'issue' ? 'issue' : 'pr'}:${l.ref.slice(1)}`);
+    return { floor, dir: rows[0]?.path ?? paths[0]!, branches: new Set(rows.map((r) => r.branch).filter((b): b is string => !!b)), linked };
   }
 
   /** The Runs as last read: new dispatches are handoffs from the head to the worker (#34). */

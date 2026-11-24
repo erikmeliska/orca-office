@@ -6,21 +6,26 @@
  */
 import { lookFromSeed, sanitizeLook } from '@orca-office/shared/office/avatar';
 import { elevatorSpot } from '@orca-office/shared/office/layout';
-import type { ClientMsg, FloorView, GhIssue, GhPull, OrcaLink, OrcaProject, PeerInfo, ServerMsg } from '@orca-office/shared/office/protocol';
+import type { ClientMsg, FloorView, GhIssue, GhPull, GhState, OrcaForgeBoard, OrcaForgeItem, OrcaLink, OrcaProject, PeerInfo, ServerMsg } from '@orca-office/shared/office/protocol';
 import { ROOF } from '@orca-office/shared/office/rooftop';
 import type { Building, LiveFloor } from './model.js';
 
 const T0 = Date.UTC(2026, 10, 24);
 
-export function liveFloorView(floorId: string | null, f: LiveFloor | undefined, project?: OrcaProject | null): FloorView {
+/** A floor's repo-wide board (#38) for a page on it; null on floors without a repository. */
+export type ForgeOf = (floor: string) => OrcaForgeBoard | null;
+
+export function liveFloorView(floorId: string | null, f: LiveFloor | undefined, project?: OrcaProject | null, forge?: OrcaForgeBoard | null): FloorView {
+  const walls = f && !project ? wallBoards(f.links, forge ?? null) : null;
   return {
     floor: floorId,
     project: f ? { name: f.info.name, dir: f.info.dir, agentCmd: 'claude', defaultProvider: 'claude', agentProviders: ['claude'] } : null,
     workers: f?.workers ?? [],
     // The floor's wall boards: what Orca links to its desks (#32), not the forge's whole list.
     // In a project room: the decisions waiting for you and the open tasks (#30).
-    issues: { items: project ? gateNotes(project) : f ? boardIssues(f.links) : [], fetchedAt: T0, loading: false },
-    pulls: { items: project ? taskNotes(project) : f ? boardPulls(f.links) : [], fetchedAt: T0, loading: false },
+    // With a forge (#38): the repository's open issues and pull/merge requests.
+    issues: walls?.issues ?? { items: project ? gateNotes(project) : [], fetchedAt: T0, loading: false },
+    pulls: walls?.pulls ?? { items: project ? taskNotes(project) : [], fetchedAt: T0, loading: false },
     decor: [],
     plan: f?.plan ?? { wing: 0, labels: {} },
     services: { items: [], port: 0 },
@@ -52,6 +57,31 @@ export function boardIssues(links: Record<string, OrcaLink[]>): GhIssue[] {
   return numbered(links, ['issue']).map((i) => ({ ...i, state: 'OPEN', author: '', labels: [], assignees: [], createdAt: ISO0, updatedAt: ISO0, body: '', comments: 0 }));
 }
 
+/**
+ * A floor's two wall boards: the forge's open issues and pull/merge requests once it has been read
+ * (#38); before that, or without a forge, what Orca links to the desks (#32), with the board's note
+ * (not logged in, no remote…) when there is nothing to pin.
+ */
+export function wallBoards(links: Record<string, OrcaLink[]>, forge: OrcaForgeBoard | null): { issues: GhState<GhIssue>; pulls: GhState<GhPull> } {
+  const read = !!forge && (forge.status === 'ok' || forge.issues.length + forge.pulls.length > 0);
+  const note = forge?.note;
+  const loading = forge?.status === 'loading';
+  const at = forge?.fetchedAt || T0;
+  if (read) return { issues: { items: forge.issues.map(forgeIssue), fetchedAt: at, loading: false }, pulls: { items: forge.pulls.map(forgePull), fetchedAt: at, loading: false } };
+  return {
+    issues: { items: boardIssues(links), fetchedAt: at, loading, ...(note && !loading ? { error: note } : {}) },
+    pulls: { items: boardPulls(links), fetchedAt: at, loading, ...(note && !loading ? { error: note } : {}) },
+  };
+}
+
+function forgeIssue(i: OrcaForgeItem): GhIssue {
+  return { number: i.number, url: i.url ?? '', title: i.title, state: 'OPEN', author: '', labels: [], assignees: [], ...(i.worktree ? { taken: true } : {}), createdAt: ISO0, updatedAt: ISO0, body: '', comments: 0 };
+}
+
+function forgePull(i: OrcaForgeItem): GhPull {
+  return { number: i.number, url: i.url ?? '', title: i.title, state: 'OPEN', isDraft: !!i.draft, author: '', labels: [], reviewDecision: '', headRefName: '', baseRefName: '', createdAt: ISO0, updatedAt: ISO0, additions: 0, deletions: 0, checks: 'none', body: '', closes: [] };
+}
+
 /** A project room's decision gates as notes on its wall ("waiting for your decision"). */
 export function gateNotes(p: OrcaProject): GhIssue[] {
   return p.gates.map((g, i) => ({ number: i + 1, url: '', title: `⚖️ ${g.question ?? 'A decision'}`, state: 'OPEN', author: '', labels: [], assignees: [], createdAt: ISO0, updatedAt: ISO0, body: '', comments: 0 }));
@@ -79,8 +109,9 @@ export class LiveSession {
   private sentFloors = '';
   private sentLinks = '';
   private sentProject = '';
+  private sentForge = '';
 
-  constructor(id: string, query: URLSearchParams, b: Building) {
+  constructor(id: string, query: URLSearchParams, b: Building, private forgeOf: ForgeOf = () => null) {
     const n = (k: string) => (query.get(k) ? Number(query.get(k)) : Number.NaN);
     const wanted = query.get('floor');
     const floor = wanted && (wanted === ROOF || b.floors.some((f) => f.info.id === wanted)) ? wanted : busiestFloor(b);
@@ -125,6 +156,7 @@ export class LiveSession {
       { t: 'orca', online },
       ...this.linksMsg(b),
       ...this.projectMsg(b),
+      ...this.forgeMsg(b, false),
     ];
   }
 
@@ -141,7 +173,7 @@ export class LiveSession {
         const spot = msg.at ?? { ...elevatorSpot(), y: 0, rotY: 0 };
         Object.assign(this.peer, { floor: msg.floor, x: spot.x, y: spot.y, z: spot.z, rotY: spot.rotY, moving: false });
         delete this.peer.seat;
-        return [{ t: 'floor.enter', peers: [this.peer], ...this.view(b) }, ...this.linksMsg(b), ...this.projectMsg(b)];
+        return [{ t: 'floor.enter', peers: [this.peer], ...this.view(b) }, ...this.linksMsg(b), ...this.projectMsg(b), ...this.forgeMsg(b, false)];
       }
       case 'sit':
         if (msg.seat) this.peer.seat = msg.seat;
@@ -170,7 +202,7 @@ export class LiveSession {
       const id = busiestFloor(b);
       if (!id) return out;
       Object.assign(this.peer, { floor: id, ...elevatorSpot(), y: 0, rotY: 0 });
-      return [...out, { t: 'floor.enter', peers: [this.peer], ...this.view(b) }, ...this.linksMsg(b), ...this.projectMsg(b)];
+      return [...out, { t: 'floor.enter', peers: [this.peer], ...this.view(b) }, ...this.linksMsg(b), ...this.projectMsg(b), ...this.forgeMsg(b, false)];
     }
     const f = b.floors.find((x) => x.info.id === this.peer.floor);
     const now = new Map((f?.workers ?? []).map((w) => [w.id, w]));
@@ -191,13 +223,49 @@ export class LiveSession {
       if (f) out.push({ t: 'plan', plan: f.plan });
     }
     const links = JSON.stringify(f?.links ?? {});
-    if (links !== this.sentLinks && f) {
-      // The wall boards follow the desks' links.
-      const v = liveFloorView(this.peer.floor ?? null, f);
+    const forgeChanged = this.forgeKey() !== this.sentForge;
+    if ((links !== this.sentLinks || forgeChanged) && f && !b.projects[this.peer.floor]) {
+      // The wall boards follow the forge (#38) and the desks' links.
+      const v = liveFloorView(this.peer.floor ?? null, f, null, this.forge());
       out.push({ t: 'gh.pulls', state: v.pulls }, { t: 'gh.issues', state: v.issues });
-      out.push(...this.linksMsg(b));
     }
+    if (links !== this.sentLinks && f) out.push(...this.linksMsg(b));
+    if (forgeChanged) out.push(...this.forgeMsg(b, false));
     if (JSON.stringify(b.projects[this.peer.floor] ?? null) !== this.sentProject) out.push(...this.projectMsg(b));
+    return out;
+  }
+
+  /** The forge's board of the page's floor changed (#38): the walls and the queue, if they did change. */
+  forgeUpdate(b: Building): ServerMsg[] {
+    return this.forgeMsg(b, true);
+  }
+
+  private forge(): OrcaForgeBoard | null {
+    const id = this.peer.floor;
+    return id && !id.startsWith('p-') && id !== ROOF ? this.forgeOf(id) : null;
+  }
+
+  /** Compared without `fetchedAt`'s clock alone: a board read again with the same items is no news. */
+  private forgeKey(): string {
+    const f = this.forge();
+    return JSON.stringify(f ? { ...f, fetchedAt: f.fetchedAt ? 1 : 0 } : null);
+  }
+
+  /** The repo board of the page's floor (`orca.forge`), remembered as sent; with `walls`, its wall boards too. */
+  private forgeMsg(b: Building, walls: boolean): ServerMsg[] {
+    const key = this.forgeKey();
+    if (walls && key === this.sentForge) return [];
+    this.sentForge = key;
+    const id = this.peer.floor;
+    if (!id) return [];
+    const forge = this.forge();
+    const out: ServerMsg[] = [];
+    const f = b.floors.find((x) => x.info.id === id);
+    if (walls && f && !b.projects[id]) {
+      const v = liveFloorView(id, f, null, forge);
+      out.push({ t: 'gh.pulls', state: v.pulls }, { t: 'gh.issues', state: v.issues });
+    }
+    out.push({ t: 'orca.forge', floor: id, board: forge });
     return out;
   }
 
@@ -224,7 +292,7 @@ export class LiveSession {
   private view(b: Building): FloorView {
     const id = this.peer.floor ?? null;
     const f = b.floors.find((x) => x.info.id === id);
-    const v = liveFloorView(id, id === ROOF ? undefined : f, id ? b.projects[id] : null);
+    const v = liveFloorView(id, id === ROOF ? undefined : f, id ? b.projects[id] : null, this.forge());
     this.sentWorkers = new Map(v.workers.map((w) => [w.id, JSON.stringify(w)]));
     this.sentPlan = JSON.stringify(f?.plan ?? null);
     this.sentFloors = JSON.stringify(b.floors.map((x) => x.info));

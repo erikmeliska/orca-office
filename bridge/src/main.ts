@@ -20,6 +20,7 @@ import { RunsPoller } from './live/runs-poller.js';
 import { Actions } from './live/actions.js';
 import { BotChats } from './live/bots.js';
 import { TerminalWatch } from './live/terminals.js';
+import { ForgeBoards, ghAdapter, gitRemote, glabAdapter, runCli } from './live/forge.js';
 import { pageLimits } from './rate.js';
 
 const config = loadConfig();
@@ -226,6 +227,25 @@ const terminals = new TerminalWatch((terminalId, maxLines) => link.call('termina
 const actions = new Actions(model, { call: (m, p, t) => link.call(m, p, t), cli, send: orcaSend(), resync: () => link.send({ type: 'resync' }), now: Date.now }, terminals);
 const bots = new BotChats(model, { cli, sendBot: orcaBotSend(), now: Date.now });
 
+// The repo-wide boards (#38): read through `gh` / `glab` for the floors pages are on, kept 3 min in memory.
+const forgeRun = runCli();
+const forge = new ForgeBoards({
+  adapters: [ghAdapter(forgeRun), glabAdapter(forgeRun)],
+  remote: gitRemote(),
+  now: Date.now,
+  changed: (floor) => {
+    const b = model.building();
+    for (const [ws, s] of liveSessions) {
+      if (s.peer.floor !== floor || ws.readyState !== ws.OPEN) continue;
+      for (const m of s.forgeUpdate(b)) ws.send(JSON.stringify(m));
+    }
+  },
+});
+const forgeOf = (floor: string) => {
+  const t = model.forgeTarget(floor);
+  return t ? forge.board(t) : null;
+};
+
 /** One line per kind of failure, not one every 5 s. */
 const logged = new Set<string>();
 function logOnce(what: string) {
@@ -306,7 +326,7 @@ function onClient(ws: WebSocket, url: string | undefined) {
 
 /** The 3D office on Orca's data (M2). */
 function onLiveClient(ws: WebSocket, query: URLSearchParams) {
-  const session = new LiveSession(randomUUID().slice(0, 10), query, model.building());
+  const session = new LiveSession(randomUUID().slice(0, 10), query, model.building(), forgeOf);
   liveSessions.set(ws, session);
   const send = (msgs: unknown[]) => {
     for (const m of msgs) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));

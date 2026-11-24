@@ -73,6 +73,45 @@ export const ORCA_LINK_TITLE = 60;
 export const ORCA_LINKS_PER_DESK = 8;
 
 /**
+ * How a floor's repo-wide board went (v2, #38): `ok`; `loading` (first read running); `missing`
+ * (the forge's CLI isn't installed); `auth` (it isn't logged in); `failed` (it errored or timed out);
+ * `no_remote` (no GitHub/GitLab remote).
+ */
+export type OrcaForgeStatus = 'ok' | 'loading' | 'missing' | 'auth' | 'failed' | 'no_remote';
+
+/** An open issue or pull/merge request on a floor's forge; `worktree`: some worktree works on it (linked in Orca, or on its branch). */
+export interface OrcaForgeItem {
+  kind: 'issue' | 'pr' | 'mr';
+  /** "#12" or "!7". */
+  ref: string;
+  number: number;
+  /** Cut with toBubble to ORCA_LINK_TITLE. */
+  title: string;
+  /** https only. */
+  url?: string;
+  draft?: boolean;
+  worktree: boolean;
+}
+
+/**
+ * A floor's repo-wide board (v2, design #17, #38), read through the bridge's ForgeAdapter (`gh`,
+ * `glab`): open issues, open pull/merge requests and the queue (those no worktree works on yet).
+ */
+export interface OrcaForgeBoard {
+  provider: 'github' | 'gitlab' | null;
+  /** `owner/name`. */
+  repo: string | null;
+  status: OrcaForgeStatus;
+  /** What the board says when it isn't `ok` (e.g. "`gh` isn't logged in: run `gh auth login` …"). */
+  note?: string;
+  issues: OrcaForgeItem[];
+  pulls: OrcaForgeItem[];
+  queue: OrcaForgeItem[];
+  /** When the forge was read (0: not yet). */
+  fetchedAt: number;
+}
+
+/**
  * A project room's board (#29, #30, design #10, #27): an orchestration Run (or a worktree lineage
  * across repos). Objective, task titles and gate questions are private: cut to 60 by the bridge.
  */
@@ -132,6 +171,8 @@ export type OrcaServerMsg =
    * sent on arriving and whenever it changes.
    */
   | { t: 'orca.links'; floor: string; desks: Record<string, OrcaLink[]> }
+  /** The repo-wide board of the page's floor (#38); null on floors without a repository. Sent on arriving and on change. */
+  | { t: 'orca.forge'; floor: string; board: OrcaForgeBoard | null }
   /** The board of the project room the page is in (#29, #30); null when it isn't in one. Sent on arriving and on change. */
   | { t: 'orca.project'; floor: string; project: OrcaProject | null }
   /** A delivery to animate on the page's floor (#34): seat to seat; null = up to the roof or down from it. */

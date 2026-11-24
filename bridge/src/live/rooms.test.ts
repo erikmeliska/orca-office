@@ -8,7 +8,7 @@ import type { OrcaWorktree } from './worktrees.js';
 const NOW = Date.parse('2026-11-24T12:00:00Z');
 const ws = (id: string, project: string, path: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project, projectId: `p-${project}`, path, branch: id, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
 const agent = (paneKey: string, path: string, over: Partial<CliAgent> = {}): CliAgent => ({ paneKey, sessionId: `s-${paneKey}`, kind: 'terminal', agent: 'claude', state: 'working', worktreeId: `repo::${path}`, workspace: 'w', repo: null, hostId: 'local', bubble: null, updatedAt: 1, ...over });
-const wt = (id: string, repoId: string, path: string, over: Partial<OrcaWorktree> = {}): OrcaWorktree => ({ id, repoId, path, hostId: 'local', name: path.split('/').pop()!, links: [], parentId: null, childIds: [], ...over });
+const wt = (id: string, repoId: string, path: string, over: Partial<OrcaWorktree> = {}): OrcaWorktree => ({ id, repoId, path, hostId: 'local', name: path.split('/').pop()!, branch: null, links: [], parentId: null, childIds: [], ...over });
 const run = (over: Partial<OrcaRun> = {}): OrcaRun => ({
   id: 'run_a',
   objective: 'Made-up objective',

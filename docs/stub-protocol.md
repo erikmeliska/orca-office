@@ -157,6 +157,43 @@ only), `title` (cut to 60 chars with `toBubble`, design #20). At a desk, **L** l
 wall board lists the floor's; each opens in the browser. On Orca the PR and issue windows inherited from
 agent-office (which called its `/api/gh/*`) are never opened: a card or palette entry opens its url.
 
+## Repo board (v2, #38)
+
+Each repository floor's wall boards show the repository's open issues and pull/merge requests, read
+through a `ForgeAdapter` (`bridge/src/live/forge.ts`): `gh` for GitHub (also GitHub Enterprise hosts
+named `github.*`) and `glab` for GitLab (gitlab.com or a `gitlab.*` host). The middle whiteboard is the
+**queue**: open items no worktree works on yet, i.e. not linked to any of the repository's worktrees in
+Orca (`linkedItems` and the older fields) and, for a pull/merge request, no worktree on its source branch.
+
+- The repository is the floor's: one of its local worktrees (from the plugin snapshot and `orca worktree
+  list --json`, matched by path and `repoId`), whose `git -C <dir> remote get-url origin` names the forge
+  (`parseRemote`). No GitHub/GitLab remote: the board says so and no forge CLI runs.
+- Calls, read only, through `execFile` with an argument array (never a shell), 15 s timeout, no prompts:
+  `gh issue list -R <host>/<owner>/<name> --state open --limit 30 --json number,title,url`,
+  `gh pr list … --json number,title,url,headRefName,isDraft`, `glab issue list -R https://<host>/<path>
+  --per-page 30 --output json`, `glab mr list …`.
+- Read only for a floor a page is on, at most one read per floor at a time; kept **in memory** for 3 min
+  (after a failure: retried after 1 min, the last good lists stay up). Titles are cut to 60 with `toBubble`.
+  Nothing is written to disk or logged.
+- Tokens stay with the CLIs: the bridge never reads or passes one. A failure is told by kind only:
+  `missing` (CLI not installed), `auth` (stderr hints at a login; the text itself is dropped), `failed`.
+  The board then says it politely ("`gh` isn't logged in: run `gh auth login` to see this repo's board")
+  and the wall boards fall back to what Orca links to the desks (#32).
+
+| Bridge → page | What |
+|---------------|------|
+| `orca.forge` | `{ floor, board }` on arriving and when it changes: `OrcaForgeBoard` (`provider`, `repo`, `status`, `note`, `issues`, `pulls`, `queue`, `fetchedAt`), items `{ kind, ref, number, title, url?, draft?, worktree }`; null on floors without a repository. |
+| `gh.issues` / `gh.pulls` | The wall boards: the forge's lists once read (an issue some worktree has is `taken`), else the desks' links with the note as `error`. |
+
+E at any of the three boards lists it; each item opens its https address in a new tab (`httpsUrl`).
+`npm run dev:fake` fakes `git`, `gh` and `glab` (`bridge/fake/git.mjs`, `gh.mjs`, `glab.mjs`; made-up
+items; `ORCA_OFFICE_FAKE_FORGE=auth` plays a `gh` that isn't logged in).
+
+![Issues board and queue](img/v2-board-desktop.png)
+![Issues panel](img/v2-issues-panel-desktop.png)
+![Queue panel](img/v2-queue-panel-desktop.png)
+![Queue panel on a phone](img/v2-queue-panel-mobile.png)
+
 ## Project rooms, decisions and deliveries (M4, #29, #30, #33, #34)
 
 The bridge polls orchestration through the CLI, one call at a time (`bridge/src/live/runs-poller.ts`,
