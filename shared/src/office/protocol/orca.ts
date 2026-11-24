@@ -16,7 +16,13 @@ export type OrcaAgent = (typeof ORCA_AGENTS)[number];
 /** Bounds the bridge holds the page's messages to (and the worker its calls). */
 export const ORCA_LIMITS = { send: 4096, prompt: 8000, comment: 2000, name: 60 } as const;
 
-export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal';
+export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal' | 'chat';
+
+/** One entry of a chat agent's conversation, read-only (`orca agent read`): a message, or a tool it used. */
+export type OrcaChatEntry = { role: 'user' | 'assistant'; text: string; shortened?: boolean } | { tool: string; state: string | null };
+
+/** Entries a chat panel shows (the newest), and the longest text an entry carries. */
+export const ORCA_CHAT = { entries: 50, text: 20_000 } as const;
 
 export type OrcaClientMsg =
   /** Show the figure's workspace in Orca and focus its terminal (`workerId`), or a desk's worktree (`deskId`). */
@@ -27,6 +33,9 @@ export type OrcaClientMsg =
   | { t: 'orca.comment'; deskId: string; comment: string }
   /** Ask for the desk's worktree comment and unread state; answered with `orca.desk`. */
   | { t: 'orca.desk'; deskId: string }
+  /** Open a chat agent's conversation (read-only) in a panel; `orca.chat` comes while it's open. */
+  | { t: 'orca.chat.open'; workerId: string }
+  | { t: 'orca.chat.close'; workerId: string }
   /** Start a task: a new worktree in the floor's repository with `agent` on `prompt`; progress comes as `orca.create`. */
   | { t: 'orca.create'; reqId: string; floor: string; agent: string; prompt: string; name?: string };
 
@@ -35,6 +44,11 @@ export type OrcaServerMsg =
   | { t: 'orca'; online: boolean }
   /** How an action went; `error` is a short reason (never terminal text). */
   | { t: 'orca.result'; action: OrcaActionKind; ok: boolean; error?: string; workerId?: string; deskId?: string }
+  /**
+   * A chat agent's conversation, the newest ORCA_CHAT.entries, while its panel is open; sent again
+   * when it changes. `state` is its latest turn's (`working`: a reply may still come); null unknown.
+   */
+  | { t: 'orca.chat'; workerId: string; state: string | null; entries: OrcaChatEntry[]; limited: boolean }
   /** A desk's worktree in Orca: its comment and whether it is unread. */
   | { t: 'orca.desk'; deskId: string; comment: string; unread: boolean }
   /**

@@ -21,6 +21,7 @@ const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({
 
 const agent = (paneKey: string, wsPath: string, over: Partial<CliAgent> = {}): CliAgent => ({
   paneKey,
+  sessionId: `s-${paneKey}`,
   kind: 'terminal',
   agent: 'claude',
   state: 'working',

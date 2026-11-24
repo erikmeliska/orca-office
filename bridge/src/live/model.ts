@@ -67,6 +67,8 @@ interface AgentRec {
   /** A done not shown yet, and since when. */
   pendingDone: number | null;
   bubble: string | null;
+  /** Orca's session id, for reading a chat's conversation. */
+  sessionId: string | null;
   firstSeen: number;
   /** Seen only in a status event so far; dropped after PROVISIONAL_MS unless the CLI lists it. */
   provisional: boolean;
@@ -145,7 +147,7 @@ export class LiveModel {
       const desk = this.deskFor(c);
       const prev = this.agents.get(c.paneKey);
       const rec: AgentRec = prev ?? newAgent(c.paneKey, desk.key, desk.floorName, now);
-      Object.assign(rec, { deskKey: desk.key, floorName: desk.floorName, kind: c.kind, agent: c.agent, hostId: c.hostId, bubble: c.bubble, provisional: false, lastSeen: now });
+      Object.assign(rec, { deskKey: desk.key, floorName: desk.floorName, kind: c.kind, agent: c.agent, hostId: c.hostId, bubble: c.bubble, sessionId: c.sessionId, provisional: false, lastSeen: now });
       if (!prev) {
         rec.shown = c.state;
         rec.shownSince = c.updatedAt || now;
@@ -205,12 +207,12 @@ export class LiveModel {
   // ---- what the office's actions reach (M3) ---------------------------------------------------
 
   /** The Orca side of a figure: its terminal (local terminal agents), workspace and kind. */
-  target(workerId: string): { paneKey: string; kind: 'chat' | 'terminal'; local: boolean; terminalId: string | null; workspaceId: string | null } | null {
+  target(workerId: string): { paneKey: string; kind: 'chat' | 'terminal'; local: boolean; terminalId: string | null; workspaceId: string | null; sessionId: string | null } | null {
     const pane = this.workerIds.get(workerId);
     const a = pane ? this.agents.get(pane) : undefined;
     if (!a) return null;
     const local = a.hostId === LOCAL;
-    return { paneKey: a.paneKey, kind: a.kind, local, terminalId: local && a.kind === 'terminal' ? this.terminalOf(a.paneKey) : null, workspaceId: this.workspaces.has(a.deskKey) ? a.deskKey : null };
+    return { paneKey: a.paneKey, kind: a.kind, local, terminalId: local && a.kind === 'terminal' ? this.terminalOf(a.paneKey) : null, workspaceId: this.workspaces.has(a.deskKey) ? a.deskKey : null, sessionId: a.sessionId };
   }
 
   /** The Orca workspace at a seat on a floor (any seat of its desk cluster), when it is one Orca lists. */
@@ -485,6 +487,7 @@ function newAgent(paneKey: string, deskKey: string, floorName: string, now: numb
     shownSince: now,
     pendingDone: null,
     bubble: null,
+    sessionId: null,
     firstSeen: now,
     provisional: false,
     lastSeen: now,

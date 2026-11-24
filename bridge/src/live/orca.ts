@@ -8,6 +8,7 @@
  * and the original is dropped; agent titles are never read at all.
  */
 import { toBubble } from '@orca-office/shared';
+import { ORCA_CHAT, type OrcaChatEntry } from '@orca-office/shared/office/protocol/orca';
 
 export type OrcaState = 'working' | 'blocked' | 'waiting' | 'done';
 
@@ -31,6 +32,8 @@ export interface OrcaWorkspace {
 /** An agent session from `orca agent list --json` (one host). */
 export interface CliAgent {
   paneKey: string;
+  /** Orca's session id (`orca agent read <id>` reads its conversation). */
+  sessionId: string | null;
   kind: 'chat' | 'terminal';
   agent: string | null;
   state: OrcaState;
@@ -138,6 +141,7 @@ export function parseAgentList(json: unknown, hostFallback = 'local'): CliAgentL
     if (!o || !paneKey || !st) continue;
     out.push({
       paneKey,
+      sessionId: str(o.orcaSessionId),
       kind: o.kind === 'terminal' ? 'terminal' : 'chat',
       agent: str(o.agent),
       state: st,
@@ -224,4 +228,29 @@ export function parseTerminals(json: unknown): CliTerminal[] {
     out.push({ handle, paneKey: `${tab}:${leaf}` });
   }
   return out;
+}
+
+/** What `orca agent read --json` says of a conversation: kept only to send to the open panel. */
+export interface CliConversation {
+  state: string | null;
+  entries: OrcaChatEntry[];
+  limited: boolean;
+}
+
+/**
+ * `orca agent read <id> --json`: messages (user / assistant text, cut to ORCA_CHAT.text) and the
+ * names of tools used; anything else is dropped. Never logged or stored: it goes to the one panel.
+ */
+export function parseConversation(json: unknown): CliConversation | null {
+  const r = result(json);
+  if (!r || !Array.isArray(r.entries)) return null;
+  const entries: OrcaChatEntry[] = [];
+  for (const e of r.entries.slice(-ORCA_CHAT.entries)) {
+    const o = obj(e);
+    if (o?.kind === 'message' && (o.role === 'user' || o.role === 'assistant') && typeof o.text === 'string') {
+      const cut = o.text.length > ORCA_CHAT.text;
+      entries.push({ role: o.role, text: cut ? o.text.slice(0, ORCA_CHAT.text) : o.text, ...(cut || o.shortened === true ? { shortened: true } : {}) });
+    } else if (o?.kind === 'tool' && str(o.name)) entries.push({ tool: str(o.name)!.slice(0, 64), state: str(o.state)?.slice(0, 24) ?? null });
+  }
+  return { state: str(r.state)?.slice(0, 24) ?? null, entries, limited: r.limited === true };
 }

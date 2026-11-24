@@ -15,6 +15,26 @@ if (args.startsWith('agent list') && args.includes('--environment')) out({ agent
 else if (args.startsWith('agent list')) out({ agents: [...AGENTS, ...st.agents], hostScope: { hostIds: ['local'], omittedHostSelectors: [{ hostId: 'runtime:demo', selector: '--environment demo.example' }] }, truncated: false });
 else if (args.startsWith('terminal list')) out({ terminals: [...TERMINALS, ...st.agents.map((a) => ({ handle: a.terminal, tabId: a.paneKey.split(':')[0], leafId: a.paneKey.split(':')[1], executionHostId: 'local' }))], truncated: false });
 else if (args.startsWith('bot list')) out({ bots: BOTS });
+else if (args.startsWith('agent read')) {
+  // A made-up conversation for any chat agent; it is still working every other 10 s.
+  const working = Math.floor(Date.now() / 10_000) % 2 === 0;
+  out({
+    orcaSessionId: argv[2],
+    kind: 'chat',
+    agent: 'claude',
+    source: 'chat',
+    state: working ? 'working' : 'done',
+    limited: false,
+    entries: [
+      { kind: 'message', role: 'user', text: 'Can you switch the app to **dark mode** tokens?' },
+      { kind: 'tool', name: 'Read', state: 'completed' },
+      { kind: 'tool', name: 'Edit', state: 'completed' },
+      { kind: 'message', role: 'assistant', text: 'Done. The palette now comes from tokens:\n\n- `--bg` and `--fg` per theme\n- contrast checked for **AA**\n\n```css\n:root[data-theme=dark] { --bg: #1d1d1d; }\n```' },
+      { kind: 'message', role: 'user', text: 'And the charts?' },
+      ...(working ? [{ kind: 'tool', name: 'Bash', state: 'running' }] : [{ kind: 'message', role: 'assistant', text: 'The charts use the same tokens now. ![made-up chart](https://example.com/chart.png)' }]),
+    ],
+  });
+}
 else if (args.startsWith('worktree set')) {
   const id = flag('--worktree');
   if (![...WORKSPACES, ...st.workspaces].some((w) => w.id === id)) {

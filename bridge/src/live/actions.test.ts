@@ -2,15 +2,15 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { ServerMsg } from '@orca-office/shared/office/protocol';
 import type { CallResult } from '../plugin-link.js';
 import { pageLimits } from '../rate.js';
-import { Actions, CREATE_WAIT_MS, chunks } from './actions.js';
+import { Actions, CHAT_EVERY_MS, CREATE_WAIT_MS, chunks } from './actions.js';
 import { LiveModel, floorId } from './model.js';
-import type { CliAgent, OrcaWorkspace } from './orca.js';
+import { parseConversation, type CliAgent, type OrcaWorkspace } from './orca.js';
 import { TerminalWatch } from './terminals.js';
 
 // Made-up Orca only: fake repos, ids and text.
 
 const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo', projectId: 'proj-demo', path: `/code/demo/${id}`, branch: id, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
-const agent = (paneKey: string, wt: string, over: Partial<CliAgent> = {}): CliAgent => ({ paneKey, kind: 'terminal', agent: 'claude', state: 'working', worktreeId: `r::/code/demo/${wt}`, workspace: wt, repo: 'demo', hostId: 'local', bubble: null, updatedAt: 1, ...over });
+const agent = (paneKey: string, wt: string, over: Partial<CliAgent> = {}): CliAgent => ({ paneKey, sessionId: `s-${paneKey}`, kind: 'terminal', agent: 'claude', state: 'working', worktreeId: `r::/code/demo/${wt}`, workspace: wt, repo: 'demo', hostId: 'local', bubble: null, updatedAt: 1, ...over });
 const FLOOR = floorId('demo');
 const T = 'term_aaa';
 
@@ -18,6 +18,7 @@ let now = 1_000;
 let calls: { method: string; params: unknown }[];
 let cliCalls: string[][];
 let answers: Record<string, CallResult>;
+let conversation: unknown;
 let model: LiveModel;
 let actions: Actions;
 let sent: ServerMsg[];
@@ -29,6 +30,7 @@ beforeEach(() => {
   calls = [];
   cliCalls = [];
   answers = {};
+  conversation = { ok: true, result: { kind: 'chat', state: 'working', limited: false, entries: [{ kind: 'message', role: 'user', text: 'Made-up question' }, { kind: 'tool', name: 'Bash', state: 'completed' }, { kind: 'message', role: 'assistant', text: 'Made-up answer' }] } };
   sent = [];
   model = new LiveModel();
   model.applyWorkspaces([ws('a'), ws('b'), ws('c')]);
@@ -40,7 +42,7 @@ beforeEach(() => {
     return answers[method] ?? { ok: true, value: method === 'terminal.read' ? { lines: ['$ hello'], truncated: false } : {} };
   };
   terminals = new TerminalWatch((terminalId, maxLines) => call('terminal.read', { terminalId, maxLines }), 250);
-  actions = new Actions(model, { call, cli: async (args) => (cliCalls.push(args), args[1] === 'show' ? { result: { worktree: { comment: 'note', isUnread: true } } } : { ok: true }), resync: () => {}, now: () => now }, terminals);
+  actions = new Actions(model, { call, cli: async (args) => (cliCalls.push(args), args[0] === 'agent' ? conversation : args[1] === 'show' ? { result: { worktree: { comment: 'note', isUnread: true } } } : { ok: true }), resync: () => {}, now: () => now }, terminals);
   page = { floor: () => FLOOR, send: (m) => sent.push(...m), limits: pageLimits(now) };
 });
 afterEach(() => vi.useRealTimers());
@@ -187,4 +189,41 @@ test('a remote figure is shown but not acted on', async () => {
   await actions.handle(page, { t: 'worker.attach', workerId: far.id });
   expect(calls).toEqual([]);
   expect(sent.map((m) => (m as { error?: string }).error)).toEqual(['remote', 'remote']);
+});
+
+test('a chat panel reads the conversation by session id while open, sending only changes', async () => {
+  const id = idOf('pane-chat');
+  await actions.handle(page, { t: 'orca.chat.open', workerId: id });
+  expect(cliCalls).toEqual([['agent', 'read', 's-pane-chat', '--json', '--limit', '50']]);
+  expect(sent).toEqual([{ t: 'orca.chat', workerId: id, state: 'working', limited: false, entries: [{ role: 'user', text: 'Made-up question' }, { tool: 'Bash', state: 'completed' }, { role: 'assistant', text: 'Made-up answer' }] }]);
+  await vi.advanceTimersByTimeAsync(CHAT_EVERY_MS);
+  expect(cliCalls.length).toBe(2);
+  expect(sent.length).toBe(1);
+  conversation = { ok: true, result: { state: 'done', limited: true, entries: [] } };
+  await vi.advanceTimersByTimeAsync(CHAT_EVERY_MS);
+  expect(sent.at(-1)).toEqual({ t: 'orca.chat', workerId: id, state: 'done', limited: true, entries: [] });
+  await actions.handle(page, { t: 'orca.chat.close', workerId: id });
+  await vi.advanceTimersByTimeAsync(CHAT_EVERY_MS * 3);
+  expect(cliCalls.length).toBe(3);
+});
+
+test('a chat panel is refused for remote agents and odd session ids, and stops with the page', async () => {
+  model.applyAgents('local', [agent('pane-1', 'a'), agent('pane-chat', 'b', { kind: 'chat', sessionId: '--help' })], now);
+  model.building();
+  await actions.handle(page, { t: 'orca.chat.open', workerId: idOf('pane-chat') });
+  expect(sent.at(-1)).toMatchObject({ action: 'chat', ok: false, error: 'no_session' });
+  model.applyAgents('local', [agent('pane-1', 'a'), agent('pane-chat', 'b', { kind: 'chat' })], now);
+  model.building();
+  await actions.handle(page, { t: 'orca.chat.open', workerId: idOf('pane-chat') });
+  actions.closed(page);
+  const n = cliCalls.length;
+  await vi.advanceTimersByTimeAsync(CHAT_EVERY_MS * 2);
+  expect(cliCalls.length).toBe(n);
+  expect(cliCalls.every((c) => !c.includes('--help'))).toBe(true);
+});
+
+test('a conversation keeps messages and tool names only, cut to size', () => {
+  const c = parseConversation({ result: { state: 'done', entries: [{ kind: 'message', role: 'system', text: 'x' }, { kind: 'message', role: 'assistant', text: 'y'.repeat(25_000) }, { kind: 'tool', name: 'Read', state: 'completed', input: { path: '/secret' } }, { kind: 'other' }] } });
+  expect(c?.entries).toEqual([{ role: 'assistant', text: 'y'.repeat(20_000), shortened: true }, { tool: 'Read', state: 'completed' }]);
+  expect(parseConversation({ result: {} })).toBeNull();
 });

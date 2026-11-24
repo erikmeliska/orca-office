@@ -109,3 +109,13 @@ actions 20 then 2 a second. Terminal text, typing, prompts and comments are neve
 In the office (Orca mode) the desk keys are: E terminal (a chat agent: its last message; an empty
 desk: new task), P prompt, O open in Orca, R mark read, C comment. `npm run dev:fake` fakes all of
 it with made-up data (`bridge/fake/`).
+
+Chat agents (no terminal) open a read-only conversation panel: `orca.chat.open` / `orca.chat.close`.
+While it is open the bridge runs `orca agent read <orcaSessionId> --json --limit 50` every 4 s
+(only for that panel, local agents only) and sends `orca.chat` (`state` of the latest turn, the
+messages with role and text, tool names) when it changed. Real shape, checked on one chat:
+`result.{state, limited, entries[{kind: 'message', role, text} | {kind: 'tool', name, state, shortened?}]}`.
+The page renders the text as sanitized markdown without pictures or media (nothing is fetched).
+The text goes only to that panel over the authenticated `/client`: never logged, stored or put
+in tests or screenshots (those use `npm run dev:fake`'s made-up chat). Writing to a chat is not
+possible (Orca has no API); the panel has a slot for it for M5 (bots, `orchestration send`).

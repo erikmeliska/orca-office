@@ -9,6 +9,8 @@
  * - Mark read and the worktree comment: `orca worktree set` (the plugin API has neither).
  * - New task: `workspace.create` with an agent and a prompt in the floor's project; the page hears
  *   how it goes until the new figure sits down.
+ * - A chat agent's conversation, read-only: `orca agent read <id> --json` every few seconds, only
+ *   while its panel is open on a page (no writing: Orca has no API for it; bots get M5).
  *
  * Nothing here deletes, closes or merges. Rate limits per page (rate.ts). What is typed, prompts,
  * comments and terminal text are never logged or kept: errors carry short codes only.
@@ -18,10 +20,13 @@ import type { ClientMsg, ServerMsg } from '@orca-office/shared/office/protocol';
 import type { CallResult } from '../plugin-link.js';
 import type { PageLimits } from '../rate.js';
 import type { LiveModel } from './model.js';
+import { parseConversation } from './orca.js';
 import type { TerminalWatch } from './terminals.js';
 
 /** How long a new task's figure has to sit down before the page is told it's slow. */
 export const CREATE_WAIT_MS = 120_000;
+/** How often an open chat panel's conversation is read again (`orca agent read`, ~0.2 s a call). */
+export const CHAT_EVERY_MS = 4_000;
 const CREATE_CALL_MS = 60_000;
 
 export interface ActionDeps {
@@ -47,6 +52,8 @@ interface PageState {
   queue: Promise<void>;
   /** Last time the page was told it typed too fast. */
   warnedAt: number;
+  /** The chat panel open on this page: its figure and how to stop reading it. */
+  chat: { workerId: string; stop: () => void } | null;
 }
 
 interface PendingCreate {
@@ -56,7 +63,7 @@ interface PendingCreate {
   since: number;
 }
 
-const ACTIONS = new Set(['worker.attach', 'worker.detach', 'term.input', 'term.resize', 'worker.prompt', 'orca.open', 'orca.read', 'orca.comment', 'orca.desk', 'orca.create']);
+const ACTIONS = new Set(['orca.chat.open', 'orca.chat.close', 'worker.attach', 'worker.detach', 'term.input', 'term.resize', 'worker.prompt', 'orca.open', 'orca.read', 'orca.comment', 'orca.desk', 'orca.create']);
 
 export class Actions {
   private pages = new Map<ActionPage, PageState>();
@@ -75,6 +82,7 @@ export class Actions {
   /** The page closed: stop its terminal, forget its tasks. */
   closed(page: ActionPage): void {
     this.pages.get(page)?.open?.stop();
+    this.pages.get(page)?.chat?.stop();
     this.pages.delete(page);
     this.creates = this.creates.filter((c) => c.page !== page);
   }
@@ -107,6 +115,14 @@ export class Actions {
         return this.desk(page, msg.deskId);
       case 'orca.create':
         return this.create(page, msg);
+      case 'orca.chat.open':
+        return this.openChat(page, st, msg.workerId);
+      case 'orca.chat.close':
+        if (st.chat && st.chat.workerId === msg.workerId) {
+          st.chat.stop();
+          st.chat = null;
+        }
+        return;
     }
   }
 
@@ -176,6 +192,44 @@ export class Actions {
       if (!r.ok) page.send([result('type', false, r.error ?? 'failed', { workerId })]);
       else this.terminals.nudge(terminalId);
     });
+  }
+
+  // ---- chat (read-only) -----------------------------------------------------------------------
+
+  private openChat(page: ActionPage, st: PageState, workerId: unknown) {
+    if (typeof workerId !== 'string' || !this.allow(page, 'chat')) return;
+    st.chat?.stop();
+    st.chat = null;
+    const t = this.model.target(workerId);
+    if (!t || !t.local) return void page.send([result('chat', false, t ? 'remote' : 'unknown_worker', { workerId })]);
+    // Passed to the CLI as one argument: an id, never something that reads as a flag.
+    const id = t.sessionId;
+    if (!id || !/^[A-Za-z0-9][A-Za-z0-9_:.-]{0,127}$/.test(id)) return void page.send([result('chat', false, 'no_session', { workerId })]);
+    let last = '';
+    let busy = false;
+    let stopped = false;
+    const read = async () => {
+      if (busy || stopped) return;
+      busy = true;
+      try {
+        const c = parseConversation(await this.deps.cli(['agent', 'read', id, '--json', '--limit', '50']));
+        if (stopped) return;
+        if (!c) return void page.send([result('chat', false, 'unreadable', { workerId })]);
+        const msg: ServerMsg = { t: 'orca.chat', workerId, ...c };
+        const key = JSON.stringify(msg);
+        if (key !== last) {
+          last = key;
+          page.send([msg]);
+        }
+      } catch {
+        if (!stopped) page.send([result('chat', false, 'cli_failed', { workerId })]);
+      } finally {
+        busy = false;
+      }
+    };
+    const timer = setInterval(() => void read(), CHAT_EVERY_MS);
+    st.chat = { workerId, stop: () => ((stopped = true), clearInterval(timer)) };
+    return read();
   }
 
   // ---- Orca actions ---------------------------------------------------------------------------
@@ -258,7 +312,7 @@ export class Actions {
 
   private state(page: ActionPage): PageState {
     let st = this.pages.get(page);
-    if (!st) this.pages.set(page, (st = { open: null, queue: Promise.resolve(), warnedAt: -Infinity }));
+    if (!st) this.pages.set(page, (st = { open: null, queue: Promise.resolve(), warnedAt: -Infinity, chat: null }));
     return st;
   }
 
