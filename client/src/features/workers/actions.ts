@@ -330,6 +330,8 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
         parts: [h('span.title', {}, `${deskName} · ${sign ? 'no agent' : 'empty'}`), can ? key('E', 'New task') : '', sign ? key('O', 'Open in Orca') : '', worktree ? key('C', 'Comment') : '', linksKey],
       };
     }
+    // A bot (M5): its chats, where you can write to it; it has no worktree here to open, mark or comment.
+    if (w.orca?.bot) return { k: `orca-bot|${w.status}|${w.id}`, parts: [h('span.title', {}, `🤖 ${w.orca.bot} · ${STATUS_LABEL[w.status]}`), key('E', 'Chat')] };
     const doing = w.activity ? clip(w.activity, 48) : '';
     const remote = !!w.orca?.remote;
     return {
@@ -352,6 +354,7 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     const w = store.workerAtDesk(deskId);
     const label = store.floorPlan.labels[deskId]?.text ?? plan().byId.get(deskId)?.label ?? 'this desk';
     if (k === 'E' && w) return openWorkerTerminal(w.id);
+    if (w?.orca?.bot) return;
     if (k === 'E' && !w) return openNewTask(net, plan().byId.get(deskId)?.label ?? 'this desk');
     if (k === 'O') return w ? openInOrca(net, { workerId: w.id }) : orcaDesk(deskId) && openInOrca(net, { deskId });
     if (k === 'R' && w && !w.acked) return net.send({ t: 'orca.read', deskId });

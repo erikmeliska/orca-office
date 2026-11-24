@@ -177,3 +177,32 @@ export function orcaSend(bin = process.env.ORCA_BIN || 'orca', timeoutMs = 8_000
       });
     });
 }
+
+/** The mailbox handle the office sends bot messages from (docs/m5-bots.md): nobody's terminal, so it reads no one's mail. */
+export const OFFICE_SENDER = 'orca-office';
+
+/**
+ * Writes to a bot (M5, docs/m5-bots.md): `orca orchestration send --from orca-office --to
+ * bot:<name> --chat <id|new> --type handoff --subject=<…> --body-file -`, the body on stdin (never
+ * in argv, where `ps` would show it). One argument per value, never a shell. The caller has checked
+ * the bot and the chat; the text is never logged. True, or a short code.
+ */
+export function orcaBotSend(bin = process.env.ORCA_BIN || 'orca', timeoutMs = 20_000) {
+  return (bot: string, chatId: string, subject: string, body: string): Promise<true | string> =>
+    new Promise((resolve) => {
+      const args = ['orchestration', 'send', '--from', OFFICE_SENDER, '--to', `bot:${bot}`, '--chat', chatId, '--type', 'handoff', `--subject=${subject}`, '--body-file', '-', '--json'];
+      const child = execFile(bin, args, { timeout: timeoutMs, maxBuffer: 1024 * 1024, env: process.env }, (err, stdout) => {
+        let r: { ok?: boolean; result?: { messageId?: unknown }; error?: { code?: unknown } } | null = null;
+        try {
+          r = JSON.parse(stdout);
+        } catch {
+          /* not JSON: a crash or an older CLI */
+        }
+        if (r?.ok === true && typeof r.result?.messageId === 'string') return resolve(true);
+        const code = typeof r?.error?.code === 'string' && /^[a-z_]{1,40}$/.test(r.error.code) ? r.error.code : err ? 'cli_failed' : 'not_sent';
+        resolve(code);
+      });
+      child.stdin?.on('error', () => {});
+      child.stdin?.end(body);
+    });
+}

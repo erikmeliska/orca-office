@@ -29,6 +29,16 @@ export const BOTS = [
   { id: 'b-review', name: 'ReviewBot', agent: 'codex', paused: false, specialty: 'Reviews pull requests', chats: { count: 0 } },
 ];
 
+// The bots' chats (M5, #37), as `orca bot chats` lists them, with a made-up conversation each.
+const said = (role, text) => ({ kind: 'message', role, text });
+export const BOT_CHATS = {
+  ReleaseBot: [
+    { id: 'p-bot', title: 'Home', home: true, lastActivityAt: NOW - 60_000, entries: [said('user', 'Tag v1.4.0 once the checks are green.'), { kind: 'tool', name: 'Bash', state: 'completed' }, said('assistant', 'Checks are green. **v1.4.0** is tagged and the release notes are drafted.')] },
+    { id: 'chat-release-notes', title: 'Release notes wording', home: false, lastActivityAt: NOW - 3600_000, entries: [said('user', 'Keep the notes short, one line per change.'), said('assistant', 'Will do: one line per change, grouped by *Added*, *Fixed* and *Changed*.')] },
+  ],
+  SupportBot: [{ id: 'chat-support-home', title: 'Home', home: true, lastActivityAt: NOW - 7200_000, entries: [said('user', 'Anything new in the queue?'), said('assistant', 'Two made-up tickets, both answered.')] }],
+};
+
 // Terminal handles by pane, as `orca terminal list` gives them.
 export const TERMINALS = AGENTS.filter((a) => a.kind === 'terminal').map((a) => ({ handle: `term_${a.paneKey.slice(2)}`, tabId: a.paneKey, leafId: 'leaf', executionHostId: 'local' }));
 for (const a of AGENTS) if (a.kind === 'terminal') a.paneKey = `${a.paneKey}:leaf`;

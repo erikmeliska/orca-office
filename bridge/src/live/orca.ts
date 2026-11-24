@@ -8,7 +8,7 @@
  * and the original is dropped; agent titles are never read at all.
  */
 import { toBubble } from '@orca-office/shared';
-import { ORCA_CHAT, type OrcaChatEntry } from '@orca-office/shared/office/protocol/orca';
+import { ORCA_BOT_CHAT_TITLE, ORCA_CHAT, type OrcaChatEntry, type OrcaMailFrom } from '@orca-office/shared/office/protocol/orca';
 
 export type OrcaState = 'working' | 'blocked' | 'waiting' | 'done';
 
@@ -251,9 +251,62 @@ export function parseConversation(json: unknown): CliConversation | null {
   for (const e of r.entries.slice(-ORCA_CHAT.entries)) {
     const o = obj(e);
     if (o?.kind === 'message' && (o.role === 'user' || o.role === 'assistant') && typeof o.text === 'string') {
-      const cut = o.text.length > ORCA_CHAT.text;
-      entries.push({ role: o.role, text: cut ? o.text.slice(0, ORCA_CHAT.text) : o.text, ...(cut || o.shortened === true ? { shortened: true } : {}) });
+      const mail = o.role === 'user' ? unwrapMail(o.text) : null;
+      const text = mail?.text ?? o.text;
+      const cut = text.length > ORCA_CHAT.text;
+      entries.push({ role: o.role, text: cut ? text.slice(0, ORCA_CHAT.text) : text, ...(cut || o.shortened === true ? { shortened: true } : {}), ...(mail ? { mail: mail.from } : {}) });
     } else if (o?.kind === 'tool' && str(o.name)) entries.push({ tool: str(o.name)!.slice(0, 64), state: str(o.state)?.slice(0, 24) ?? null });
   }
   return { state: str(r.state)?.slice(0, 24) ?? null, entries, limited: r.limited === true };
+}
+
+/** A bot's chat from `orca bot chats --bot <name> --json` (M5). */
+export interface CliBotChat {
+  /** The chat's Orca session id: what `orca agent read` and `orchestration send --chat` take. */
+  id: string;
+  /** Cut to ORCA_BOT_CHAT_TITLE at once (titles are private, design #20). */
+  title: string | null;
+  home: boolean;
+  /** The chat the command runs from (never the office's: it isn't a bot); refused as a target. */
+  self: boolean;
+  closed: boolean;
+  lastActivityAt: number | null;
+}
+
+/** A chat id, as the office passes it to the CLI: one argument that can't read as a flag. */
+export const CHAT_ID = /^[A-Za-z0-9][A-Za-z0-9_:.-]{0,127}$/;
+
+/**
+ * `orca bot chats --bot <name> --json`: ids, cut titles, home/closed and last activity. What the
+ * bot was last asked and said (`lastAsked`, `lastSaid`) is never read.
+ */
+export function parseBotChats(json: unknown): CliBotChat[] {
+  const r = result(json);
+  const out: CliBotChat[] = [];
+  for (const c of Array.isArray(r?.chats) ? r.chats : []) {
+    const o = obj(c);
+    const id = str(o?.id);
+    if (!o || !id || !CHAT_ID.test(id)) continue;
+    out.push({ id, title: toBubble(str(o.title), ORCA_BOT_CHAT_TITLE), home: o.home === true, self: o.self === true, closed: o.closed === true, lastActivityAt: num(o.lastActivityAt) });
+  }
+  return out;
+}
+
+const MAIL_HEAD = /^─{2,} From: (.{1,120}?) \(([^()\n]{1,120})\)(?: \([a-z_]{1,24}\))? ─{2,}$/;
+
+/**
+ * Orca mail as a chat turn (docs/m5-bots.md): a `──── From: NAME (handle) (type) ────` line,
+ * `Subject: …`, the body, `[Payload: …]` / `[Reply: …]` lines and a closing rule. The body and who
+ * sent it (the office's own handle, or the sender's name); null for a turn that isn't mail.
+ */
+export function unwrapMail(text: string): { from: OrcaMailFrom; text: string } | null {
+  const lines = text.split('\n');
+  const head = MAIL_HEAD.exec(lines[0]?.trim() ?? '');
+  if (!head) return null;
+  let body = lines.slice(1);
+  if (/^Subject: /.test(body[0] ?? '')) body = body.slice(1);
+  while (body.length && /^(\[(Payload|Reply): .*\]|─{8,})?\s*$/.test(body.at(-1)!)) body = body.slice(0, -1);
+  const handle = head[2]!;
+  const from: OrcaMailFrom = handle === 'orca-office' ? { office: true } : { office: false, from: head[1]!.slice(0, 40) };
+  return { from, text: body.join('\n').trim() };
 }

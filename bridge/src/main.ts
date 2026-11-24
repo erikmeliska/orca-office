@@ -12,12 +12,13 @@ import { loadConfig } from './config.js';
 import { allowedClientOrigins, checkUpgrade } from './origin.js';
 import { PluginLink } from './plugin-link.js';
 import { StubSession } from './stub.js';
-import { CliPoller, orcaCli, orcaSend } from './live/cli.js';
+import { CliPoller, orcaBotSend, orcaCli, orcaSend } from './live/cli.js';
 import { LiveModel } from './live/model.js';
 import { parseStatusEvent, parseToolHook, parseWorkspaces } from './live/orca.js';
 import { LiveSession } from './live/session.js';
 import { RunsPoller } from './live/runs-poller.js';
 import { Actions } from './live/actions.js';
+import { BotChats } from './live/bots.js';
 import { TerminalWatch } from './live/terminals.js';
 import { pageLimits } from './rate.js';
 
@@ -223,6 +224,7 @@ const runsPoller = new RunsPoller(cli, {
 
 const terminals = new TerminalWatch((terminalId, maxLines) => link.call('terminal.read', { terminalId, maxLines }));
 const actions = new Actions(model, { call: (m, p, t) => link.call(m, p, t), cli, send: orcaSend(), resync: () => link.send({ type: 'resync' }), now: Date.now }, terminals);
+const bots = new BotChats(model, { cli, sendBot: orcaBotSend(), now: Date.now });
 
 /** One line per kind of failure, not one every 5 s. */
 const logged = new Set<string>();
@@ -326,6 +328,11 @@ function onLiveClient(ws: WebSocket, query: URLSearchParams) {
       actions.handle(page, msg as never).catch(() => send([{ t: 'orca.result', action: 'type', ok: false, error: 'failed' }]));
       return;
     }
+    if (BotChats.handles(t)) {
+      // Never logged: messages to bots and their answers are private.
+      bots.handle(page, msg as never).catch(() => send([{ t: 'orca.result', action: 'bot', ok: false, error: 'failed' }]));
+      return;
+    }
     try {
       send(session.handle(msg as never, model.building()));
     } catch {
@@ -335,6 +342,7 @@ function onLiveClient(ws: WebSocket, query: URLSearchParams) {
   ws.on('close', () => {
     liveSessions.delete(ws);
     actions.closed(page);
+    bots.closed(page);
   });
 }
 

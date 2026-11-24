@@ -46,6 +46,11 @@ export function hash(s: string): number {
   return h >>> 0;
 }
 
+/** A bot's figure id: stable, from its Orca id. */
+export function botWorkerId(b: { id: string }): string {
+  return `bot-${hash(b.id).toString(36)}`;
+}
+
 /** Desk clusters: the room's four pods of four desks side by side, then the back office's four. */
 const CLUSTERS: string[][] = [...chunk(DESKS.map((d) => d.id), 4), WING_DESKS.map((d) => d.id)];
 const WING_IDS = new Set(WING_DESKS.map((d) => d.id));
@@ -382,6 +387,16 @@ export class LiveModel {
     if (!a) return null;
     const local = a.hostId === LOCAL;
     return { paneKey: a.paneKey, kind: a.kind, local, terminalId: local && a.kind === 'terminal' ? this.terminalOf(a.paneKey) : null, workspaceId: this.workspaces.has(a.deskKey) ? a.deskKey : null, sessionId: a.sessionId };
+  }
+
+  /** The bot a figure is (Staff floor or the head of a project room), by its figure id; null for anyone else. */
+  botOf(workerId: string): OrcaBot | null {
+    return this.bots.find((b) => botWorkerId(b) === workerId) ?? null;
+  }
+
+  /** A bot by its exact name, as `orca bot list` gives it. */
+  botNamed(name: string): OrcaBot | null {
+    return this.bots.find((b) => b.name === name) ?? null;
   }
 
   /** The Orca workspace at a seat on a floor (any seat of its desk cluster), when it is one Orca lists. */
@@ -755,7 +770,7 @@ export class LiveModel {
       const said = chats.find((c) => c.state === st)?.bubble ?? null;
       const h = hash(b.id);
       return {
-        id: `bot-${h.toString(36)}`,
+        id: botWorkerId(b),
         kind: 'agent',
         ...(isAgentProvider(b.agent) ? { provider: b.agent } : {}),
         deskId,
@@ -770,6 +785,7 @@ export class LiveModel {
         viewers: [],
         viewerIds: [],
         task: { name: `🤖 ${b.name}`, summary: b.paused ? '⏸ paused' : status === 'working' && said ? said : (b.specialty ?? 'Bot') },
+        orca: { terminal: false, remote: false, bot: b.name },
       };
     }
   }

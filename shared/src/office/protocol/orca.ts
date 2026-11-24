@@ -7,6 +7,8 @@ export interface OrcaWorkerInfo {
   terminal: boolean;
   /** On another host (a paired environment): shown, but the office can't act on it. */
   remote: boolean;
+  /** An Orca bot (Staff floor, M5): its name; clicking it opens its chats, where you can write to it. */
+  bot?: string;
 }
 
 /** Agents the office can start in a new workspace; Orca's plugin worker allows the same (plugin/src/worker.ts). */
@@ -19,13 +21,36 @@ export const ORCA_AGENT_LABELS: Partial<Record<OrcaAgent, string>> = { antigravi
 /** Bounds the bridge holds the page's messages to (and the worker its calls). */
 export const ORCA_LIMITS = { send: 4096, prompt: 8000, comment: 2000, name: 60 } as const;
 
-export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal' | 'chat';
+export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal' | 'chat' | 'bot';
 
 /** One entry of a chat agent's conversation, read-only (`orca agent read`): a message, or a tool it used. */
-export type OrcaChatEntry = { role: 'user' | 'assistant'; text: string; shortened?: boolean } | { tool: string; state: string | null };
+export type OrcaChatEntry = { role: 'user' | 'assistant'; text: string; shortened?: boolean; mail?: OrcaMailFrom } | { tool: string; state: string | null };
+
+/**
+ * A user turn that is Orca mail (`orchestration send`): who sent it, its header taken off the text.
+ * `office` is the office itself (a message written in the bot panel, M5).
+ */
+export type OrcaMailFrom = { office: true } | { office: false; from: string };
 
 /** Entries a chat panel shows (the newest), and the longest text an entry carries. */
 export const ORCA_CHAT = { entries: 50, text: 20_000 } as const;
+
+/**
+ * One of a bot's chats (`orca bot chats`, M5): its id (the chat's Orca session), its title cut to
+ * ORCA_BOT_CHAT_TITLE (private, design #20), whether it is the bot's Home Chat, its last activity.
+ */
+export interface OrcaBotChat {
+  id: string;
+  title: string | null;
+  home: boolean;
+  lastActivityAt: number | null;
+}
+
+/** The longest chat title the page gets, and how many of a bot's chats it lists (newest first). */
+export const ORCA_BOT_CHAT_TITLE = 60;
+export const ORCA_BOT_CHATS = 20;
+/** What `orca.bot.send` takes as `chatId` to start a new chat on the bot (titled from the message's first line). */
+export const ORCA_NEW_CHAT = 'new';
 
 /**
  * Something Orca links to a worktree (design #8, #17 v1; issue #32): a pull/merge request, an issue,
@@ -75,6 +100,13 @@ export type OrcaClientMsg =
   /** Open a chat agent's conversation (read-only) in a panel; `orca.chat` comes while it's open. */
   | { t: 'orca.chat.open'; workerId: string }
   | { t: 'orca.chat.close'; workerId: string }
+  /** Open a bot's chats (M5): `orca.bot` comes with the list (and again when it changes) while it's open. */
+  | { t: 'orca.bot.open'; workerId: string }
+  /** Show one of the open bot's chats: `orca.chat` (with its `chatId`) comes while it's shown. */
+  | { t: 'orca.bot.chat'; workerId: string; chatId: string }
+  | { t: 'orca.bot.close'; workerId: string }
+  /** Write to the bot: into `chatId`, or ORCA_NEW_CHAT for a new chat. How it goes comes as `orca.bot.sent`. */
+  | { t: 'orca.bot.send'; workerId: string; reqId: string; chatId: string; text: string }
   /** Start a task: a new worktree in the floor's repository with `agent` on `prompt`; progress comes as `orca.create`. */
   | { t: 'orca.create'; reqId: string; floor: string; agent: string; prompt: string; name?: string };
 
@@ -87,7 +119,14 @@ export type OrcaServerMsg =
    * A chat agent's conversation, the newest ORCA_CHAT.entries, while its panel is open; sent again
    * when it changes. `state` is its latest turn's (`working`: a reply may still come); null unknown.
    */
-  | { t: 'orca.chat'; workerId: string; state: string | null; entries: OrcaChatEntry[]; limited: boolean }
+  | { t: 'orca.chat'; workerId: string; state: string | null; entries: OrcaChatEntry[]; limited: boolean; chatId?: string }
+  /** The open bot's chats (M5), newest first, at most ORCA_BOT_CHATS. */
+  | { t: 'orca.bot'; workerId: string; bot: string; chats: OrcaBotChat[] }
+  /**
+   * A message to a bot (`orca.bot.send`): `sending`, then `sent` (with the chat it went to, once
+   * known: a new chat's id is learned from the bot's chat list) or `failed` with a short reason.
+   */
+  | { t: 'orca.bot.sent'; workerId: string; reqId: string; phase: 'sending' | 'sent' | 'failed'; chatId?: string; error?: string }
   /**
    * What Orca links to the desks of the page's floor, by the seat that carries each desk's sign;
    * sent on arriving and whenever it changes.
