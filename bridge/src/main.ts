@@ -4,7 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { PROTOCOL_VERSION, redactForLog } from '@orca-office/shared';
-import { hostAllowed, loadOrCreateToken, tokenMatches } from './auth.js';
+import { hostAllowed, isNonce, loadOrCreateToken, newNonce, proof, tokenMatches } from './auth.js';
 import { loadConfig } from './config.js';
 import { allowedClientOrigins, checkUpgrade } from './origin.js';
 import { PluginLink } from './plugin-link.js';
@@ -71,11 +71,7 @@ const server = createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 1024 });
 
 server.on('upgrade', (req, socket, head) => {
-  let peer = hostAllowed(req.headers.host, config.port) ? checkUpgrade(req.url, req.headers.origin, clientOrigins) : null;
-  if (peer === 'plugin') {
-    const given = new URL(req.url ?? '/', 'http://localhost').searchParams.get('token');
-    if (!tokenMatches(token, given)) peer = null;
-  }
+  const peer = hostAllowed(req.headers.host, config.port) ? checkUpgrade(req.url, req.headers.origin, clientOrigins) : null;
   if (!peer) {
     socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
     socket.destroy();
@@ -85,13 +81,32 @@ server.on('upgrade', (req, socket, head) => {
 });
 
 function onPlugin(ws: WebSocket) {
-  link.attach(ws);
-  console.log('plugin connected');
+  // Nothing from this socket counts until it passes the handshake (auth.ts).
+  let verified = false;
+  let workerNonce: string | null = null;
+  let bridgeNonce: string | null = null;
+  const authTimer = setTimeout(() => {
+    if (!verified) ws.close(4001, 'auth timeout');
+  }, 5_000);
+
   ws.on('message', (data) => {
     let msg: { type?: string; [k: string]: unknown };
     try {
       msg = JSON.parse(String(data));
     } catch {
+      return;
+    }
+    if (!verified) {
+      if (msg.type === 'challenge' && bridgeNonce === null && isNonce(msg.nonce)) {
+        workerNonce = msg.nonce;
+        bridgeNonce = newNonce();
+        ws.send(JSON.stringify({ type: 'auth', nonce: bridgeNonce, proof: proof(token, 'bridge', msg.nonce, bridgeNonce) }));
+        return;
+      }
+      if (msg.type === 'auth' && bridgeNonce !== null && typeof msg.proof === 'string') {
+        return void verifyPlugin(msg.proof);
+      }
+      ws.close(4001, 'auth failed');
       return;
     }
     record(msg);
@@ -100,9 +115,24 @@ function onPlugin(ws: WebSocket) {
     if (msg.type === 'result') return void link.settle(msg as never);
     for (const c of clients) c.send(JSON.stringify(redactForLog(msg)));
   });
+
+  function verifyPlugin(given: string) {
+    if (workerNonce === null || bridgeNonce === null || !tokenMatches(proof(token, 'plugin', bridgeNonce, workerNonce), given)) {
+      ws.close(4001, 'auth failed');
+      return;
+    }
+    verified = true;
+    clearTimeout(authTimer);
+    link.attach(ws);
+    console.log('plugin connected (verified)');
+  }
+
   ws.on('close', () => {
-    link.detach(ws);
-    console.log('plugin disconnected');
+    clearTimeout(authTimer);
+    if (verified) {
+      link.detach(ws);
+      console.log('plugin disconnected');
+    }
   });
 }
 

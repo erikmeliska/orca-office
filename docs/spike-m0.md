@@ -131,9 +131,13 @@ Private text reaches the bridge only through the CLI (`lastAssistantMessage`,
 - `/plugin` refuses any upgrade with an `Origin` header and `/client` accepts
   only the office page's origin, because any website can open
   `ws://127.0.0.1`.
-- Loopback is open to every local process and user, so the plugin also
-  proves itself with a token: the bridge writes `~/.orca-office/token`
-  (0600, folder 0700) and the worker sends it on connect. Requests whose
+- Loopback is open to every local process and user, so worker and bridge
+  authenticate each other: the bridge writes `~/.orca-office/token` (0600,
+  folder 0700) and both sides prove they know it with HMACs over each other's
+  random nonces (`bridge/src/auth.ts`). The token never crosses the socket.
+  The worker sends no data and obeys no call before the bridge has proved
+  itself, so a process squatting the port while the bridge is down gets only a
+  random nonce (tested: the worker closes with 4001). Requests whose
   `Host` is not `127.0.0.1`/`localhost` get 421 (DNS rebinding). Call ids are
   random UUIDs.
 - The worker allows only `workspace.list`, `agents.list`, `terminal.list`,
