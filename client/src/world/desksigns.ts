@@ -64,13 +64,44 @@ function paintFace(canvas: HTMLCanvasElement, label: DeskLabel) {
   ctx.roundRect(22, 22, w - 44, h - 44, 34);
   ctx.stroke();
   ctx.globalAlpha = 1;
-  const { lines, size } = fit(ctx, label.text, w - 120, h - 70);
+  // Orca's links pinned along the bottom (#32): a sticky strip, the name above it.
+  const strip = label.pins ? Math.round(h * 0.46) : 0;
+  const { lines, size } = fit(ctx, label.text, w - 120, h - 70 - strip);
   ctx.font = FONT(size);
   ctx.fillStyle = ink;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const lh = size * 1.02;
-  lines.forEach((line, i) => ctx.fillText(line, w / 2, h / 2 + (i - (lines.length - 1) / 2) * lh + size * 0.04));
+  const mid = (h - strip) / 2 + (strip ? 10 : 0);
+  lines.forEach((line, i) => ctx.fillText(line, w / 2, mid + (i - (lines.length - 1) / 2) * lh + size * 0.04));
+  if (label.pins) paintPins(ctx, label.pins, w, h, strip);
+}
+
+/** The links strip: a yellow note pinned over the sign's bottom edge. */
+function paintPins(ctx: CanvasRenderingContext2D, text: string, w: number, h: number, strip: number) {
+  const x = 60;
+  const y = h - strip - 6;
+  ctx.save();
+  ctx.translate(w / 2, y + strip / 2);
+  ctx.rotate(-0.012);
+  ctx.fillStyle = 'rgba(0,0,0,.25)';
+  ctx.fillRect(-(w / 2 - x) + 6, -strip / 2 + 8, w - 2 * x, strip - 10);
+  ctx.fillStyle = '#fff7b0';
+  ctx.fillRect(-(w / 2 - x), -strip / 2, w - 2 * x, strip - 10);
+  let size = Math.round(strip * 0.6);
+  ctx.font = FONT(size);
+  while (size > 30 && ctx.measureText(text).width > w - 2 * x - 60) ctx.font = FONT((size -= 4));
+  ctx.fillStyle = '#2b2d42';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, 0, -5);
+  for (const px of [-(w / 2 - x) + 26, w / 2 - x - 26]) {
+    ctx.beginPath();
+    ctx.arc(px, -strip / 2 + 14, 10, 0, Math.PI * 2);
+    ctx.fillStyle = '#ef476f';
+    ctx.fill();
+  }
+  ctx.restore();
 }
 
 interface Hung {
@@ -130,7 +161,7 @@ export function buildDeskSigns(): DeskSigns {
     return { root, key: keyOf(label, back), canvas, tex, label };
   };
 
-  const keyOf = (label: DeskLabel, back: boolean) => `${label.text}|${label.color}|${back}`;
+  const keyOf = (label: DeskLabel, back: boolean) => `${label.text}|${label.color}|${label.pins ?? ''}|${back}`;
   const drop = (h: Hung) => {
     h.root.removeFromParent();
     h.root.traverse((o) => {
