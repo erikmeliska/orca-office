@@ -28,7 +28,7 @@ test('a page that came before Orca had anything is let in once a floor exists', 
   const s = new LiveSession('me', new URLSearchParams(), m.building());
   expect(s.peer.floor).toBeUndefined();
   m.applyWorkspaces([ws('a')]);
-  expect(s.update(m.building()).map((x) => x.t)).toEqual(['floors', 'floor.enter', 'orca.links']);
+  expect(s.update(m.building()).map((x) => x.t)).toEqual(['floors', 'floor.enter', 'orca.links', 'orca.project']);
 });
 
 test('floor.go to an unknown floor is ignored', () => {
@@ -44,7 +44,8 @@ test('the desks’ links (#32) come with the floor, again when they change, and 
   m.applyAgents('local', [agent('p1', 'working')], 0);
   const s = new LiveSession('me', new URLSearchParams(), m.building());
   const first = s.welcome(m.building(), 'test', true);
-  expect(first.at(-1)).toMatchObject({ t: 'orca.links', desks: {} });
+  expect(first.find((x) => x.t === 'orca.links')).toMatchObject({ t: 'orca.links', desks: {} });
+  expect(first.at(-1)).toEqual({ t: 'orca.project', floor: s.peer.floor, project: null });
   m.applyWorktrees([{ id: 'r::/code/demo/a', repoId: 'r', path: '/code/demo/a', hostId: 'local', name: 'a', links: [{ provider: 'github', kind: 'pr', ref: '#12', url: 'https://github.com/o/r/pull/12', title: 'Made-up PR' }, { provider: 'github', kind: 'issue', ref: '#3' }], parentId: null, childIds: [] }]);
   const msgs = s.update(m.building());
   expect(msgs.map((x) => x.t)).toEqual(['plan', 'gh.pulls', 'gh.issues', 'orca.links']);

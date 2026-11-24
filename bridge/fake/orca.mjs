@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 // A stand-in `orca` CLI (ORCA_BIN) that answers what the bridge polls and does with made-up data.
-import { AGENTS, BOTS, REMOTE, TERMINALS, WORKSPACES, WORKTREES } from './data.mjs';
+import { AGENTS, BOTS, GATES, REMOTE, RUN, TASKS, TERMINALS, WORKERS, WORKSPACES, WORKTREES, inbox } from './data.mjs';
 import { load, save } from './state.mjs';
 const argv = process.argv.slice(2);
 const args = argv.join(' ');
@@ -15,6 +15,12 @@ if (args.startsWith('agent list') && args.includes('--environment')) out({ agent
 else if (args.startsWith('agent list')) out({ agents: [...AGENTS, ...st.agents], hostScope: { hostIds: ['local'], omittedHostSelectors: [{ hostId: 'runtime:demo', selector: '--environment demo.example' }] }, truncated: false });
 else if (args.startsWith('terminal list')) out({ terminals: [...TERMINALS, ...st.agents.map((a) => ({ handle: a.terminal, tabId: a.paneKey.split(':')[0], leafId: a.paneKey.split(':')[1], executionHostId: 'local' }))], truncated: false });
 else if (args.startsWith('bot list')) out({ bots: BOTS });
+else if (args.startsWith('orchestration run-list')) out({ runs: [{ id: RUN.id, objective: RUN.objective }] });
+else if (args.startsWith('orchestration run-show')) out({ run: { ...RUN, updated_at: new Date().toISOString() } });
+else if (args.startsWith('orchestration task-list')) out({ tasks: TASKS, runId: RUN.id });
+else if (args.startsWith('orchestration gate-list')) out({ gates: GATES, runId: RUN.id });
+else if (args.startsWith('orchestration worker-list')) out({ workers: WORKERS, scope: { run: RUN.id, source: 'flag' } });
+else if (args.startsWith('orchestration inbox')) out({ messages: inbox() });
 else if (args.startsWith('worktree list')) out({ worktrees: [...WORKTREES, ...st.workspaces.map((w) => ({ id: `${w.projectId}::${w.path}`, repoId: w.projectId, path: w.path, hostId: 'local', displayName: w.name, linkedItems: [], childWorktreeIds: [] }))], totalCount: WORKTREES.length, truncated: false });
 else if (args.startsWith('agent read')) {
   // A made-up conversation for any chat agent; it is still working every other 10 s.

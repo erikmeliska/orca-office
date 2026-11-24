@@ -6,20 +6,21 @@
  */
 import { lookFromSeed, sanitizeLook } from '@orca-office/shared/office/avatar';
 import { elevatorSpot } from '@orca-office/shared/office/layout';
-import type { ClientMsg, FloorView, GhIssue, GhPull, OrcaLink, PeerInfo, ServerMsg } from '@orca-office/shared/office/protocol';
+import type { ClientMsg, FloorView, GhIssue, GhPull, OrcaLink, OrcaProject, PeerInfo, ServerMsg } from '@orca-office/shared/office/protocol';
 import { ROOF } from '@orca-office/shared/office/rooftop';
 import type { Building, LiveFloor } from './model.js';
 
 const T0 = Date.UTC(2026, 10, 24);
 
-export function liveFloorView(floorId: string | null, f: LiveFloor | undefined): FloorView {
+export function liveFloorView(floorId: string | null, f: LiveFloor | undefined, project?: OrcaProject | null): FloorView {
   return {
     floor: floorId,
     project: f ? { name: f.info.name, dir: f.info.dir, agentCmd: 'claude', defaultProvider: 'claude', agentProviders: ['claude'] } : null,
     workers: f?.workers ?? [],
     // The floor's wall boards: what Orca links to its desks (#32), not the forge's whole list.
-    issues: { items: f ? boardIssues(f.links) : [], fetchedAt: T0, loading: false },
-    pulls: { items: f ? boardPulls(f.links) : [], fetchedAt: T0, loading: false },
+    // In a project room: the decisions waiting for you and the open tasks (#30).
+    issues: { items: project ? gateNotes(project) : f ? boardIssues(f.links) : [], fetchedAt: T0, loading: false },
+    pulls: { items: project ? taskNotes(project) : f ? boardPulls(f.links) : [], fetchedAt: T0, loading: false },
     decor: [],
     plan: f?.plan ?? { wing: 0, labels: {} },
     services: { items: [], port: 0 },
@@ -51,9 +52,23 @@ export function boardIssues(links: Record<string, OrcaLink[]>): GhIssue[] {
   return numbered(links, ['issue']).map((i) => ({ ...i, state: 'OPEN', author: '', labels: [], assignees: [], createdAt: ISO0, updatedAt: ISO0, body: '', comments: 0 }));
 }
 
+/** A project room's decision gates as notes on its wall ("waiting for your decision"). */
+export function gateNotes(p: OrcaProject): GhIssue[] {
+  return p.gates.map((g, i) => ({ number: i + 1, url: '', title: `⚖️ ${g.question ?? 'A decision'}`, state: 'OPEN', author: '', labels: [], assignees: [], createdAt: ISO0, updatedAt: ISO0, body: '', comments: 0 }));
+}
+
+/** A project room's tasks still open, as notes on its other wall. */
+export function taskNotes(p: OrcaProject): GhPull[] {
+  return p.tasks
+    .filter((t) => t.status !== 'completed' && t.status !== 'failed')
+    .map((t, i) => ({ number: i + 1, url: '', title: `${t.status} · ${t.title ?? t.id}`, state: 'OPEN', isDraft: t.status === 'pending', author: '', labels: [], reviewDecision: '', headRefName: '', baseRefName: '', createdAt: ISO0, updatedAt: ISO0, additions: 0, deletions: 0, checks: 'none', body: '', closes: [] }));
+}
+
 /** The floor to arrive on: the one where most needs you, then most is working. */
 export function busiestFloor(b: Building): string | null {
-  const best = [...b.floors].sort((x, y) => y.info.waiting - x.info.waiting || y.info.busy - x.info.busy || y.info.workers - x.info.workers)[0];
+  // A project room is somewhere to go, not to arrive: the repositories' floors first.
+  const pool = b.floors.some((f) => f.info.room !== 'project') ? b.floors.filter((f) => f.info.room !== 'project') : b.floors;
+  const best = [...pool].sort((x, y) => y.info.waiting - x.info.waiting || y.info.busy - x.info.busy || y.info.workers - x.info.workers)[0];
   return best?.info.id ?? null;
 }
 
@@ -63,6 +78,7 @@ export class LiveSession {
   private sentPlan = '';
   private sentFloors = '';
   private sentLinks = '';
+  private sentProject = '';
 
   constructor(id: string, query: URLSearchParams, b: Building) {
     const n = (k: string) => (query.get(k) ? Number(query.get(k)) : Number.NaN);
@@ -108,6 +124,7 @@ export class LiveSession {
       },
       { t: 'orca', online },
       ...this.linksMsg(b),
+      ...this.projectMsg(b),
     ];
   }
 
@@ -124,7 +141,7 @@ export class LiveSession {
         const spot = msg.at ?? { ...elevatorSpot(), y: 0, rotY: 0 };
         Object.assign(this.peer, { floor: msg.floor, x: spot.x, y: spot.y, z: spot.z, rotY: spot.rotY, moving: false });
         delete this.peer.seat;
-        return [{ t: 'floor.enter', peers: [this.peer], ...this.view(b) }, ...this.linksMsg(b)];
+        return [{ t: 'floor.enter', peers: [this.peer], ...this.view(b) }, ...this.linksMsg(b), ...this.projectMsg(b)];
       }
       case 'sit':
         if (msg.seat) this.peer.seat = msg.seat;
@@ -146,12 +163,14 @@ export class LiveSession {
       this.sentFloors = floors;
       out.push({ t: 'floors', floors: b.floors.map((f) => f.info) });
     }
+    // A project room that closed (its Run is over) under the page: back down to the busiest floor.
+    if (this.peer.floor?.startsWith('p-') && !b.floors.some((x) => x.info.id === this.peer.floor)) delete this.peer.floor;
     // Nowhere yet (Orca had nothing when the page came): in on the busiest floor once there is one.
     if (!this.peer.floor) {
       const id = busiestFloor(b);
       if (!id) return out;
       Object.assign(this.peer, { floor: id, ...elevatorSpot(), y: 0, rotY: 0 });
-      return [...out, { t: 'floor.enter', peers: [this.peer], ...this.view(b) }, ...this.linksMsg(b)];
+      return [...out, { t: 'floor.enter', peers: [this.peer], ...this.view(b) }, ...this.linksMsg(b), ...this.projectMsg(b)];
     }
     const f = b.floors.find((x) => x.info.id === this.peer.floor);
     const now = new Map((f?.workers ?? []).map((w) => [w.id, w]));
@@ -178,7 +197,19 @@ export class LiveSession {
       out.push({ t: 'gh.pulls', state: v.pulls }, { t: 'gh.issues', state: v.issues });
       out.push(...this.linksMsg(b));
     }
+    if (JSON.stringify(b.projects[this.peer.floor] ?? null) !== this.sentProject) out.push(...this.projectMsg(b));
     return out;
+  }
+
+  /** The board of the project room the page is in, remembered as sent. */
+  private projectMsg(b: Building): ServerMsg[] {
+    const id = this.peer.floor;
+    const p = id ? (b.projects[id] ?? null) : null;
+    const changed = JSON.stringify(p) !== this.sentProject;
+    this.sentProject = JSON.stringify(p);
+    if (!id) return [];
+    const boards: ServerMsg[] = p && changed ? [{ t: 'gh.issues', state: { items: gateNotes(p), fetchedAt: T0, loading: false } }, { t: 'gh.pulls', state: { items: taskNotes(p), fetchedAt: T0, loading: false } }] : [];
+    return [...boards, { t: 'orca.project', floor: id, project: p }];
   }
 
   /** The desks' links on the page's floor, remembered as sent. */
@@ -193,7 +224,7 @@ export class LiveSession {
   private view(b: Building): FloorView {
     const id = this.peer.floor ?? null;
     const f = b.floors.find((x) => x.info.id === id);
-    const v = liveFloorView(id, id === ROOF ? undefined : f);
+    const v = liveFloorView(id, id === ROOF ? undefined : f, id ? b.projects[id] : null);
     this.sentWorkers = new Map(v.workers.map((w) => [w.id, JSON.stringify(w)]));
     this.sentPlan = JSON.stringify(f?.plan ?? null);
     this.sentFloors = JSON.stringify(b.floors.map((x) => x.info));

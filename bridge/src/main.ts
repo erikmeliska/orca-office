@@ -16,6 +16,7 @@ import { CliPoller, orcaCli, orcaSend } from './live/cli.js';
 import { LiveModel } from './live/model.js';
 import { parseStatusEvent, parseToolHook, parseWorkspaces } from './live/orca.js';
 import { LiveSession } from './live/session.js';
+import { RunsPoller } from './live/runs-poller.js';
 import { Actions } from './live/actions.js';
 import { TerminalWatch } from './live/terminals.js';
 import { pageLimits } from './rate.js';
@@ -213,6 +214,13 @@ const poller = new CliPoller(cli, {
   error: (what) => logOnce(what),
 });
 
+// Orchestration Runs and the mailbox (#29, #30, #33, #34): project rooms on the roof and deliveries.
+const runsPoller = new RunsPoller(cli, {
+  runs: (runs, now) => (model.applyRuns(runs, now), changed()),
+  inbox: (messages, now) => (model.applyInbox(messages, now), changed()),
+  error: (what) => logOnce(what),
+});
+
 const terminals = new TerminalWatch((terminalId, maxLines) => link.call('terminal.read', { terminalId, maxLines }));
 const actions = new Actions(model, { call: (m, p, t) => link.call(m, p, t), cli, send: orcaSend(), resync: () => link.send({ type: 'resync' }), now: Date.now }, terminals);
 
@@ -262,10 +270,16 @@ function flush() {
   const b = model.building();
   actions.tick();
   for (const [ws, s] of liveSessions) for (const m of s.update(b)) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
+  // Deliveries (#34): to the pages on the floor each happens on.
+  for (const h of model.takeHandoffs()) {
+    const out = JSON.stringify({ t: 'orca.handoff', from: h.from, to: h.to, kind: h.kind, subject: h.subject });
+    for (const [ws, s] of liveSessions) if (s.peer.floor === h.floor && ws.readyState === ws.OPEN) ws.send(out);
+  }
 }
 
 if (!config.stub) {
   poller.start();
+  runsPoller.start();
   // The done debounce and fading actions run on the clock.
   setInterval(() => {
     const v = model.version;

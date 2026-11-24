@@ -47,6 +47,22 @@ export const ORCA_LINK_TITLE = 60;
 /** Links a desk shows at most. */
 export const ORCA_LINKS_PER_DESK = 8;
 
+/**
+ * A project room's board (#29, #30, design #10, #27): an orchestration Run (or a worktree lineage
+ * across repos). Objective, task titles and gate questions are private: cut to 60 by the bridge.
+ */
+export interface OrcaProject {
+  source: 'run' | 'lineage';
+  objective: string | null;
+  /** Who sits at the head of the table; null when Orca doesn't say. */
+  coordinator: { name: string; bot: boolean } | null;
+  tasks: { id: string; title: string | null; status: 'pending' | 'ready' | 'dispatched' | 'in_progress' | 'completed' | 'failed' | 'blocked' }[];
+  /** Decision gates waiting for you; `seat` is the desk "Open in Orca" opens (null: none to open). */
+  gates: { id: string; question: string | null; options: string[]; seat: string | null }[];
+  /** A lineage room's worktrees, by name. */
+  members: string[];
+}
+
 export type OrcaClientMsg =
   /** Show the figure's workspace in Orca and focus its terminal (`workerId`), or a desk's worktree (`deskId`). */
   | { t: 'orca.open'; workerId?: string; deskId?: string }
@@ -77,6 +93,10 @@ export type OrcaServerMsg =
    * sent on arriving and whenever it changes.
    */
   | { t: 'orca.links'; floor: string; desks: Record<string, OrcaLink[]> }
+  /** The board of the project room the page is in (#29, #30); null when it isn't in one. Sent on arriving and on change. */
+  | { t: 'orca.project'; floor: string; project: OrcaProject | null }
+  /** A delivery to animate on the page's floor (#34): seat to seat; null = up to the roof or down from it. */
+  | { t: 'orca.handoff'; from: string | null; to: string | null; kind: 'dispatch' | 'ask' | 'reply' | 'worker_done' | 'escalation'; subject: string | null }
   /** A desk's worktree in Orca: its comment and whether it is unread. */
   | { t: 'orca.desk'; deskId: string; comment: string; unread: boolean }
   /**

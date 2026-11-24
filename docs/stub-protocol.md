@@ -156,3 +156,40 @@ bridge then derives it from another url of the same repository. The office never
 only), `title` (cut to 60 chars with `toBubble`, design #20). At a desk, **L** lists its links; E at a
 wall board lists the floor's; each opens in the browser. On Orca the PR and issue windows inherited from
 agent-office (which called its `/api/gh/*`) are never opened: a card or palette entry opens its url.
+
+## Project rooms, decisions and deliveries (M4, #29, #30, #33, #34)
+
+The bridge polls orchestration through the CLI, one call at a time (`bridge/src/live/runs-poller.ts`,
+0.1–0.2 s each): every 10 s `run-list` and `inbox --limit 50`; a Run with open tasks or a pending gate
+gets `run-show --full`, `task-list`, `gate-list --status pending` and `worker-list --run` every round,
+a quiet one once a minute (and fully only when its `updated_at` moved). On this machine (3 finished
+Runs) the first round is 13 calls / 2.5 s, later rounds 2 calls.
+
+**Project room** (`FloorInfo.room = 'project'`, floor id `p-…`): one per *live* Run (open task or
+pending gate, or changed in the last 2 h). The head of the table is the room's first desk; each task
+with a worker gets a seat, signed with its status and worktree, and mirrors the figure at that desk
+downstairs (same name, look and state; E/P/O/C reach the same agent). Fallback: a worktree **lineage**
+(`parentWorktreeId` / `childWorktreeIds` from `orca worktree list`) that spans more than one repo or has
+2+ children, while one of its worktrees is open or has an agent, and no Run covers it; the parent sits
+at the head. The room's `waiting` counts pending gates too, so the elevator badge shows them.
+
+**Who coordinates**: `coordinator_handle` was null in every real Run, so the bridge also learns it from
+the mailbox: the sender (`orca_session_id:S`) of mail to one of the Run's dispatches. Seen on real
+data: those senders are bot chats. A bot that coordinates a live Run sits at the head of its room and
+its Staff office shows "🤖 Name → 🏗️ roof" until the Run is over (#33). With neither, the head stays
+empty under the sign "👑 Coordinator unknown".
+
+| Bridge → page | What |
+|---------------|------|
+| `orca.project` | `{ floor, project }` on arriving and on change: `OrcaProject` (`source`, `objective`, `coordinator`, `tasks[]` with status, `gates[]` with `question`, `options`, the `seat` to open, `members` of a lineage) or null outside a room. |
+| `gh.issues` / `gh.pulls` | In a room: the pending gates ("⚖️ …") and the open tasks as notes on its walls. |
+| `orca.handoff` | `{ from, to, kind, subject }`: a seat to seat delivery on the page's floor; `null` is the roof. |
+
+**Deliveries** (#34): new mail since the last read (`ask`, `reply`, `worker_done`, `escalation`; not
+`status`) and new rows in `worker-list` (a dispatch) fly as an envelope with a tag (`subject` cut to 60):
+in the room between the worker's seat and the head, and on the worker's own floor from its desk up to
+the roof or down from it. What is in the mailbox when the bridge starts is not news.
+
+Privacy (design #20): objectives, task titles, gate questions/options and subjects are cut with
+`toBubble` to 60 the moment they are read; message bodies are never read. Nothing is logged or stored.
+The office only reads: gates are decided in Orca ("Open in Orca" opens the desk the gate blocks).

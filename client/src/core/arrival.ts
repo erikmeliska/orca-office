@@ -18,6 +18,7 @@ import { routePullMessage } from '../ui/pull';
 import { openTerminalFor, routeTerminalMessage } from '../ui/terminal';
 import { routeOrcaMessage } from '../ui/orca';
 import { routeLinksMessage } from '../ui/links';
+import { routeProjectMessage } from '../ui/project';
 import { restarting, showRestarting, showUpgraded } from '../ui/upgrade';
 import type { Ctx } from './context';
 import type { CoreState } from './ctx';
@@ -70,6 +71,7 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
   ctx.messages.onAny(routeTerminalMessage);
   ctx.messages.onAny(routeOrcaMessage);
   ctx.messages.onAny(routeLinksMessage);
+  ctx.messages.onAny(routeProjectMessage);
   ctx.messages.onAny(routeChangesMessage);
   ctx.messages.onAny(routePullMessage);
   ctx.messages.onAny(routeElevatorMessage);
