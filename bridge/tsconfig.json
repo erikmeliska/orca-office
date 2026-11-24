@@ -2,5 +2,5 @@
   "extends": "../tsconfig.base.json",
   "compilerOptions": { "rootDir": "src", "outDir": "../.tsbuild/bridge", "tsBuildInfoFile": "../.tsbuild/bridge.tsbuildinfo", "types": ["node"] },
   "include": ["src"],
-  "references": [{ "path": "../shared" }]
+  "references": [{ "path": "../shared" }, { "path": "../shared/src/office" }]
 }

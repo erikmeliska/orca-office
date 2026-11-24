@@ -1,0 +1,33 @@
+orca-office
+Copyright (c) 2026 Erik Meliska
+
+This product includes software from agent-office
+  https://github.com/AgentSystemLabs/agent-office
+  commit 852e2ab28c4f3f31bffdf4b20353bd119c9d3270 (2026-10-08)
+  Copyright (c) 2026 AgentSystemLabs, MIT License (full text in LICENSE)
+
+Copied once from that commit (design.md, decisions 7 and 22); later changes
+from upstream are cherry-picked by hand. What came from where:
+
+  upstream                       here
+  src/client/**                  client/src/** (3D office, UI, models, sound, lab)
+  src/client/index.html          client/index.html
+  src/client/public/             client/public/
+  src/client/models/*.glb        client/src/models/*.glb
+  src/shared/** (incl. protocol) shared/src/office/**
+  tests/*.test.ts, tests/glb.ts  client/test/ (only tests of kept client and
+                                 shared code, moved from node:test to vitest)
+
+Not copied: the server (src/server), its agent providers, bin/, deploy/,
+blender/ sources, install scripts and docs.
+
+Changed here:
+  - imports of src/shared point at @orca-office/shared/office/*;
+  - features dropped by design.md decision 16 are removed: voice, accounts,
+    login/claim/join pages, meetings, whiteboard (Excalidraw), queue, jukebox,
+    cars, golf and the client side of the GitHub integration (the board
+    windows and issue cards; the per-desk PR and issue windows stay), and
+    with them the 2D /lite view, the board agents at the kiosks and the
+    character select before entering;
+  - the client talks to the orca-office bridge instead of the agent-office
+    server, without a session or sign-in.

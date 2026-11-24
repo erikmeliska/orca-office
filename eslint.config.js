@@ -12,4 +12,14 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
     },
   },
+  {
+    // Copied from agent-office (see NOTICE). Terminal escape handling matches control characters
+    // on purpose, and the store and registries grow by declaration merging into empty interfaces.
+    files: ['client/src/**', 'client/test/**', 'shared/src/office/**'],
+    rules: {
+      'no-control-regex': 'off',
+      '@typescript-eslint/no-empty-object-type': 'off',
+      'no-useless-assignment': 'off',
+    },
+  },
 );

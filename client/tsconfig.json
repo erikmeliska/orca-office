@@ -6,8 +6,11 @@
     "lib": ["ES2023", "DOM", "DOM.Iterable"],
     "types": ["vite/client"],
     "rootDir": "src",
-    "outDir": "../.tsbuild/client", "tsBuildInfoFile": "../.tsbuild/client.tsbuildinfo"
+    "outDir": "../.tsbuild/client", "tsBuildInfoFile": "../.tsbuild/client.tsbuildinfo",
+    // Most of the client is copied from agent-office (see NOTICE), written without these.
+    "noUncheckedIndexedAccess": false,
+    "verbatimModuleSyntax": false
   },
   "include": ["src"],
-  "references": [{ "path": "../shared" }]
+  "references": [{ "path": "../shared" }, { "path": "../shared/src/office" }]
 }

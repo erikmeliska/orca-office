@@ -70,4 +70,4 @@ Orca (local) ──trusted-worker plugin──► bridge (Node, launchd, 127.0.0
 
 If M0 breaks an assumption, the plan is adjusted before M1.
 
-M0 is done: findings in [spike-m0.md](spike-m0.md). Open point: status events for agents on SSH hosts could not be observed (no SSH worktrees yet); the 10 s resync covers them until re-tested.
+M1 is done: the client runs against the stub bridge ([stub-protocol.md](stub-protocol.md)); besides the features in #16, the 2D `/lite` view, the board agents at the kiosks and the character select before entering went too (they need agent-office's server or login). M0 is done: findings in [spike-m0.md](spike-m0.md). Open point: status events for agents on SSH hosts could not be observed (no SSH worktrees yet); the 10 s resync covers them until re-tested.
