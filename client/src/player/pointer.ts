@@ -16,6 +16,12 @@ const DRAG_LOOK_SPEED = 0.005;
 const SETTLE_REST = 100;
 const SETTLE_MAX = 150;
 const CENTER = new THREE.Vector2(0, 0);
+/**
+ * A lock the browser takes back this soon after granting it, with no Esc and the page not letting go,
+ * was never really given: Orca's built-in browser grants the pointer lock and drops it ~7 ms later.
+ * From then on the office looks around with a soft lock instead (see softLock).
+ */
+const REVOKED_WITHIN = 80;
 
 /** Where you look and what steers it: the PlayerController is built on this (see index.ts). */
 export abstract class PlayerInput {
@@ -57,6 +63,15 @@ export abstract class PlayerInput {
   private settleUntil = 0;
   /** When the mouse last moved, or a lock that settles landed. */
   private movedAt = 0;
+  /** When the browser last granted the lock (ms), to tell a lock it takes straight back (REVOKED_WITHIN). */
+  private lockedAt = 0;
+  /**
+   * The browser won't keep the pointer locked, so the office keeps its own: one click turns looking
+   * around with the mouse on, without holding a button (the cursor is hidden but not held), and Esc
+   * turns it off. `softHeld` is whether it's on now.
+   */
+  private softLock = false;
+  private softHeld = false;
   enabled = true;
   /** False while the mouse picks something else (an emote on the wheel), so it doesn't turn the camera. */
   mouseLook = true;
@@ -74,7 +89,21 @@ export abstract class PlayerInput {
       this.lockOnEscUp = false;
     });
     // Captured, since the window an Esc closes stops it going any further.
-    window.addEventListener('keydown', (e) => e.key === 'Escape' && (this.escDownAt = performance.now()), true);
+    window.addEventListener(
+      'keydown',
+      (e) => {
+        if (e.key !== 'Escape') return;
+        // A soft lock lets go on Esc the way the browser's does: that Esc goes no further.
+        if (this.softHeld) {
+          e.stopImmediatePropagation();
+          e.preventDefault();
+          this.unlock();
+          return;
+        }
+        this.escDownAt = performance.now();
+      },
+      true,
+    );
     window.addEventListener(
       'keyup',
       (e) => {
@@ -146,6 +175,14 @@ export abstract class PlayerInput {
     });
     document.addEventListener('pointerlockchange', () => {
       this.lockPending = false;
+      if (this.revoked()) {
+        // Taken straight back: look around with the office's own lock from now on, starting with this click.
+        this.softLock = true;
+        this.letting = false;
+        this.lockedAt = 0;
+        this.lock(this.settleNext);
+        return;
+      }
       if (!this.locked) {
         this.letGo = this.letting;
         this.letting = false;
@@ -155,6 +192,7 @@ export abstract class PlayerInput {
         return;
       }
       this.everLocked = true;
+      if (!this.softLock && document.pointerLockElement === this.dom) this.lockedAt = performance.now();
       this.drag = null;
       // The pause to click doesn't count as the hand coming to rest: only once it's taken.
       if (this.settleNext) this.movedAt = performance.now();
@@ -175,7 +213,20 @@ export abstract class PlayerInput {
   }
 
   get locked(): boolean {
-    return document.pointerLockElement === this.dom;
+    return this.softLock ? this.softHeld : document.pointerLockElement === this.dom;
+  }
+
+  /** Whether the office looks around with its own lock, because the browser won't keep one (see softLock). */
+  get soft(): boolean {
+    return this.softLock;
+  }
+
+  /** The browser just took back a lock it had granted a moment ago, not for Esc or the page letting go. */
+  private revoked(): boolean {
+    if (this.softLock || !this.lockedAt || document.pointerLockElement === this.dom) return false;
+    const quick = performance.now() - this.lockedAt < REVOKED_WITHIN;
+    this.lockedAt = 0;
+    return quick && !this.letting && !this.escDownAt;
   }
 
   /** Whether the mouse is captured and staying so: not while it's being let go of for a window. */
@@ -185,12 +236,13 @@ export abstract class PlayerInput {
 
   /** Whether clicking the scene will capture the mouse for looking around. */
   get canLock(): boolean {
-    return this.view === 'first' && !this.lockFailed && typeof this.dom.requestPointerLock === 'function';
+    return this.view === 'first' && (this.softLock || (!this.lockFailed && typeof this.dom.requestPointerLock === 'function'));
   }
 
   unlock() {
     this.lockAfter = false;
     this.lockOnEscUp = false;
+    if (this.softLock) return this.setSoft(false);
     if (!this.locked) return;
     this.letting = true;
     document.exitPointerLock();
@@ -204,6 +256,8 @@ export abstract class PlayerInput {
    */
   yieldMouse() {
     if (this.locked) return this.unlock();
+    // The office's own lock needs no leave from the browser to be taken back.
+    if (this.softLock) return;
     if (this.letGo || !this.canLock || !navigator.userActivation?.isActive) return;
     this.lock();
   }
@@ -224,6 +278,10 @@ export abstract class PlayerInput {
    */
   lock(settle = false) {
     this.settleNext = settle;
+    if (this.softLock) {
+      if (!this.softHeld) this.setSoft(true);
+      return;
+    }
     // Still being let go of, for a window that closed again at once: taken back once it's free.
     if (this.locked && this.letting) this.lockAfter = true;
     if (this.locked || this.lockPending) return;
@@ -252,6 +310,19 @@ export abstract class PlayerInput {
       this.lockPending = false;
       this.lockFailed = true;
     }
+  }
+
+  /**
+   * Turns the soft lock on or off and tells everyone listening for the browser's lock (the same
+   * pointerlockchange), so the hint bar, windows and games treat it as one.
+   */
+  private setSoft(on: boolean) {
+    if (this.softHeld === on) return;
+    this.softHeld = on;
+    // Let go of by the page, so taking it back needs no click (see yieldMouse), as with the real lock.
+    if (!on) this.letting = true;
+    if (this.dom.style) this.dom.style.cursor = on ? 'none' : '';
+    document.dispatchEvent(new Event('pointerlockchange'));
   }
 
   private refused() {
