@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { LiveModel } from './model.js';
 import { LiveSession, wallBoards } from './session.js';
-import { boardOf, FORGE_RETRY_MS, FORGE_TTL_MS, ForgeBoards, ForgeError, ghAdapter, glabAdapter, parseRemote, runCli, type ForgeAdapter, type ForgeTarget, type RunCli } from './forge.js';
+import { boardOf, parseForgeHosts, setForgeHosts, FORGE_RETRY_MS, FORGE_TTL_MS, ForgeBoards, ForgeError, ghAdapter, glabAdapter, parseRemote, runCli, type ForgeAdapter, type ForgeTarget, type RunCli } from './forge.js';
 import type { OrcaWorkspace } from './orca.js';
 
 // Made-up repositories, issues and pull requests only.
@@ -10,8 +10,14 @@ test('git remotes name their forge repository; anything else is no forge', () =>
   expect(parseRemote('git@github.com:acme/widgets.git')).toEqual({ kind: 'github', host: 'github.com', path: 'acme/widgets' });
   expect(parseRemote('https://github.com/acme/widgets')).toEqual({ kind: 'github', host: 'github.com', path: 'acme/widgets' });
   expect(parseRemote('https://gitlab.com/acme/tools/widgets.git')).toEqual({ kind: 'gitlab', host: 'gitlab.com', path: 'acme/tools/widgets' });
+  // Self-hosted forges only when named: a look-alike host never gets a CLI call (and so no enterprise token).
+  expect(parseRemote('ssh://git@gitlab.example.com:2222/g/sub/r.git')).toBeNull();
+  expect(parseRemote('git@github.example.com:o/r.git')).toBeNull();
+  setForgeHosts(parseForgeHosts('gitlab:gitlab.example.com, github:GitHub.Example.com, bogus, ftp:x.com'));
   expect(parseRemote('ssh://git@gitlab.example.com:2222/g/sub/r.git')).toEqual({ kind: 'gitlab', host: 'gitlab.example.com', path: 'g/sub/r' });
   expect(parseRemote('git@github.example.com:o/r.git')).toEqual({ kind: 'github', host: 'github.example.com', path: 'o/r' });
+  expect(parseRemote('git@x.com:o/r.git')).toBeNull();
+  setForgeHosts(parseForgeHosts(undefined));
   expect(parseRemote('/Users/me/code/r.git')).toBeNull();
   expect(parseRemote('git@bitbucket.org:o/r.git')).toBeNull();
   expect(parseRemote('https://github.com/o/r/extra')).toBeNull();

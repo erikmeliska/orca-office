@@ -145,8 +145,33 @@ export function glabAdapter(run: RunCli = runCli(), bin = process.env.ORCA_OFFIC
 }
 
 /**
+ * The hosts the office asks a forge CLI about: github.com and gitlab.com, plus self-hosted ones only
+ * when named in ORCA_OFFICE_FORGE_HOSTS (`github:ghe.example.com,gitlab:gitlab.example.com`). A
+ * remote on any other host gets no CLI call, so a look-alike host (`github.evil.example`) never gets
+ * an enterprise token a CLI would send to a non-github.com host.
+ */
+export function parseForgeHosts(raw: string | undefined): Map<string, ForgeKind> {
+  const hosts = new Map<string, ForgeKind>([
+    ['github.com', 'github'],
+    ['gitlab.com', 'gitlab'],
+  ]);
+  for (const part of (raw ?? '').split(',')) {
+    const m = /^\s*(github|gitlab):([a-z0-9.-]{1,253})\s*$/i.exec(part);
+    if (m) hosts.set(m[2]!.toLowerCase(), m[1]!.toLowerCase() as ForgeKind);
+  }
+  return hosts;
+}
+
+let forgeHosts = parseForgeHosts(process.env.ORCA_OFFICE_FORGE_HOSTS);
+/** For tests: which hosts count as forges. */
+export function setForgeHosts(hosts: Map<string, ForgeKind>): void {
+  forgeHosts = hosts;
+}
+
+/**
  * A git remote → its forge repository: `git@github.com:o/r.git`, `https://github.com/o/r`,
- * `ssh://git@gitlab.example.com:2222/g/s/r.git`. Null for anything else (a path, an unknown forge).
+ * `ssh://git@gitlab.example.com:2222/g/s/r.git` (a self-hosted host only when allowed, above). Null for
+ * anything else (a path, an unknown host).
  */
 export function parseRemote(remote: string): ForgeRepo | null {
   const s = remote.trim();
@@ -170,7 +195,7 @@ export function parseRemote(remote: string): ForgeRepo | null {
   path = path.replace(/^\/+/, '').replace(/\/+$/, '').replace(/\.git$/, '');
   host = host.toLowerCase();
   if (!/^[a-z0-9.-]{1,253}$/.test(host) || !/^[\w.-]+(\/[\w.-]+)+$/.test(path) || path.split('/').some((p) => p === '..' || p === '.')) return null;
-  const kind: ForgeKind | null = host === 'github.com' || /(^|\.)github\./.test(host) ? 'github' : host === 'gitlab.com' || /(^|\.)gitlab\./.test(host) ? 'gitlab' : null;
+  const kind = forgeHosts.get(host) ?? null;
   if (!kind) return null;
   if (kind === 'github' && path.split('/').length !== 2) return null;
   return { kind, host, path };

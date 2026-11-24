@@ -160,8 +160,9 @@ agent-office (which called its `/api/gh/*`) are never opened: a card or palette 
 ## Repo board (v2, #38)
 
 Each repository floor's wall boards show the repository's open issues and pull/merge requests, read
-through a `ForgeAdapter` (`bridge/src/live/forge.ts`): `gh` for GitHub (also GitHub Enterprise hosts
-named `github.*`) and `glab` for GitLab (gitlab.com or a `gitlab.*` host). The middle whiteboard is the
+through a `ForgeAdapter` (`bridge/src/live/forge.ts`): `gh` for github.com and `glab` for gitlab.com.
+Self-hosted forges only when named in `ORCA_OFFICE_FORGE_HOSTS` (`github:ghe.example.com,gitlab:gitlab.example.com`):
+a remote on any other host gets no CLI call, so a look-alike host never receives a token the CLI would send. The middle whiteboard is the
 **queue**: open items no worktree works on yet, i.e. not linked to any of the repository's worktrees in
 Orca (`linkedItems` and the older fields) and, for a pull/merge request, no worktree on its source branch.
 
