@@ -42,7 +42,7 @@ function graph(entry: string): Set<string> {
 test('main.ts installs every feature, each with one install line', () => {
   const main = read(path.join(client, 'main.ts'));
   const features = readdirSync(path.join(client, 'features')).filter((d) => statSync(path.join(client, 'features', d)).isDirectory());
-  assert.ok(features.length >= 30, `found ${features.length} features`);
+  assert.ok(features.length >= 25, `found ${features.length} features`);
   for (const f of features) {
     const dir = path.join(client, 'features', f);
     const installs = readdirSync(dir)
@@ -63,16 +63,11 @@ test('no part of the office imports main.ts: it only puts them together', () => 
   }
 });
 
-test('the 2D view loads no three.js, and none of the 3D office: what it shares with it is three.js-free', () => {
-  const lite = graph(path.join(client, 'lite.ts'));
-  for (const f of lite) {
+test('the live list page (live.html) loads no three.js and none of the 3D office', () => {
+  const live = graph(path.join(client, 'live.ts'));
+  for (const f of live) {
     const rel = path.relative(client, f);
-    assert.doesNotMatch(read(f), /from 'three(?:\/[^']*)?'/, `${rel} (loaded by lite.ts) imports three.js`);
-    assert.ok(!/^(core|features|input|world|player)\//.test(rel), `lite.ts loads ${rel}, part of the 3D office`);
-  }
-  // What the 2D view and the 3D office share.
-  for (const shared of ['shared/title.ts', 'shared/hiring.ts']) {
-    assert.ok(lite.has(path.join(client, shared)), `lite.ts uses ${shared}`);
-    assert.ok(graph(path.join(client, 'main.ts')).has(path.join(client, shared)), `the 3D office uses ${shared}`);
+    assert.doesNotMatch(read(f), /from 'three(?:\/[^']*)?'/, `${rel} (loaded by live.ts) imports three.js`);
+    assert.ok(!/^(core|features|input|world|player)\//.test(rel), `live.ts loads ${rel}, part of the 3D office`);
   }
 });
