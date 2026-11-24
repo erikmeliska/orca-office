@@ -195,6 +195,46 @@ items; `ORCA_OFFICE_FAKE_FORGE=auth` plays a `gh` that isn't logged in).
 ![Queue panel](img/v2-queue-panel-desktop.png)
 ![Queue panel on a phone](img/v2-queue-panel-mobile.png)
 
+## Read-only LAN view (v2, #39)
+
+A TV (LG webOS browser) or a phone on the LAN can watch the office, and do nothing else. **Off by
+default**; it needs both variables, and the address must be one IPv4 address of this machine (no
+`0.0.0.0`, no names):
+
+```sh
+ORCA_OFFICE_LAN_PORT=4318 ORCA_OFFICE_LAN_HOST=192.168.1.20 npm run start -w bridge   # then http://192.168.1.20:4318/
+```
+
+Turning it on opens a port to the LAN, a security change: decide it yourself; the launchd install
+never sets it. Stub mode refuses LAN sockets.
+
+What the LAN port is (`bridge/src/lan.ts`), enforced by the bridge, not by the page:
+
+- **A separate HTTP server** on that address and port. It serves only the TV page (`/`, `/tv`) and its
+  assets, and one WebSocket, `/lan`. `/client`, `/plugin`, `/health`, the page's token and the full
+  office page are not there (404 / 403). `Host` must be the LAN address (421 otherwise), the socket's
+  `Origin` the page's own; at most 16 LAN sockets.
+- **Sends** only `lan.view` (on connect and whenever the building changes) and `pong`. `lanView` builds
+  it field by field from an allowlist: floors (a project room is just "Project room": a Run's objective
+  is private), badges (`waiting`, `busy`, `workers`), desk signs (Orca's worktree names; none in project
+  rooms), figures with the office's made-up name, color, status, action (read/edit/test…), helper count,
+  remote, bot name. **Never** a last message, a title, an activity line, a prompt, terminal text, chats,
+  links' titles, task titles, gates, Run objectives or paths (design #20).
+- **Takes** only `{ "t": "ping", "at": <number> }` (≤256 bytes, ≤120 a minute). Anything else (an action,
+  typing, a chat, a floor change) closes the socket with 1008. No terminals, actions, chats or bots
+  exist on that side at all.
+
+The TV page (`client/tv.html`, `src/tv.ts`, 3.5 kB of script, no three.js) needs no pointer lock or
+keyboard: big type, the repositories' floors first and then Staff and project rooms, each for 12 s;
+tapping a floor holds it for a minute. A phone gets one column.
+
+Tested on this machine only on `127.0.0.1:4418` (made-up data, `npm run dev:fake`): `/client` and
+`/plugin` upgrades and foreign `Origin`/`Host` refused, `term.input` and `orca.create` close the socket,
+no bubble text in the view. Not tried on a real TV.
+
+![TV view](img/v2-tv-desktop.png)
+![TV view on a phone](img/v2-tv-mobile.png)
+
 ## Project rooms, decisions and deliveries (M4, #29, #30, #33, #34)
 
 The bridge polls orchestration through the CLI, one call at a time (`bridge/src/live/runs-poller.ts`,
