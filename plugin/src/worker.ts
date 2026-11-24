@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import type { OrcaWorkerApi } from 'orca/worker';
 
 // M0 spike: forwards Orca workspace/agent state to the local orca-office bridge.
@@ -9,18 +12,24 @@ const PROTOCOL = 0;
 const RESYNC_MS = 10_000;
 const MAX_BACKOFF_MS = 30_000;
 
-/** Host methods the bridge may call through this worker (design #14, #19). */
-const ALLOWED_CALLS = new Set([
-  'workspace.list',
-  'agents.list',
-  'terminal.list',
-  'terminal.read',
-  'terminal.sendText',
-  'terminal.create',
-]);
+/** Written by the bridge (0600); proves to the bridge that this is the plugin. */
+const TOKEN_PATH = join(homedir(), '.orca-office', 'token');
 
-// The worker runs in Node; Orca's worker typings do not include @types/node.
-declare const process: { version: string; platform: string };
+/**
+ * Host methods the bridge may call through this worker (design #14, #19).
+ * Only after the token handshake; nothing that creates terminals or launches.
+ */
+const ALLOWED_CALLS = new Set(['workspace.list', 'agents.list', 'terminal.list', 'terminal.read', 'terminal.sendText']);
+
+function readToken(): string | null {
+  try {
+    const t = readFileSync(TOKEN_PATH, 'utf8').trim();
+    return t.length >= 32 ? t : null;
+  } catch {
+    return null;
+  }
+}
+
 
 type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 
@@ -58,9 +67,15 @@ export default function activate(orca: OrcaWorkerApi) {
   function connect() {
     if (stopped) return;
     status('Office…', 'neutral', `Connecting to ${BRIDGE_URL}`);
+    const token = readToken();
+    if (!token) {
+      status('Office ✕', 'warning', `No token at ${TOKEN_PATH}; start the bridge first`);
+      scheduleReconnect();
+      return;
+    }
     let ws: WebSocket;
     try {
-      ws = new WebSocket(BRIDGE_URL);
+      ws = new WebSocket(`${BRIDGE_URL}?token=${encodeURIComponent(token)}`);
     } catch (err) {
       orca.log(`connect threw: ${String(err)}`);
       scheduleReconnect();
@@ -107,7 +122,7 @@ export default function activate(orca: OrcaWorkerApi) {
     const msg = JSON.parse(raw) as { type?: string; id?: string; method?: string; params?: Json };
     if (msg.type === 'resync') return snapshot();
     if (msg.type !== 'call' || typeof msg.id !== 'string' || typeof msg.method !== 'string') return;
-    if (!ALLOWED_CALLS.has(msg.method)) {
+    if (!ALLOWED_CALLS.has(msg.method) || !validParams(msg.method, msg.params)) {
       send({ type: 'result', id: msg.id, ok: false, error: 'not_allowed' });
       return;
     }
@@ -164,6 +179,20 @@ export default function activate(orca: OrcaWorkerApi) {
       socket?.close();
     },
   };
+}
+
+/** Shape checks before anything reaches a terminal; Orca validates the rest. */
+function validParams(method: string, params: Json | undefined): boolean {
+  if (method !== 'terminal.sendText') return true;
+  if (!params || typeof params !== 'object' || Array.isArray(params)) return false;
+  const { terminalId, text, enter } = params as Record<string, Json>;
+  return (
+    typeof terminalId === 'string' &&
+    terminalId.startsWith('term_') &&
+    typeof text === 'string' &&
+    text.length <= 4096 &&
+    (enter === undefined || typeof enter === 'boolean')
+  );
 }
 
 function errorCode(err: unknown): string {

@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer, type WebSocket } from 'ws';
 import { PROTOCOL_VERSION, redactForLog } from '@orca-office/shared';
+import { hostAllowed, loadOrCreateToken, tokenMatches } from './auth.js';
 import { loadConfig } from './config.js';
 import { allowedClientOrigins, checkUpgrade } from './origin.js';
 import { PluginLink } from './plugin-link.js';
@@ -11,6 +12,8 @@ import { PluginLink } from './plugin-link.js';
 const config = loadConfig();
 const clientOrigins = allowedClientOrigins(config.clientPort);
 const link = new PluginLink();
+const token = loadOrCreateToken();
+const spikeCalls = process.env.ORCA_OFFICE_SPIKE_CALLS === '1';
 const clients = new Set<WebSocket>();
 let lastPluginHello: unknown = null;
 let lastSnapshotAt: number | null = null;
@@ -35,6 +38,10 @@ async function readBody(req: IncomingMessage): Promise<string> {
 }
 
 const server = createServer(async (req, res) => {
+  if (!hostAllowed(req.headers.host, config.port)) {
+    res.writeHead(421).end();
+    return;
+  }
   const json = (code: number, value: unknown) => {
     res.writeHead(code, { 'content-type': 'application/json' });
     res.end(JSON.stringify(value));
@@ -42,8 +49,15 @@ const server = createServer(async (req, res) => {
   if (req.method === 'GET' && req.url === '/health') {
     return json(200, { ok: true, protocol: PROTOCOL_VERSION, plugin: link.connected, lastSnapshotAt, hello: lastPluginHello });
   }
-  // Spike-only: drive host calls from the shell. Refused for browsers (any Origin).
-  if (req.method === 'POST' && req.url === '/spike/call' && req.headers.origin === undefined) {
+  // Spike-only: drive host calls from the shell. Off unless ORCA_OFFICE_SPIKE_CALLS=1,
+  // needs the token as a bearer and is refused for browsers (any Origin).
+  if (
+    spikeCalls &&
+    req.method === 'POST' &&
+    req.url === '/spike/call' &&
+    req.headers.origin === undefined &&
+    tokenMatches(token, req.headers.authorization?.replace(/^Bearer /, ''))
+  ) {
     try {
       const { method, params } = JSON.parse(await readBody(req)) as { method: string; params?: unknown };
       return json(200, await link.call(method, params));
@@ -57,7 +71,11 @@ const server = createServer(async (req, res) => {
 const wss = new WebSocketServer({ noServer: true, maxPayload: 8 * 1024 * 1024 });
 
 server.on('upgrade', (req, socket, head) => {
-  const peer = checkUpgrade(req.url, req.headers.origin, clientOrigins);
+  let peer = hostAllowed(req.headers.host, config.port) ? checkUpgrade(req.url, req.headers.origin, clientOrigins) : null;
+  if (peer === 'plugin') {
+    const given = new URL(req.url ?? '/', 'http://localhost').searchParams.get('token');
+    if (!tokenMatches(token, given)) peer = null;
+  }
   if (!peer) {
     socket.write('HTTP/1.1 403 Forbidden\r\n\r\n');
     socket.destroy();
@@ -95,5 +113,5 @@ function onClient(ws: WebSocket) {
 }
 
 server.listen(config.port, config.host, () => {
-  console.log(`orca-office bridge on http://${config.host}:${config.port}${spikeLog ? ` (spike log ${spikeLog})` : ''}`);
+  console.log(`orca-office bridge on http://${config.host}:${config.port}${spikeLog ? ` (spike log ${spikeLog})` : ''}${spikeCalls ? ' (spike calls on)' : ''}`);
 });

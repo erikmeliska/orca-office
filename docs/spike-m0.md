@@ -7,15 +7,18 @@ written back into [design.md](design.md).
 ## How to reproduce
 
 ```sh
-ORCA_OFFICE_SPIKE_LOG=1 npm run start -w bridge     # logs redacted messages to bridge/.spike/
+ORCA_OFFICE_SPIKE_LOG=1 ORCA_OFFICE_SPIKE_CALLS=1 npm run start -w bridge
 orca plugin dev load plugin --json                  # prints the approval fingerprint
 orca plugin dev load plugin --approve <fingerprint>
 curl -s 127.0.0.1:4317/health
-curl -s -X POST 127.0.0.1:4317/spike/call -d '{"method":"workspace.list","params":{"includeStatus":true}}'
+curl -s -X POST -H "Authorization: Bearer $(cat ~/.orca-office/token)" \
+  127.0.0.1:4317/spike/call -d '{"method":"workspace.list","params":{"includeStatus":true}}'
 ```
 
-`/spike/call` forwards an allowlisted host call to the worker and is refused
-for any request that carries an `Origin` header (browsers).
+`/spike/call` exists only with `ORCA_OFFICE_SPIKE_CALLS=1`, needs the token
+and is refused for any request with an `Origin` header (browsers). During the
+spike the worker also allowed `terminal.create` to open the key-echo terminal;
+it was removed afterwards.
 
 ## #2 Worker → bridge
 
@@ -128,3 +131,13 @@ Private text reaches the bridge only through the CLI (`lastAssistantMessage`,
 - `/plugin` refuses any upgrade with an `Origin` header and `/client` accepts
   only the office page's origin, because any website can open
   `ws://127.0.0.1`.
+- Loopback is open to every local process and user, so the plugin also
+  proves itself with a token: the bridge writes `~/.orca-office/token`
+  (0600, folder 0700) and the worker sends it on connect. Requests whose
+  `Host` is not `127.0.0.1`/`localhost` get 421 (DNS rebinding). Call ids are
+  random UUIDs.
+- The worker allows only `workspace.list`, `agents.list`, `terminal.list`,
+  `terminal.read` and `terminal.sendText` from the bridge, and checks
+  `terminal.sendText` params (a `term_` id, text ≤4096 chars). The `/client`
+  side gets its own token in M1/M3, before any terminal action reaches the
+  browser.
