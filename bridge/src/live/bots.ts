@@ -7,7 +7,7 @@
  * Checked here before anything reaches the CLI: the page has that bot open, the bot is one of
  * `orca bot list` and not paused, the chat is one of `orca bot chats` for it (read again right
  * before sending) or `new`, the text is 1–ORCA_LIMITS.prompt characters. One message every 5 s and
- * 30 an hour for the whole bridge. Message text, titles and answers are never logged or kept:
+ * 200 an hour for the whole bridge. Message text, titles and answers are never logged or kept:
  * they pass to the one page that has the panel open; errors are short codes.
  */
 import { toBubble } from '@orca-office/shared';
@@ -49,9 +49,12 @@ interface OpenBot {
 
 const MESSAGES = new Set(['orca.bot.open', 'orca.bot.chat', 'orca.bot.close', 'orca.bot.send']);
 
+/** Bot messages the bridge lets through per hour, all pages together. */
+export const BOT_SENDS_PER_HOUR = 200;
+
 export class BotChats {
   private pages = new Map<ActionPage, OpenBot>();
-  /** For the whole bridge, whichever page sends: 1 message in 5 s, 30 an hour. */
+  /** For the whole bridge, whichever page sends: 1 message in 5 s (no double sends), 200 an hour (a runaway loop stops). */
   private burst: Bucket;
   private hourly: Bucket;
 
@@ -60,7 +63,7 @@ export class BotChats {
     private deps: BotDeps,
   ) {
     this.burst = new Bucket(1, 1 / 5, deps.now());
-    this.hourly = new Bucket(30, 30 / 3600, deps.now());
+    this.hourly = new Bucket(BOT_SENDS_PER_HOUR, BOT_SENDS_PER_HOUR / 3600, deps.now());
   }
 
   static handles(t: string): boolean {

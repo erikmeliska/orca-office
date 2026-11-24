@@ -47,7 +47,7 @@ orca orchestration send --from orca-office --to bot:<name> --chat <id|new> \
 - The chat is `new` or one of that bot's open chats from `orca bot chats --bot <name>` (not
   `closed`, not `self`).
 - The text is 1–`ORCA_LIMITS.prompt` (8000) characters, without NUL.
-- Rate limit per page: 1 message every 5 s, 30 an hour.
+- Rate limit for the whole bridge (all pages): 1 message every 5 s, 200 an hour.
 - `execFile` with an argument array (never a shell); the subject is the text's first line cut to
   60 characters, passed as `--subject=<…>` so it can't read as a flag.
 - No message or answer text is logged, stored, put in tests or screenshots; errors carry a code.

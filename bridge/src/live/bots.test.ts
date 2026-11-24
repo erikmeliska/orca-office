@@ -5,7 +5,7 @@ import { afterEach, beforeEach, expect, test, vi } from 'vitest';
 import type { ServerMsg } from '@orca-office/shared/office/protocol';
 import { ORCA_LIMITS } from '@orca-office/shared/office/protocol/orca';
 import { pageLimits } from '../rate.js';
-import { BOT_CHAT_EVERY_MS, BotChats, NEW_CHAT_EVERY_MS, subjectOf } from './bots.js';
+import { BOT_CHAT_EVERY_MS, BOT_SENDS_PER_HOUR, BotChats, NEW_CHAT_EVERY_MS, subjectOf } from './bots.js';
 import { OFFICE_SENDER, orcaBotSend } from './cli.js';
 import { LiveModel, botWorkerId } from './model.js';
 import { parseBotChats, parseConversation, unwrapMail } from './orca.js';
@@ -130,7 +130,7 @@ test('a message is refused unless every check passes, and nothing is sent', asyn
   expect(sends).toEqual([]);
 });
 
-test('one message every 5 s and 30 an hour, for the whole bridge', async () => {
+test('one message every 5 s and 200 an hour, for the whole bridge', async () => {
   await bots.handle(page, { t: 'orca.bot.open', workerId: W });
   await send();
   await send();
@@ -144,8 +144,14 @@ test('one message every 5 s and 30 an hour, for the whole bridge', async () => {
     now += 5_000;
     await send();
   }
-  // 30 at once, plus the ~1.7 the hour's bucket refilled over these 200 s.
-  expect(sends).toHaveLength(31);
+  expect(sends).toHaveLength(41);
+  // One every 5 s drains the hour's 200 (refilling ~0.28 per send) after ~250 more.
+  for (let i = 0; i < 400 && of('orca.bot.sent').at(-1)?.error !== 'rate_limited_hour'; i++) {
+    now += 5_000;
+    await send();
+  }
+  expect(sends.length).toBeGreaterThan(BOT_SENDS_PER_HOUR);
+  expect(sends.length).toBeLessThan(BOT_SENDS_PER_HOUR * 1.5);
   expect(of('orca.bot.sent').at(-1)).toMatchObject({ phase: 'failed', error: 'rate_limited_hour' });
 });
 
