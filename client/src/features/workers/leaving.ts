@@ -562,3 +562,117 @@ export class Arrivals {
     root.scale.setScalar(1);
   }
 }
+
+interface Goer {
+  model: Worker;
+  way: Pt[];
+  /** The point on `way` it's walking to; 0 while it hops down off its chair. */
+  next: number;
+  /** Where it sat, for the hop down. */
+  seat: THREE.Vector3;
+  hop: number;
+  heading: number;
+  stepIn: number;
+  scale: number;
+  /** 0 → 1 as it shrinks away into the elevator. */
+  gone: number;
+}
+
+/**
+ * Off to work on another floor (a bot called to coordinate a project room, #33, and back to its
+ * office when that's over): it hops down off its chair, walks the way people come in backwards, to
+ * the elevator (see wayIn), and is gone into it. Not sent home: no box, no farewell.
+ */
+export class ElevatorExits {
+  private goers: Goer[] = [];
+
+  constructor(
+    private parent: THREE.Object3D,
+    private ground: (x: number, z: number, y: number) => number,
+    private footstep: (x: number, y: number, z: number) => void,
+    private ways: () => Ways,
+    /** Done with a model: it's in the elevator. */
+    private dispose: (model: Worker) => void,
+  ) {}
+
+  /** Walks `model`, sitting at `desk`, to the elevator. */
+  add(model: Worker, desk: DeskView) {
+    const seat = model.root.getWorldPosition(new THREE.Vector3());
+    const scale = model.root.getWorldScale(new THREE.Vector3()).x;
+    const heading = model.root.getWorldQuaternion(new THREE.Quaternion());
+    this.parent.add(model.root);
+    model.root.position.copy(seat);
+    model.root.rotation.setFromQuaternion(heading, 'YXZ');
+    model.root.scale.setScalar(scale);
+    const way = [...this.ways().in(desk.def)].reverse();
+    this.goers.push({ model, way, next: 0, seat, hop: 0, heading: model.root.rotation.y, stepIn: 0, scale, gone: 0 });
+  }
+
+  /** Off to another floor: whoever is still on the way goes. */
+  clear() {
+    for (const g of this.goers) this.dispose(g.model);
+    this.goers = [];
+  }
+
+  positions(): THREE.Vector3[] {
+    return this.goers.map((g) => g.model.root.position);
+  }
+
+  update(dt: number, t: number) {
+    this.goers = this.goers.filter((g) => {
+      g.model.update(dt, t);
+      if (this.step(g, dt)) return true;
+      this.dispose(g.model);
+      return false;
+    });
+  }
+
+  /** Moves one along; false once it's gone into the elevator. */
+  private step(g: Goer, dt: number): boolean {
+    const { root } = g.model;
+    const pos = root.position;
+    if (g.next === 0) {
+      // Down off the chair in a little arc, to the first point of the way out.
+      const [x, z] = g.way[0] ?? [g.seat.x, g.seat.z];
+      g.hop = Math.min(1, g.hop + dt / HOP);
+      const y = this.ground(x, z, 0) - FEET;
+      pos.set(THREE.MathUtils.lerp(g.seat.x, x, g.hop), THREE.MathUtils.lerp(g.seat.y, y, g.hop) + Math.sin(g.hop * Math.PI) * 0.35, THREE.MathUtils.lerp(g.seat.z, z, g.hop));
+      if (g.hop >= 1) g.next = 1;
+      return true;
+    }
+    if (g.next >= g.way.length) {
+      g.model.walking = false;
+      g.gone = Math.min(1, g.gone + dt / GONE);
+      root.scale.setScalar(g.scale * (1 - g.gone));
+      return g.gone < 1;
+    }
+    let move = IN_PACE * dt;
+    while (move > 0 && g.next < g.way.length) {
+      const [x, z] = g.way[g.next];
+      const dx = x - pos.x;
+      const dz = z - pos.z;
+      const d = Math.hypot(dx, dz);
+      if (d > 1e-4) g.heading = Math.atan2(dx, dz);
+      if (d <= move) {
+        pos.x = x;
+        pos.z = z;
+        move -= d;
+        g.next++;
+      } else {
+        pos.x += (dx / d) * move;
+        pos.z += (dz / d) * move;
+        move = 0;
+      }
+    }
+    const gy = this.ground(pos.x, pos.z, pos.y + FEET) - FEET;
+    pos.y += (gy - pos.y) * Math.min(1, dt * 14);
+    root.rotation.y += wrap(g.heading - root.rotation.y) * Math.min(1, dt * 8);
+    g.model.walking = true;
+    g.stepIn -= dt;
+    if (g.stepIn <= 0) {
+      g.stepIn += Math.PI / 9;
+      this.footstep(pos.x, pos.y, pos.z);
+    }
+    return true;
+  }
+}

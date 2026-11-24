@@ -176,7 +176,13 @@ at the head. The room's `waiting` counts pending gates too, so the elevator badg
 **Who coordinates**: `coordinator_handle` was null in every real Run, so the bridge also learns it from
 the mailbox: the sender (`orca_session_id:S`) of mail to one of the Run's dispatches. Seen on real
 data: those senders are bot chats. A bot that coordinates a live Run sits at the head of its room and
-its Staff office shows "🤖 Name → 🏗️ roof" until the Run is over (#33). With neither, the head stays
+its Staff office shows "🤖 Name → 🏗️ roof" until the Run is over (#33).
+On the page (M5, #33) such a move is a walk, not a jump: a bot that leaves a floor (its Staff office,
+or the room when the Run is over) hops off its chair, walks the way in backwards to the elevator and is
+gone into it (`ElevatorExits`, client/src/features/workers/leaving.ts), and on the floor it comes to it
+steps out of the elevator and walks to its seat (`Arrivals`). A bot is never "sent home" with a box.
+Only one floor is drawn at a time, so the ride itself isn't shown; changing floors yourself seats
+everyone at once as before. With neither, the head stays
 empty under the sign "👑 Coordinator unknown".
 
 | Bridge → page | What |
