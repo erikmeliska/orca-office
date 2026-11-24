@@ -4,7 +4,7 @@ import type { Look } from '../avatar.js';
 import type { BarGame } from '../bargames.js';
 import type { EmoteId } from '../emotes.js';
 import type { DrinkId } from '../rooftop.js';
-import type { Me } from './accounts.js';
+import type { Me } from './me.js';
 import type { FloorInfo, FloorView, ProjectsDirState } from './floors.js';
 import type { LeaveOnMergeState, MachineState, MapState, NotifyState, PromptsState, SkyState, ThemeState, UpgradeState } from './settings.js';
 import type { PlanLimits, UsageState } from './usage.js';
@@ -34,8 +34,6 @@ export interface PeerInfo {
   seat?: string;
   /** A drink from the rooftop bar in their hand. */
   drink?: DrinkId;
-  /** Signed in with their own account, so `name` is theirs and nobody else can take it. */
-  account?: boolean;
   /** The floor they're on (see FloorInfo); none while the building has no floors yet. */
   floor?: string;
   /** What they have open, in their own words: "in Pixel's terminal", "reading PR #12". */
@@ -52,8 +50,6 @@ export interface ChatLine {
   color: string;
   text: string;
   at: number;
-  /** Said by someone signed in with their own account. */
-  account?: boolean;
 }
 
 /** A line of a worker's terminal that matched a search. */
@@ -103,8 +99,6 @@ export type PresenceServerMsg =
       /** Where new projects are cloned to, on the office's machine. */
       projectsDir: ProjectsDirState;
       chat: ChatLine[];
-      /** Whether teammates can be invited from the office (see TeamState). */
-      invites: boolean;
       /** The running server's version; a change after a reconnect means the office was upgraded. */
       version: string;
       upgrade: UpgradeState;

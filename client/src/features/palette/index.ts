@@ -11,12 +11,10 @@ import type { Parts } from '../../core/parts';
 import { STATION_INFO } from '../../core/stations';
 import { isTyping } from '../../player';
 import { store } from '../../state';
-import { openAccounts } from '../../ui/accounts';
 import { STATUS_LABEL, toast } from '../../ui/dom';
 import { paletteOpen, togglePalette, type PaletteEntry } from '../../ui/palette';
 import { openIssue, openPull } from '../../ui/pull';
 import { openServices, serviceUrl } from '../../ui/services';
-import { openTeam } from '../../ui/team';
 import { IS_MAC } from '../../ui/termkeys';
 import type { InteractKind, Interactable } from '../../world/types';
 
@@ -91,8 +89,6 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
       walk: free ? () => walkThen(deskSpot(free)!, free.label, hireAt(free), free) : undefined,
     });
     out.push({ icon: '⚙️', kind: 'Action', title: 'Settings', keywords: ['preferences', 'options'], open: () => parts.hud.showSettings() });
-    if (store.invites) out.push({ icon: '👥', kind: 'Action', title: 'Invite teammates', keywords: ['team', 'add people'], open: () => openTeam(net) });
-    else if (store.me.admin) out.push({ icon: '👥', kind: 'Action', title: 'Invite people', detail: 'Accounts', keywords: ['invite teammates', 'accounts', 'team'], open: () => openAccounts(net) });
     out.push({ icon: '🖼️', kind: 'Action', title: 'Hang a picture', detail: 'On a wall of this floor', keywords: ['decorate', 'frame', 'art'], open: hanging.startHanging });
     out.push({ icon: '🔎', kind: 'Action', title: 'Search the chat and every terminal', keywords: ['find'], open: showSearch });
 

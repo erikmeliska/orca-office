@@ -49,7 +49,7 @@ const setting = (title: string, scope: Scope | null, ...body: Node[]) =>
 let lastPane: SettingsPane = 'you';
 
 /** `outside` describes the sky over the office (see describeSky), once the server has said. `first` opens on that category instead of the last one. */
-export function openSettings(net: Net, settings: Settings, onChange: (s: Settings) => void, onCharacter: () => void, sound: Pick<OfficeSound, 'ding' | 'needsYou'>, notifier: DesktopNotifier, onSignOut: () => void, outside?: { now: string; live: boolean }, first?: SettingsPane) {
+export function openSettings(net: Net, settings: Settings, onChange: (s: Settings) => void, onCharacter: () => void, sound: Pick<OfficeSound, 'ding' | 'needsYou'>, notifier: DesktopNotifier, outside?: { now: string; live: boolean }, first?: SettingsPane) {
   const seg = h('div.seg', { role: 'radiogroup', 'aria-label': 'Camera view' });
   const note = h('p.setting-note');
   const paint = () => {
@@ -436,15 +436,11 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
 
   // What the sky's doing, and which clock it keeps (see settings-sky.ts).
   const sky = outside && outsideSetting(net, outside, (body) => setting('Outside', 'office', ...body));
-  const account = store.me.account;
-  const signOut = h('button.btn', { type: 'button' }, '🚪 Sign out');
-  signOut.addEventListener('click', onSignOut);
-  const character = h('button.btn', { type: 'button' }, account ? '🧍 Change your look' : '🧍 Change your look & name');
+  const character = h('button.btn', { type: 'button' }, '🧍 Change your look & name');
   const panes: Record<SettingsPane, Node[]> = {
     you: [
       setting('Your character', null, character),
       setting('Camera view', 'you', seg, note),
-      setting('Signed in', null, h('div.volume', {}, signOut), h('p.setting-note', {}, account ? `As ${account.name}, with your own account (${account.role}).` : 'With the shared office password.')),
     ],
     sound: [
       setting('Office sounds', 'you', soundRow, h('p.setting-note', {}, 'Workers typing, footsteps, the coffee machine, birds and rain outside, the dog, the ding when a worker is done and the alarm when one needs you.')),

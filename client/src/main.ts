@@ -7,7 +7,6 @@ import { Hands } from './world/hands';
 import { Confetti } from './world/confetti';
 import { djFrame } from './dnb';
 import { $ } from './ui/dom';
-import { openCharacter } from './ui/character';
 import { elevatorPanelOpen } from './ui/elevator';
 import { onModelsProgress, preloadModels } from './world/models';
 import { loadingScreen } from './ui/loading';
@@ -153,51 +152,27 @@ function boot() {
   requestAnimationFrame(frame);
 }
 
-/** Who you're signed in as. With an account of your own, your name is that account's. */
-async function whoami() {
-  try {
-    const res = await fetch('/api/whoami', { cache: 'no-store' });
-    if (res.status === 401) location.href = '/login';
-    const { me } = (await res.json()) as { me?: typeof store.me };
-    if (me) store.me = me;
-  } catch {
-    // the welcome message says it too
-  }
-}
-
-void whoami().then(() => {
+// No sign-in and no character select first (orca-office is one person's office, design.md #1): in with
+// the look you saved last time, or a random one, which ⚙️ Settings → Your character changes.
+{
   const saved = loadProfile();
-  if (saved && store.me.account) saved.name = store.me.account.name;
-  if (store.me.account) store.profile.name = store.me.account.name;
+  if (saved?.look) store.profile = { ...saved, look: saved.look };
+  else if (saved) Object.assign(store.profile, { name: saved.name, color: saved.color });
   store.emit('me');
-  if (saved?.look) {
-    store.profile = { ...saved, look: saved.look };
-    parts.you.showMyProfile(store.profile);
-    boot();
-    // In as soon as the floor you're on is here with its dog, so the dog doesn't pop in after.
-    const welcomed = new Promise<void>((resolve) => {
-      const off = store.on('floor', () => {
-        off();
-        resolve();
-      });
+  parts.you.showMyProfile(store.profile);
+  boot();
+  // In as soon as the floor you're on is here with its dog, so the dog doesn't pop in after.
+  const welcomed = new Promise<void>((resolve) => {
+    const off = store.on('floor', () => {
+      off();
+      resolve();
     });
-    loading.until([
-      { say: 'Knocking on the door', done: welcomed },
-      { say: 'Fetching the dog', done: parts.dog.firstReady },
-    ]);
-  } else {
-    // Pick a character first (people from before there was a choice keep their name and color).
-    if (saved) Object.assign(store.profile, { name: saved.name, color: saved.color });
-    // Render the office behind the character select screen.
-    requestAnimationFrame(frame);
-    openCharacter(true, (p) => {
-      parts.you.showMyProfile(p);
-      parts.net.connect();
-    });
-    // No floor comes before you pick, so only the office behind the character select is waited for.
-    loading.until([]);
-  }
-});
+  });
+  loading.until([
+    { say: 'Knocking on the door', done: welcomed },
+    { say: 'Fetching the dog', done: parts.dog.firstReady },
+  ]);
+}
 
 // Debug handle for quick checks from the console / headless screenshots.
 const { worlds, views, rooftop, bar, coffee, bargames, hanging, climbing, emotes, hoops } = parts;

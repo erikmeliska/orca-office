@@ -105,10 +105,8 @@ export class Store {
   issues: GhState<GhIssue> = { items: [], fetchedAt: 0, loading: true };
   pulls: GhState<GhPull> = { items: [], fetchedAt: 0, loading: true };
   chat: ChatLine[] = [];
-  /** Whether this office can invite teammates (deployed with deploy/aws.sh). */
-  invites = false;
-  /** Who you're signed in as (see /api/whoami). */
-  me: Me = { admin: false };
+  /** You: always the office's admin in orca-office (see Me). */
+  me: Me = { admin: true };
   private subs = new Map<Topic, Set<() => void>>();
   // The slices, and each message type's handlers in their order. Kept in # fields, which aren't among
   // the store's keys: those are its state (window.__office.store).

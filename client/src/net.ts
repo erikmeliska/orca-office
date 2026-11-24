@@ -3,10 +3,12 @@ import { lastFloor, store, type Profile, type Spot } from './state';
 
 type Handler = (msg: ServerMsg) => void;
 
-/** The sign-in page, coming back to the 2D view afterwards if that's where you are (see login.ts). */
-export function loginUrl(): string {
-  return location.pathname === '/lite' ? '/login?next=/lite' : '/login';
-}
+/**
+ * The orca-office bridge's socket for the office page (bridge/src/origin.ts lets only this page's
+ * origin in). The bridge listens on 127.0.0.1 only; its port comes from ORCA_OFFICE_PORT at build
+ * time (see vite.config.ts).
+ */
+export const BRIDGE_URL = `ws://127.0.0.1:${__ORCA_OFFICE_BRIDGE_PORT__}/client`;
 
 export class Net {
   private ws: WebSocket | null = null;
@@ -36,7 +38,6 @@ export class Net {
 
   connect() {
     const { name, color, look } = this.profile();
-    const proto = location.protocol === 'https:' ? 'wss' : 'ws';
     const q = new URLSearchParams({ name, color, skin: String(look.skin), hair: String(look.hair), style: String(look.style) });
     // Back to the floor you were on (after a reload or a restart), in the spot you were in there.
     const floor = store.floor ?? lastFloor();
@@ -47,7 +48,7 @@ export class Net {
       for (const k of ['x', 'y', 'z'] as const) q.set(k, at[k].toFixed(2));
       q.set('rotY', at.facing.toFixed(3));
     }
-    const ws = new WebSocket(`${proto}://${location.host}/ws?${q}`);
+    const ws = new WebSocket(`${BRIDGE_URL}?${q}`);
     this.ws = ws;
     ws.onopen = () => {
       this.retry = 0;
@@ -63,21 +64,11 @@ export class Net {
       }
       for (const h of this.handlers) h(msg);
     };
-    ws.onclose = async () => {
+    ws.onclose = () => {
       if (this.ws !== ws) return;
       this.up = false;
       this.statusHandlers.forEach((h) => h(false));
       if (this.closedByUs) return;
-      // Session expired? Go back to the door.
-      try {
-        const res = await fetch('/api/whoami', { cache: 'no-store' });
-        if (res.status === 401) {
-          location.href = loginUrl();
-          return;
-        }
-      } catch {
-        // offline; keep retrying
-      }
       const delay = this.restartExpected ? 1000 : Math.min(8000, 500 * 2 ** this.retry++);
       setTimeout(() => this.connect(), delay);
     };

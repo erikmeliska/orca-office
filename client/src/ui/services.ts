@@ -2,7 +2,7 @@ import './services.css';
 import type { ServiceInfo, ServicesState } from '@orca-office/shared/office/protocol';
 import { store } from '../state';
 import { h, openModal, timeAgo } from './dom';
-import { copy, copyButton, guessOs, openCommand, OS_LABEL, type Os } from './team';
+import { copy, copyButton, guessOs, openCommand, OS_LABEL, type Os } from './copy';
 
 /** Whether this page came over the office's Tailscale network, where every server has its own link. */
 function onTailnet(s: ServicesState): boolean {

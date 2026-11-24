@@ -10,14 +10,11 @@ import { SLAB, inElevator } from '@orca-office/shared/office/layout';
 import { ROOF, ROOF_NAME } from '@orca-office/shared/office/rooftop';
 import { renderTitle } from '../shared/title';
 import { lastFloor, lastSpot, store, type Spot } from '../state';
-import { routeAccountsMessage } from '../ui/accounts';
 import { openChangesFor, routeChangesMessage } from '../ui/changes';
 import { $, toast } from '../ui/dom';
 import { routeElevatorMessage } from '../ui/elevator';
 import { providerLabel } from '../ui/provider';
 import { routePullMessage } from '../ui/pull';
-import { needsSigningIn, openSignIns } from '../ui/signins';
-import { routeTeamMessage } from '../ui/team';
 import { openTerminalFor, routeTerminalMessage } from '../ui/terminal';
 import { restarting, showRestarting, showUpgraded } from '../ui/upgrade';
 import type { Ctx } from './context';
@@ -43,8 +40,6 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
   let upgradePhase = '';
 
   net.onStatus((up) => $('conn').classList.toggle('hidden', up));
-  /** Whether this page has shown someone their sign-ins yet (it greets a newcomer once). */
-  let signInsGreeted = false;
   net.onMessage((msg) => ctx.messages.dispatch(msg));
   /** The floor you asked to come back to (see Net.connect), to tell if the office put you somewhere else. */
   let wasOn: string | null = null;
@@ -62,8 +57,6 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
   ctx.messages.onAny(() => parts.views.settled());
   ctx.messages.onAny(routeTerminalMessage);
   ctx.messages.onAny(routeChangesMessage);
-  ctx.messages.onAny(routeTeamMessage);
-  ctx.messages.onAny(routeAccountsMessage);
   ctx.messages.onAny(routePullMessage);
   ctx.messages.onAny(routeElevatorMessage);
   ctx.messages.on('welcome', (msg) => {
@@ -136,14 +129,6 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
     }
     parts.maps.offTheRoof();
   });
-  ctx.messages.on('signins', () => {
-    // Someone who just joined starts here: their workers need their own Claude sign-in first.
-    if (!signInsGreeted) {
-      signInsGreeted = true;
-      if (needsSigningIn()) openSignIns(net, 'Welcome! Sign in to Claude so the workers you hire run on your own plan, and to GitHub so what you do on the boards is yours.');
-    }
-  });
-  ctx.messages.on('signins.needed', (msg) => openSignIns(net, msg.why));
   ctx.messages.on('toast', (msg) => toast(msg.text, msg.level));
 
   function renderUpgrade() {

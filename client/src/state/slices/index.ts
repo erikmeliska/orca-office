@@ -9,7 +9,6 @@
 
 import type { Slice } from '../store';
 import { building, floor, me, presence } from '../core';
-import { accounts } from './accounts';
 import { ball } from './ball';
 import { cabinet } from './cabinet';
 import { clock } from './clock';
@@ -23,9 +22,7 @@ import { map } from './map';
 import { notify } from './notify';
 import { prompts } from './prompts';
 import { services } from './services';
-import { signins } from './signins';
 import { sky } from './sky';
-import { team } from './team';
 import { theme } from './theme';
 import { upgrade } from './upgrade';
 import { usage } from './usage';
@@ -52,7 +49,4 @@ export const SLICES: readonly Slice[] = [
   cabinet,
   ball,
   jail,
-  team,
-  accounts,
-  signins,
 ];

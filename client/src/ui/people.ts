@@ -24,7 +24,6 @@ export function renderPeople(onEditProfile: () => void, onWalkTo: (id: string) =
       { 'data-peer': p.id, class: p.lite && !you ? undefined : 'walk', title: you ? 'Change your character' : p.lite ? `${p.name} is on the 2D view` : `${store.onMyFloor(p) ? 'Walk over to' : 'Take the elevator to'} ${p.name}${sub ? ` (${sub})` : ''}` },
       h('span.dot', { style: `background:${p.color}` }),
       h('span.name', {}, p.name, sub ? h('span.sub', {}, sub) : null),
-      p.account ? h('span.acct', { title: `Signed in with ${you ? 'your' : 'their'} own account` }, '✓') : null,
       you ? h('span.you', {}, '(you)') : null,
       // Somewhere else in the building: which floor.
       !you && !store.onMyFloor(p)

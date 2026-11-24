@@ -20,8 +20,7 @@ export function renderChat() {
       return h(
         'li',
         { style: `animation-delay:${Math.round(CHAT_LINGER - (now - seen))}ms` },
-        h('b', { style: `color:${c.color}`, title: c.account ? `${c.name}, signed in with their own account` : undefined }, c.name),
-        c.account ? h('span.acct', {}, ' ✓') : null,
+        h('b', { style: `color:${c.color}` }, c.name),
         ': ',
         c.text,
       );

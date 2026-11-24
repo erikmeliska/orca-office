@@ -20,7 +20,6 @@ export const presence: Slice = {
       s.you = m.you;
       s.peers = peersOf(m.peers);
       s.chat = m.chat;
-      s.invites = m.invites;
       return ['peers', 'chat'];
     },
     'floor.enter'(s, m) {
@@ -49,10 +48,6 @@ export const presence: Slice = {
 export const me: Slice = {
   on: {
     welcome(s, m) {
-      s.me = m.me;
-      return ['me'];
-    },
-    me(s, m) {
       s.me = m.me;
       return ['me'];
     },

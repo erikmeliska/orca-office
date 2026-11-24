@@ -147,13 +147,6 @@ export function openCharacter(first: boolean, onSave: (p: Profile) => void) {
     input.focus();
   });
   const typedName = () => input.value.trim().slice(0, 24) || input.placeholder;
-  // Your account's name is the one everyone sees; only the look is yours to change here.
-  const account = store.me.account;
-  if (account) {
-    input.value = account.name;
-    input.readOnly = true;
-    input.title = 'Your account name';
-  }
 
   const skinRow = h('div.swatches', { role: 'radiogroup', 'aria-label': 'Skin tone' });
   const styleRow = h('div.seg', { role: 'radiogroup', 'aria-label': 'Hair style' });
@@ -202,8 +195,7 @@ export function openCharacter(first: boolean, onSave: (p: Profile) => void) {
         'div.charsel-opts',
         {},
         h('label', {}, 'Your name'),
-        account ? input : h('div.webhook', {}, input, reroll),
-        account ? h('p.setting-note', {}, `🔑 Signed in as ${account.name}, so that's your name here.`) : null,
+        h('div.webhook', {}, input, reroll),
         h('label', {}, 'Skin tone'),
         skinRow,
         h('label', {}, 'Hair'),
@@ -240,5 +232,5 @@ export function openCharacter(first: boolean, onSave: (p: Profile) => void) {
     e.preventDefault();
     finish(typedName());
   });
-  if (!account) setTimeout(() => input.focus(), 30);
+  setTimeout(() => input.focus(), 30);
 }

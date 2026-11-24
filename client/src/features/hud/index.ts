@@ -10,7 +10,6 @@ import { builtFloors } from '../../core/floors';
 import type { Parts } from '../../core/parts';
 import { waitingInOrder, waitingLabel } from '../../nextup';
 import { saveSettings, store } from '../../state';
-import { openAccounts } from '../../ui/accounts';
 import { openCharacter } from '../../ui/character';
 import { $ } from '../../ui/dom';
 import { toggleFloorMenu } from '../../ui/floormenu';
@@ -18,8 +17,6 @@ import { openHelp } from '../../ui/hud';
 import { mountHud } from '../../ui/menu';
 import { openServices } from '../../ui/services';
 import { openSettings, type SettingsPane } from '../../ui/settings';
-import { needsSigningIn, openSignIns } from '../../ui/signins';
-import { openTeam } from '../../ui/team';
 import { openUpgrade } from '../../ui/upgrade';
 import { describeSky } from '../../world/sky';
 
@@ -53,9 +50,6 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
       { id: 'elevator', icon: '🛗', label: () => (inOffice() ? 'Elevator' : 'Floors'), section: 'Open', count: () => store.floors.reduce((n, f) => n + (f.id === store.floor ? 0 : f.waiting), 0), title: () => (inOffice() ? 'Ride to another project' : 'Go to another project, or add one'), run: travel.showElevator },
       { id: 'roof', icon: '🍸', label: 'Rooftop bar', section: 'Open', shown: () => !core.upTop && inOffice() && builtFloors().length > 0, title: () => 'Ride the elevator up to the roof: a DJ, drinks and the city', run: () => travel.ride(ROOF) },
       { id: 'decor', icon: '🖼️', label: () => (hanging.hanger.active ? 'Stop hanging the picture' : 'Hang a picture'), section: 'Together', key: 'F', shown: () => inOffice(), on: () => hanging.hanger.active, status: () => hanging.hanger.active, run: () => (hanging.hanger.active ? hanging.hanger.cancel() : hanging.startHanging()) },
-      { id: 'team', icon: '👥', label: 'Invite teammates', section: 'Together', shown: () => store.invites, run: () => openTeam(net) },
-      { id: 'accounts', icon: '🔑', label: 'Accounts', section: 'Together', shown: () => store.me.admin, title: () => 'Invite people, see who has an account, revoke them', run: () => openAccounts(net) },
-      { id: 'signins', icon: '🔐', label: 'Your sign-ins', section: 'Together', shown: () => !!store.me.account, tone: () => (needsSigningIn() ? 'danger' : undefined), status: needsSigningIn, chip: () => 'Sign in to Claude', title: () => 'The Claude plan and GitHub account your workers run on: your own', run: () => openSignIns(net) },
       { id: 'settings', icon: '⚙️', label: 'Settings', section: 'Office', run: showSettings },
       { id: 'help', icon: '❓', label: 'Controls', section: 'Office', key: 'H', run: openHelp },
       {
@@ -123,15 +117,9 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
       editProfile,
       sound,
       parts.notifier,
-      signOut,
       store.sky ? { now: describeSky(store.sky, store.officeNow()), live: !!store.sky.city } : undefined,
       pane,
     );
-  }
-
-  async function signOut() {
-    await fetch('/api/logout', { method: 'POST' }).catch(() => {});
-    location.href = '/login';
   }
 
   function editProfile() {
