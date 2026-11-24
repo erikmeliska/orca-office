@@ -126,8 +126,8 @@ messages with role and text, tool names) when it changed. Real shape, checked on
 `result.{state, limited, entries[{kind: 'message', role, text} | {kind: 'tool', name, state, shortened?}]}`.
 The page renders the text as sanitized markdown without pictures or media (nothing is fetched).
 The text goes only to that panel over the authenticated `/client`: never logged, stored or put
-in tests or screenshots (those use `npm run dev:fake`'s made-up chat). Writing to a chat is not
-possible (Orca has no API); the panel has a slot for it for M5 (bots, `orchestration send`).
+in tests or screenshots (those use `npm run dev:fake`'s made-up chat). Writing to a regular chat is
+not possible (Orca has no API); bots take messages since M5 (below).
 
 ## Projects and navigation (M4)
 
@@ -193,3 +193,34 @@ the roof or down from it. What is in the mailbox when the bridge starts is not n
 Privacy (design #20): objectives, task titles, gate questions/options and subjects are cut with
 `toBubble` to 60 the moment they are read; message bodies are never read. Nothing is logged or stored.
 The office only reads: gates are decided in Orca ("Open in Orca" opens the desk the gate blocks).
+
+## Talking to bots (M5, #37)
+
+A bot's figure (Staff floor, or the head of a project room) carries `orca: { terminal: false, remote:
+false, bot: '<name>' }`; its desk hint offers **E Chat**, which opens the bot panel. Route and the
+real-Orca check: [m5-bots.md](m5-bots.md). Bridge: `bridge/src/live/bots.ts`.
+
+| Page → bridge | What |
+|---------------|------|
+| `orca.bot.open` | `{ workerId }`: the bot's chats; `orca bot chats --bot <name>` now and every 10 s while open. |
+| `orca.bot.chat` | `{ workerId, chatId }`: show one (an open chat of that bot): `orca agent read <chatId>` every 3 s. |
+| `orca.bot.send` | `{ workerId, reqId, chatId, text }`: write to the bot in `chatId`, or `'new'` for a new chat. |
+| `orca.bot.close` | `{ workerId }`. |
+
+| Bridge → page | What |
+|---------------|------|
+| `orca.bot` | `{ workerId, bot, chats[] }`: `OrcaBotChat` (`id`, `title` cut to 60, `home`, `lastActivityAt`), Home first, then newest; closed chats left out. |
+| `orca.chat` | As for chat agents, plus `chatId`. A user turn that is Orca mail has its header taken off and `mail` (`{ office: true }` for the office's own messages, else the sender's name). |
+| `orca.bot.sent` | `{ workerId, reqId, phase: 'sending' \| 'sent' \| 'failed', chatId?, error? }`; a new chat's id comes with `sent` once it turns up in the bot's list. |
+
+Sending: `orca orchestration send --from orca-office --to bot:<name> --chat <id|new> --type handoff
+--subject=<first line, 60> --body-file - --json`, the text on stdin. Checked first: the page has that
+bot open, the bot is in `orca bot list` and not paused, the chat is one of its open chats read again
+right before sending (or `new`), 1–8000 characters without NUL; 1 message per 5 s and 30 per hour for
+the whole bridge. The page shows *Sending… → Sent → <bot> is working… → <bot> answered* from the
+chat's next reads (`state: working`, then a new answer). Message text and answers are never logged,
+stored, or put in tests or screenshots; the fake CLI (`npm run dev:fake`) answers made-up messages
+after ~7 s.
+
+![Bot chat, desktop](img/m5-bot-chat-desktop.png)
+![Bot chat, new chat on a phone](img/m5-bot-new-chat-mobile.png)

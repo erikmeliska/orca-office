@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 const FILE = join(tmpdir(), `orca-office-fake-${process.env.ORCA_OFFICE_PORT ?? 4317}.json`);
-const EMPTY = { workspaces: [], agents: [], comments: {}, read: [], typed: {} };
+const EMPTY = { workspaces: [], agents: [], comments: {}, read: [], typed: {}, botChats: {}, botMail: [] };
 
 export function load() {
   try {

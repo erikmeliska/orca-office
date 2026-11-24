@@ -5,6 +5,7 @@ import type { Net } from '../net';
 import { store } from '../state';
 import { STATUS_LABEL, h, openModal, toast } from './dom';
 import { markdownChat } from './markdown';
+import { routeBotMessage } from './bots';
 
 /**
  * Light control over Orca from the office (M3, design #14): open a figure in Orca, a chat agent's
@@ -39,8 +40,14 @@ const ERRORS: Record<string, string> = {
   no_agent_yet: 'The worktree is there, but no agent has sat down yet — check Orca',
   capability_denied: 'The orca-office plugin is not allowed to do that yet (approve its new capabilities)',
   not_allowed: 'The orca-office plugin does not allow that',
+  unknown_chat: 'That chat is gone or closed — pick another',
+  paused: 'This bot is paused in Orca',
+  rate_limited_hour: 'That is 30 messages to bots this hour — try again later',
+  invalid: 'Orca refused the message',
+  not_sent: 'Orca did not take the message',
+  failed: 'Something went wrong',
 };
-const say = (e: string | undefined) => (e && ERRORS[e]) || `Orca said no${e ? ` (${e})` : ''}`;
+export const say = (e: string | undefined) => (e && ERRORS[e]) || `Orca said no${e ? ` (${e})` : ''}`;
 
 const DONE: Partial<Record<OrcaActionKind, string>> = { open: '↗ Opened in Orca', read: '✓ Marked read', comment: '✓ Comment saved' };
 
@@ -63,9 +70,13 @@ export function routeOrcaMessage(msg: ServerMsg) {
       if (Date.now() - typeWarnedAt < 3000) return;
       typeWarnedAt = Date.now();
     }
+    if (msg.action === 'bot' && routeBotMessage(msg)) return;
     toast(say(msg.error), 'warn');
   } else if (msg.t === 'orca.chat') {
-    if (chatPanel?.workerId === msg.workerId) chatPanel.show(msg);
+    if (msg.chatId !== undefined) routeBotMessage(msg);
+    else if (chatPanel?.workerId === msg.workerId) chatPanel.show(msg);
+  } else if (msg.t === 'orca.bot' || msg.t === 'orca.bot.sent') {
+    routeBotMessage(msg);
   } else if (msg.t === 'orca.desk') {
     deskWaiters.get(msg.deskId)?.(msg.comment);
     deskWaiters.delete(msg.deskId);
@@ -127,21 +138,26 @@ export function openChatAgent(net: Net, w: WorkerInfo) {
       const atBottom = log.scrollHeight - log.scrollTop - log.clientHeight < 40;
       pill.className = `pill ${msg.state === 'working' ? 'working' : (store.workers.get(w.id)?.status ?? w.status)}`;
       pill.textContent = msg.state === 'working' ? 'working' : (STATUS_LABEL[store.workers.get(w.id)?.status ?? w.status] ?? msg.state ?? '');
-      log.replaceChildren(
-        ...(msg.limited ? [h('p.orca-note', {}, 'Older messages are in Orca.')] : []),
-        ...msg.entries.map((e) =>
-          'tool' in e
-            ? h('div.orca-tool', {}, `🔧 ${e.tool}${e.state && e.state !== 'completed' ? ` · ${e.state}` : ''}`)
-            : h(`div.orca-msg.${e.role}`, {}, h('div.orca-who', {}, e.role === 'user' ? 'You' : w.name), chatText(e.text), e.shortened ? h('p.orca-note', {}, '…shortened; the rest is in Orca') : null),
-        ),
-        ...(msg.state === 'working' ? [h('p.orca-note.orca-typing', {}, `${w.name} is working…`)] : []),
-        ...(msg.entries.length ? [] : [h('p.orca-note', {}, 'Nothing said yet.')]),
-      );
+      renderConversation(log, msg, w.name);
       if (atBottom) log.scrollTop = log.scrollHeight;
     },
   };
   net.send({ t: 'orca.chat.open', workerId: w.id });
   open.focus();
+}
+
+/** A conversation (`orca.chat`) into a log: messages as sanitized markdown, tools as chips. */
+export function renderConversation(log: HTMLElement, msg: Extract<ServerMsg, { t: 'orca.chat' }>, name: string) {
+  log.replaceChildren(
+    ...(msg.limited ? [h('p.orca-note', {}, 'Older messages are in Orca.')] : []),
+    ...msg.entries.map((e) =>
+      'tool' in e
+        ? h('div.orca-tool', {}, `🔧 ${e.tool}${e.state && e.state !== 'completed' ? ` · ${e.state}` : ''}`)
+        : h(`div.orca-msg.${e.role}`, {}, h('div.orca-who', {}, e.role === 'assistant' ? name : !e.mail ? 'You' : e.mail.office ? 'You · from the office' : `📨 ${e.mail.from}`), chatText(e.text), e.shortened ? h('p.orca-note', {}, '…shortened; the rest is in Orca') : null),
+    ),
+    ...(msg.state === 'working' ? [h('p.orca-note.orca-typing', {}, `${name} is working…`)] : []),
+    ...(msg.entries.length ? [] : [h('p.orca-note', {}, 'Nothing said yet.')]),
+  );
 }
 
 /** A message's markdown, sanitized and without pictures (markdown.ts). */
