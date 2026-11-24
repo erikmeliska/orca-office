@@ -34,8 +34,15 @@ else if (args.startsWith('agent read')) {
       ...(working ? [{ kind: 'tool', name: 'Bash', state: 'running' }] : [{ kind: 'message', role: 'assistant', text: 'The charts use the same tokens now. ![made-up chart](https://example.com/chart.png)' }]),
     ],
   });
-}
-else if (args.startsWith('worktree set')) {
+} else if (args.startsWith('terminal send')) {
+  // What the office types: kept per terminal for the fake plugin's terminal.read to show.
+  const t = flag('--terminal');
+  const text = flag('--text') ?? '';
+  const prev = st.typed[t] ?? '';
+  st.typed[t] = (text === '\x7f' ? prev.slice(0, -1) : prev + text + (argv.includes('--enter') ? '\r' : '')).slice(-60);
+  save(st);
+  out({ send: { handle: t, accepted: true, bytesWritten: text.length } });
+} else if (args.startsWith('worktree set')) {
   const id = flag('--worktree');
   if (![...WORKSPACES, ...st.workspaces].some((w) => w.id === id)) {
     console.error('fake orca: no such worktree');

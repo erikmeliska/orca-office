@@ -17,6 +17,9 @@ const T = 'term_aaa';
 let now = 1_000;
 let calls: { method: string; params: unknown }[];
 let cliCalls: string[][];
+let sends: { terminalId: string; text: string; enter: boolean }[];
+/** How long a fake CLI send takes (a real one ~0.2 s). */
+let sendMs = 0;
 let answers: Record<string, CallResult>;
 let conversation: unknown;
 let model: LiveModel;
@@ -29,6 +32,8 @@ beforeEach(() => {
   vi.useFakeTimers();
   calls = [];
   cliCalls = [];
+  sends = [];
+  sendMs = 0;
   answers = {};
   conversation = { ok: true, result: { kind: 'chat', state: 'working', limited: false, entries: [{ kind: 'message', role: 'user', text: 'Made-up question' }, { kind: 'tool', name: 'Bash', state: 'completed' }, { kind: 'message', role: 'assistant', text: 'Made-up answer' }] } };
   sent = [];
@@ -42,7 +47,11 @@ beforeEach(() => {
     return answers[method] ?? { ok: true, value: method === 'terminal.read' ? { lines: ['$ hello'], truncated: false } : {} };
   };
   terminals = new TerminalWatch((terminalId, maxLines) => call('terminal.read', { terminalId, maxLines }), 250);
-  actions = new Actions(model, { call, cli: async (args) => (cliCalls.push(args), args[0] === 'agent' ? conversation : args[1] === 'show' ? { result: { worktree: { comment: 'note', isUnread: true } } } : { ok: true }), resync: () => {}, now: () => now }, terminals);
+  actions = new Actions(model, { call, send: async (terminalId, text, enter) => {
+      sends.push({ terminalId, text, enter });
+      if (sendMs) await new Promise((r) => setTimeout(r, sendMs));
+      return true;
+    }, cli: async (args) => (cliCalls.push(args), args[0] === 'agent' ? conversation : args[1] === 'show' ? { result: { worktree: { comment: 'note', isUnread: true } } } : { ok: true }), resync: () => {}, now: () => now }, terminals);
   page = { floor: () => FLOOR, send: (m) => sent.push(...m), limits: pageLimits(now) };
 });
 afterEach(() => vi.useRealTimers());
@@ -82,22 +91,28 @@ test('a chat agent has no terminal to attach', async () => {
   expect(sent).toEqual([{ t: 'orca.result', action: 'terminal', ok: false, error: 'no_terminal', workerId: idOf('pane-chat') }]);
 });
 
-test('typing goes raw, in order, only into the open terminal', async () => {
+test('typing goes raw, in order, only into the open terminal, a burst merged into few sends', async () => {
   const id = idOf('pane-1');
   await actions.handle(page, { t: 'term.input', workerId: id, data: 'x' });
   expect(sent.at(-1)).toMatchObject({ t: 'orca.result', action: 'type', ok: false, error: 'not_open' });
   await actions.handle(page, { t: 'worker.attach', workerId: id });
-  for (const data of ['\x1b', '\x03', '\t', '\x1b[Z', '\x1b[A', '\x7f', 'hi', '\r']) await actions.handle(page, { t: 'term.input', workerId: id, data });
-  await flush();
-  expect(calls.filter((c) => c.method === 'terminal.sendText').map((c) => c.params)).toEqual(['\x1b', '\x03', '\t', '\x1b[Z', '\x1b[A', '\x7f', 'hi', '\r'].map((text) => ({ terminalId: T, text })));
+  sendMs = 200;
+  const keys = ['\x1b', '\x03', '\t', '\x1b[Z', '\x1b[A', '\x7f', 'hi', '\r'];
+  for (const data of keys) await actions.handle(page, { t: 'term.input', workerId: id, data });
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(sends.map((s) => s.text).join('')).toBe(keys.join(''));
+  expect(sends.length).toBeLessThan(keys.length);
+  expect(sends.every((s) => s.terminalId === T && !s.enter)).toBe(true);
+  // Typing never goes through the plugin (Orca refuses it outside the active workspace).
+  expect(calls.some((c) => c.method === 'terminal.sendText')).toBe(false);
 });
 
-test('a long paste is split into 4096-char sends', async () => {
+test('a long paste goes in 4096-char pieces, NULs dropped', async () => {
   const id = idOf('pane-1');
   await actions.handle(page, { t: 'worker.attach', workerId: id });
-  await actions.handle(page, { t: 'term.input', workerId: id, data: 'y'.repeat(9000) });
+  await actions.handle(page, { t: 'term.input', workerId: id, data: 'y'.repeat(9000) + '\0' });
   await flush();
-  expect(calls.filter((c) => c.method === 'terminal.sendText').map((c) => (c.params as { text: string }).text.length)).toEqual([4096, 4096, 808]);
+  expect(sends.map((s) => s.text.length)).toEqual([4096, 4096, 808]);
   expect(chunks('a😀b', 2)).toEqual(['a', '😀', 'b']);
 });
 
@@ -106,14 +121,14 @@ test('typing is rate-limited', async () => {
   await actions.handle(page, { t: 'worker.attach', workerId: id });
   for (let i = 0; i < 250; i++) await actions.handle(page, { t: 'term.input', workerId: id, data: 'k' });
   await flush();
-  expect(calls.filter((c) => c.method === 'terminal.sendText').length).toBe(200);
+  expect(sends.map((s) => s.text).join('').length).toBe(200);
   expect(sent.filter((m) => m.t === 'orca.result' && m.error === 'rate_limited').length).toBe(1);
 });
 
 test('a prompt from the desk is typed and entered', async () => {
   await actions.handle(page, { t: 'worker.prompt', workerId: idOf('pane-1'), prompt: 'go on' });
   await flush();
-  expect(calls).toContainEqual({ method: 'terminal.sendText', params: { terminalId: T, text: 'go on', enter: true } });
+  expect(sends).toEqual([{ terminalId: T, text: 'go on', enter: true }]);
 });
 
 test('open in Orca shows the workspace and focuses the terminal; a chat only its workspace', async () => {

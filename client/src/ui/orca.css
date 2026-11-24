@@ -20,3 +20,4 @@
 .orca-md p { margin: 4px 0; }
 .orca-tool { align-self: flex-start; font-size: 12px; font-weight: 800; color: var(--muted); padding: 2px 10px; border: 2px dashed var(--muted); border-radius: 999px; }
 .orca-typing { font-style: italic; }
+.term-pending { padding: 6px 14px; font: 13px ui-monospace, "SF Mono", Menlo, monospace; color: #fffaf3; background: #2b2d42; border-top: 2px dashed #6c6f8a; white-space: pre-wrap; overflow-wrap: anywhere; }

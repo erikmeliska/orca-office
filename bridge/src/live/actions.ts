@@ -3,8 +3,10 @@
  * here before anything reaches the plugin (which checks its calls again, plugin/src/worker.ts).
  *
  * - Terminal agents on this machine: their live terminal (terminals.ts) and typing into it through
- *   `terminal.sendText`, raw (Esc, Ctrl-C, Tab, arrows, Enter as `\r` arrive as they are, M0).
- *   Typing goes only to a terminal the page has open.
+ *   `orca terminal send --text=…`, raw (Esc, Ctrl-C, Tab, arrows, Enter as `\r` arrive as they are),
+ *   keystrokes that come while a send runs merged into the next one. Typing goes only to a terminal
+ *   the page has open. (Plugin `terminal.sendText` is refused for any terminal outside the
+ *   workspace active in Orca, checked on Orca 1.4.272, so it isn't used.)
  * - Open in Orca: `workspace.open`, then `terminal.focus` for a terminal agent.
  * - Mark read and the worktree comment: `orca worktree set` (the plugin API has neither).
  * - New task: `workspace.create` with an agent and a prompt in the floor's project; the page hears
@@ -33,6 +35,12 @@ export interface ActionDeps {
   call(method: string, params: unknown, timeoutMs?: number): Promise<CallResult>;
   /** `orca <args>` with JSON out; rejects with a short reason. */
   cli(args: string[]): Promise<unknown>;
+  /**
+   * Types into a terminal: `orca terminal send --terminal <id> --text=<text>` (raw bytes; with
+   * `enter`, Orca submits it as a prompt). Plugin `terminal.sendText` only reaches terminals of the
+   * workspace that is active in Orca right now, so the office types through the CLI. True, or a code.
+   */
+  send(terminalId: string, text: string, enter: boolean): Promise<true | string>;
   /** Ask the plugin for a fresh snapshot (a new workspace). */
   resync(): void;
   now(): number;
@@ -48,8 +56,9 @@ export interface ActionPage {
 interface PageState {
   /** The terminal open on this page: its figure, terminal and how to stop watching. */
   open: { workerId: string; terminalId: string; stop: () => void } | null;
-  /** Typing in order: each send waits for the one before. */
-  queue: Promise<void>;
+  /** Typing waiting to go out, in order (merged while a send runs), and whether one is running. */
+  out: { workerId: string; terminalId: string; text: string; enter: boolean }[];
+  sending: boolean;
   /** Last time the page was told it typed too fast. */
   warnedAt: number;
   /** The chat panel open on this page: its figure and how to stop reading it. */
@@ -161,8 +170,7 @@ export class Actions {
     if (!st.open || st.open.workerId !== workerId) return void page.send([result('type', false, 'not_open', { workerId })]);
     if (data.length > ORCA_LIMITS.send * 8) return void page.send([result('type', false, 'too_large', { workerId })]);
     if (!this.allowTyping(page, st, data.length)) return;
-    const terminalId = st.open.terminalId;
-    for (const chunk of chunks(data, ORCA_LIMITS.send)) this.enqueue(page, st, workerId, terminalId, { terminalId, text: chunk });
+    this.enqueue(page, st, workerId, st.open.terminalId, data, false);
   }
 
   /** A prompt (P at the desk): its text, then Enter, into the figure's terminal. */
@@ -172,8 +180,7 @@ export class Actions {
     const t = this.model.target(workerId);
     if (!t?.terminalId) return void page.send([result('type', false, t ? (t.local ? 'no_terminal' : 'remote') : 'unknown_worker', { workerId })]);
     if (!this.allowTyping(page, st, prompt.length)) return;
-    const parts = chunks(prompt, ORCA_LIMITS.send);
-    parts.forEach((text, i) => this.enqueue(page, st, workerId, t.terminalId!, i === parts.length - 1 ? { terminalId: t.terminalId!, text, enter: true } : { terminalId: t.terminalId!, text }));
+    this.enqueue(page, st, workerId, t.terminalId, prompt, true);
   }
 
   private allowTyping(page: ActionPage, st: PageState, n: number): boolean {
@@ -186,12 +193,36 @@ export class Actions {
     return false;
   }
 
-  private enqueue(page: ActionPage, st: PageState, workerId: string, terminalId: string, params: { terminalId: string; text: string; enter?: boolean }) {
-    st.queue = st.queue.then(async () => {
-      const r = await this.deps.call('terminal.sendText', params);
-      if (!r.ok) page.send([result('type', false, r.error ?? 'failed', { workerId })]);
-      else this.terminals.nudge(terminalId);
-    });
+  /**
+   * Queues text for a terminal. Raw typing joins the last queued piece for the same terminal (up to
+   * 4096 chars), so a burst of keystrokes is one CLI call, not one each; a prompt goes on its own.
+   */
+  private enqueue(page: ActionPage, st: PageState, workerId: string, terminalId: string, text: string, enter: boolean) {
+    // A NUL can't go through a process argument; nothing types one anyway.
+    const clean = text.replace(/\0/g, '');
+    if (!clean && !enter) return;
+    const parts = enter ? [clean] : chunks(clean, ORCA_LIMITS.send);
+    for (const part of parts) {
+      const last = st.out.at(-1);
+      if (!enter && last && !last.enter && last.terminalId === terminalId && last.text.length + part.length <= ORCA_LIMITS.send) last.text += part;
+      else st.out.push({ workerId, terminalId, text: part, enter });
+    }
+    void this.pump(page, st);
+  }
+
+  private async pump(page: ActionPage, st: PageState) {
+    if (st.sending) return;
+    st.sending = true;
+    try {
+      while (st.out.length) {
+        const s = st.out.shift()!;
+        const r = await this.deps.send(s.terminalId, s.text, s.enter);
+        if (r !== true) page.send([result('type', false, r, { workerId: s.workerId })]);
+        else this.terminals.nudge(s.terminalId);
+      }
+    } finally {
+      st.sending = false;
+    }
   }
 
   // ---- chat (read-only) -----------------------------------------------------------------------
@@ -312,7 +343,7 @@ export class Actions {
 
   private state(page: ActionPage): PageState {
     let st = this.pages.get(page);
-    if (!st) this.pages.set(page, (st = { open: null, queue: Promise.resolve(), warnedAt: -Infinity, chat: null }));
+    if (!st) this.pages.set(page, (st = { open: null, out: [], sending: false, warnedAt: -Infinity, chat: null }));
     return st;
   }
 
