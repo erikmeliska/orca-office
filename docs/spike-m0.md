@@ -82,6 +82,33 @@ and Enter as `\r`.
   `agent.tool.*` is documented as not covering SSH, so SSH agents get no action
   animations. Re-test when the first SSH worktree exists.
 
+### Re-test on 2026-11-24 (v2): still not verified
+
+Tried on this machine's only allowed SSH host, the local OrbStack VM (`orca-test`,
+Ubuntu 24.04 amd64, Orca SSH target `orb`). Nothing else was touched; the OrbStack
+VM was left running and the temporary clone in it was removed.
+
+| Step | Result |
+|------|--------|
+| `orb start orca-test`, `ssh orca-test@orb` | Works; `git` is there. |
+| Agent CLIs in the VM (`claude`, `codex`, `opencode`, `pi`, `copilot`, `cursor-agent`, `gemini`, `agy`) and `node`/`npm` | **None installed.** Not installed or logged in on purpose (out of scope without Erik). |
+| `orca host list` | `orb` is a saved SSH target, `connected: false`. |
+| `orca project setup-existing-folder --project github:erikmeliska/orca-office --host ssh:<orb> --path <clone in the VM>` | Refused: *"This Orca server can't add projects on its SSH hosts. Add the SSH host on your computer to open its projects."* The CLI help says the same: SSH targets and their projects are set up through the desktop UI, which owns SSH connections. No project or worktree was created. |
+
+So `agent.status.changed` for an SSH agent is **still not observed**. The fallback stays:
+the 10 s `workspace.list({includeStatus})` resync, and no action animations for SSH agents.
+
+To verify it, someone has to (in this order):
+
+1. Connect the `orb` SSH target in the Orca desktop app and add a project on it there
+   (a small test repo cloned into `orca-test`).
+2. Install and log in one agent CLI inside `orca-test` (e.g. `claude`), or let Orca's
+   SSH relay provide one if it does.
+3. Start that agent from Orca on the SSH worktree, then watch the bridge with
+   `ORCA_OFFICE_SPIKE_LOG=1` for `agent.status.changed` with an `ssh:` `hostId`, and check
+   whether `workspace.list` returns the `ssh:` row (the resync fallback relies on it).
+4. Remove the test worktree and project in Orca afterwards.
+
 ## #5 Bot and orchestration data from the CLI
 
 All commands below take 0.1–0.2 s each.
