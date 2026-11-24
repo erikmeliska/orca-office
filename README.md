@@ -32,5 +32,10 @@ npm run dev:client   # Vite only; the live list is at http://127.0.0.1:5317/live
 npm run typecheck:plugin   # needs `orca plugin types plugin` first (see plugin/README.md)
 ```
 
+Running the bridge for good (macOS): `scripts/install-bridge.sh` installs it as a launchd agent
+(`com.orca-office.bridge`: starts at login, restarts if it dies, outlives Orca restarts; logs in
+`~/Library/Logs/orca-office/bridge.log`), `scripts/uninstall-bridge.sh` removes it. It runs from this
+checkout and takes the same `ORCA_OFFICE_PORT` / `ORCA_OFFICE_CLIENT_PORT`.
+
 Other ports: `ORCA_OFFICE_PORT=4417 ORCA_OFFICE_CLIENT_PORT=5417 npm run dev` (the bridge only lets
 the page on `ORCA_OFFICE_CLIENT_PORT` in, and the page is built against `ORCA_OFFICE_PORT`).
