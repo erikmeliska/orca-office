@@ -9,3 +9,4 @@
 .toast.orca-progress.ok { border-color: var(--good, #06d6a0); }
 .toast.orca-progress.bad { border-color: var(--bad, #ef476f); }
 .term .term-orca { white-space: nowrap; }
+.term-pending { padding: 6px 14px; font: 13px ui-monospace, "SF Mono", Menlo, monospace; color: #fffaf3; background: #2b2d42; border-top: 2px dashed #6c6f8a; white-space: pre-wrap; overflow-wrap: anywhere; }

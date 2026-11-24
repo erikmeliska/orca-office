@@ -67,7 +67,7 @@ async function answer({ method, params }) {
       const name = t.replace(/^term_/, '');
       // Shows what was typed, its control keys as visible marks.
       // eslint-disable-next-line no-control-regex
-      const line = (typed.get(t) ?? '').replace(/\r/g, '⏎').replace(/\x1b/g, '⎋').replace(/[\x00-\x1f\x7f]/g, '·');
+      const line = (load().typed?.[t] ?? '').replace(/\r/g, '⏎').replace(/\x1b/g, '⎋').replace(/[\x00-\x1f\x7f]/g, '·');
       return { ok: true, value: { lines: [...screen(name), `> ${line}${Date.now() % 1000 < 500 ? '▌' : ' '}`], truncated: false } };
     }
     case 'terminal.sendText': {

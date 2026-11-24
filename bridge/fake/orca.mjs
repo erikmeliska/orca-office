@@ -15,7 +15,15 @@ if (args.startsWith('agent list') && args.includes('--environment')) out({ agent
 else if (args.startsWith('agent list')) out({ agents: [...AGENTS, ...st.agents], hostScope: { hostIds: ['local'], omittedHostSelectors: [{ hostId: 'runtime:demo', selector: '--environment demo.example' }] }, truncated: false });
 else if (args.startsWith('terminal list')) out({ terminals: [...TERMINALS, ...st.agents.map((a) => ({ handle: a.terminal, tabId: a.paneKey.split(':')[0], leafId: a.paneKey.split(':')[1], executionHostId: 'local' }))], truncated: false });
 else if (args.startsWith('bot list')) out({ bots: BOTS });
-else if (args.startsWith('worktree set')) {
+else if (args.startsWith('terminal send')) {
+  // What the office types: kept per terminal for the fake plugin's terminal.read to show.
+  const t = flag('--terminal');
+  const text = flag('--text') ?? '';
+  const prev = st.typed[t] ?? '';
+  st.typed[t] = (text === '\x7f' ? prev.slice(0, -1) : prev + text + (argv.includes('--enter') ? '\r' : '')).slice(-60);
+  save(st);
+  out({ send: { handle: t, accepted: true, bytesWritten: text.length } });
+} else if (args.startsWith('worktree set')) {
   const id = flag('--worktree');
   if (![...WORKSPACES, ...st.workspaces].some((w) => w.id === id)) {
     console.error('fake orca: no such worktree');

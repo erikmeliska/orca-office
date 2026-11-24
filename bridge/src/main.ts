@@ -11,7 +11,7 @@ import { loadConfig } from './config.js';
 import { allowedClientOrigins, checkUpgrade } from './origin.js';
 import { PluginLink } from './plugin-link.js';
 import { StubSession } from './stub.js';
-import { CliPoller, orcaCli } from './live/cli.js';
+import { CliPoller, orcaCli, orcaSend } from './live/cli.js';
 import { LiveModel } from './live/model.js';
 import { parseStatusEvent, parseToolHook, parseWorkspaces } from './live/orca.js';
 import { LiveSession } from './live/session.js';
@@ -187,7 +187,7 @@ const poller = new CliPoller(cli, {
 });
 
 const terminals = new TerminalWatch((terminalId, maxLines) => link.call('terminal.read', { terminalId, maxLines }));
-const actions = new Actions(model, { call: (m, p, t) => link.call(m, p, t), cli, resync: () => link.send({ type: 'resync' }), now: Date.now }, terminals);
+const actions = new Actions(model, { call: (m, p, t) => link.call(m, p, t), cli, send: orcaSend(), resync: () => link.send({ type: 'resync' }), now: Date.now }, terminals);
 
 /** One line per kind of failure, not one every 5 s. */
 const logged = new Set<string>();
