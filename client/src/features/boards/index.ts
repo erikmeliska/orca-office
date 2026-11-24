@@ -9,6 +9,8 @@ import type { Ctx } from '../../core/context';
 import { boardHint, onE } from '../../core/hint';
 import { store, type Topic } from '../../state';
 import { openServices } from '../../ui/services';
+import { floorLinks, openLinks } from '../../ui/links';
+import { isOrca } from '../../ui/orca';
 import { BoardTexture, ServicesBoardTexture } from './world';
 import { MachineTexture } from './machine';
 import type { World } from '../../world/world';
@@ -54,8 +56,10 @@ export function installBoards(ctx: Ctx) {
   const servicesTex = new ServicesBoardTexture();
   const renderServicesBoard = () => servicesTex.render(store.services.items, store.workers);
   mountBoard(office.boardMeshes.services, servicesTex.texture, renderServicesBoard, ['services', 'workers']);
-  ctx.interactions.define('issues', { reach: 9, hint: () => boardHint('📌 Issues board'), use: () => {} });
-  ctx.interactions.define('pulls', { reach: 9, hint: () => boardHint('🔀 Pull request board'), use: () => {} });
+  // On Orca the boards carry what Orca links to this floor's desks (#32); E lists them, to open in the browser.
+  const linksOf = (kinds: string[]) => floorLinks().filter((l) => kinds.includes(l.kind));
+  ctx.interactions.define('issues', { reach: 9, hint: () => boardHint('📌 Issues board'), use: onE(() => isOrca() && openLinks('📌 Issues linked on this floor', linksOf(['issue', 'item']))) });
+  ctx.interactions.define('pulls', { reach: 9, hint: () => boardHint('🔀 Pull request board'), use: onE(() => isOrca() && openLinks('🔀 Pull requests linked on this floor', linksOf(['pr', 'mr']))) });
   ctx.interactions.define('services', {
     reach: 9,
     hint: () => boardHint('🌐 Services board'),

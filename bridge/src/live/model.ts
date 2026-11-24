@@ -19,6 +19,8 @@ import { cleanLabel, type FloorPlan } from '@orca-office/shared/office/floorplan
 import { FLOOR_PALETTES } from '@orca-office/shared/office/floors';
 import { BEANBAGS, DESKS, WING_DESKS } from '@orca-office/shared/office/layout';
 import type { FloorInfo, WorkerAction, WorkerInfo, WorkerStatus } from '@orca-office/shared/office/protocol';
+import type { OrcaLink } from '@orca-office/shared/office/protocol/orca';
+import { pinsText, type OrcaWorktree } from './worktrees.js';
 import { worktreePath, type CliAgent, type CliTerminal, type OrcaBot, type OrcaState, type OrcaWorkspace, type StatusEvent, type ToolHook } from './orca.js';
 
 export const DONE_DEBOUNCE_MS = 1_000;
@@ -100,6 +102,8 @@ export interface LiveFloor {
   info: FloorInfo;
   workers: WorkerInfo[];
   plan: FloorPlan;
+  /** What Orca links to each desk, by the seat with its sign (#32). */
+  links: Record<string, OrcaLink[]>;
 }
 
 export interface Building {
@@ -125,6 +129,9 @@ export class LiveModel {
   private botFolders = new Set<string>();
   /** Seats per floor and desk, kept while the desk stays, so figures don't jump about. */
   private seats = new Map<string, Map<string, string[]>>();
+  /** What Orca links to each worktree on this machine, by path (`orca worktree list`, #32). */
+  private linksByPath = new Map<string, OrcaLink[]>();
+  private linksKey = '';
   /** Bumped on every change the office would show. */
   version = 0;
 
@@ -209,6 +216,16 @@ export class LiveModel {
     rec.action = action;
     rec.actionAt = h.at;
     rec.activity = h.tool;
+    this.version++;
+  }
+
+  /** `orca worktree list --json` (this machine): the links on each worktree. */
+  applyWorktrees(list: OrcaWorktree[]): void {
+    const next = new Map(list.filter((w) => w.hostId === LOCAL && w.links.length).map((w) => [w.path, w.links]));
+    const key = JSON.stringify([...next]);
+    if (key === this.linksKey) return;
+    this.linksKey = key;
+    this.linksByPath = next;
     this.version++;
   }
 
@@ -330,6 +347,7 @@ export class LiveModel {
     this.deskSeats.set(id, new Map([...seats].flatMap(([key, at]) => at.map((s) => [s, key] as [string, string]))));
     const workers: WorkerInfo[] = [];
     const labels: FloorPlan['labels'] = {};
+    const links: LiveFloor['links'] = {};
     let wing = 0;
     for (const d of ordered) {
       const at = seats.get(d.key);
@@ -338,7 +356,11 @@ export class LiveModel {
       list.slice(0, at.length).forEach((a, i) => workers.push(this.worker(a, at[i]!, d)));
       const extra = list.length - at.length;
       const sign = at.find((s) => !s.startsWith('beanbag-'));
-      if (sign) labels[sign] = { text: cleanLabel(`${d.hostId !== LOCAL ? '🌐 ' : ''}${d.name}${extra > 0 ? ` +${extra}` : ''}`), color: signColor(list), by: 'orca', at: 0 };
+      const path = d.hostId === LOCAL ? this.workspaces.get(d.key)?.path : undefined;
+      const mine = path ? this.linksByPath.get(path) : undefined;
+      // Every seat of the desk has its links, so the hint finds them wherever you stand.
+      if (mine?.length) for (const s of at) links[s] = mine;
+      if (sign) labels[sign] = { text: cleanLabel(`${d.hostId !== LOCAL ? '🌐 ' : ''}${d.name}${extra > 0 ? ` +${extra}` : ''}`), color: signColor(list), by: 'orca', at: 0, ...(mine?.length ? { pins: pinsText(mine) } : {}) };
       for (const s of at) if (WING_IDS.has(s)) wing = 2;
     }
     const busy = workers.filter((w) => w.status === 'working').length;
@@ -348,6 +370,7 @@ export class LiveModel {
       info: { id, name, dir: dir ? (this.workspaces.get(dir)?.path ?? '') : '', palette: hash(name) % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing, ...(this.floorProject(id) ? { orcaCreate: true } : {}) },
       workers,
       plan: { wing, labels },
+      links,
     };
   }
 
@@ -423,6 +446,7 @@ export class LiveModel {
       info: { id, name: 'Staff', dir: '', palette: hash('Staff') % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing },
       workers,
       plan: { wing, labels },
+      links: {},
     };
   }
 

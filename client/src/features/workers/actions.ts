@@ -27,6 +27,7 @@ import { openPull } from '../../ui/pull';
 import { openRepoPulls, workerRepos } from '../../ui/repos';
 import { openTerminal } from '../../ui/terminal';
 import { isOrca, openComment, openInOrca, openNewTask } from '../../ui/orca';
+import { deskLinks, openLinks } from '../../ui/links';
 import { hiringPaused, usageLabel, usageTitle } from '../../ui/usage';
 
 // The kinds of thing you can use that this defines (see InteractKinds in world/types.ts).
@@ -319,17 +320,20 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     const sign = store.floorPlan.labels[deskId]?.text;
     const deskName = `${sign ? `🪧 ${sign} · ` : ''}${plan().byId.get(deskId)!.label}`;
     const worktree = orcaDesk(deskId);
+    // What Orca links to the worktree (#32): L shows them, each opens in the browser.
+    const links = deskLinks(deskId);
+    const linksKey = links.length ? key('L', `🔗 ${links.map((l) => l.ref).slice(0, 2).join(' ')}${links.length > 2 ? ` +${links.length - 2}` : ''}`) : '';
     if (!w) {
       const can = !!store.currentFloor()?.orcaCreate || store.floors.some((f) => f.orcaCreate);
       return {
-        k: `orca|${sign}|${can}`,
-        parts: [h('span.title', {}, `${deskName} · ${sign ? 'no agent' : 'empty'}`), can ? key('E', 'New task') : '', sign ? key('O', 'Open in Orca') : '', worktree ? key('C', 'Comment') : ''],
+        k: `orca|${sign}|${can}|${links.length}`,
+        parts: [h('span.title', {}, `${deskName} · ${sign ? 'no agent' : 'empty'}`), can ? key('E', 'New task') : '', sign ? key('O', 'Open in Orca') : '', worktree ? key('C', 'Comment') : '', linksKey],
       };
     }
     const doing = w.activity ? clip(w.activity, 48) : '';
     const remote = !!w.orca?.remote;
     return {
-      k: `orca|${w.status}|${w.id}|${w.acked}|${doing}|${sign}`,
+      k: `orca|${w.status}|${w.id}|${w.acked}|${doing}|${sign}|${links.map((l) => l.ref).join()}`,
       parts: [
         h('span.title', {}, `${sign ? `🪧 ${sign} · ` : ''}${w.name} · ${STATUS_LABEL[w.status]}`),
         doing ? aside(doing) : '',
@@ -339,6 +343,7 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
         remote ? '' : key('O', 'Open in Orca'),
         !w.acked && !remote ? key('R', 'Mark read') : '',
         remote ? '' : key('C', 'Comment'),
+        linksKey,
       ],
     };
   }
@@ -351,6 +356,7 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     if (k === 'O') return w ? openInOrca(net, { workerId: w.id }) : orcaDesk(deskId) && openInOrca(net, { deskId });
     if (k === 'R' && w && !w.acked) return net.send({ t: 'orca.read', deskId });
     if (k === 'C' && orcaDesk(deskId)) return openComment(net, deskId, label);
+    if (k === 'L' && deskLinks(deskId).length) return openLinks(`🔗 ${label}`, deskLinks(deskId));
     if (k === 'P' && w?.orca?.terminal)
       return openPrompt({
         title: `💬 Prompt ${w.name}`,

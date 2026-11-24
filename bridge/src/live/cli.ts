@@ -8,9 +8,14 @@
  */
 import { execFile } from 'node:child_process';
 import { parseAgentList, parseBots, parseTerminals, type CliAgentList, type CliTerminal, type OrcaBot } from './orca.js';
+import { parseWorktreeList, type OrcaWorktree } from './worktrees.js';
 
 export const AGENTS_EVERY_MS = 5_000;
 export const BOTS_EVERY_MS = 15_000;
+/** `orca worktree list --json` (links, lineage): every 30 s, and soon after a `workspace.*` event. */
+export const WORKTREES_EVERY_MS = 30_000;
+const WORKTREES_KICK_MS = 1_500;
+const WORKTREES_MIN_GAP_MS = 5_000;
 /** The quickest a refresh asked for by an event (a new agent) follows the last one. */
 const KICK_AFTER_MS = 300;
 
@@ -36,6 +41,8 @@ export interface PollSink {
   bots(bots: OrcaBot[]): void;
   /** This machine's terminal handles by pane (`orca terminal list`), for the office's live terminal. */
   terminals?(list: CliTerminal[]): void;
+  /** `orca worktree list --json` on this machine: links and lineage (#32). */
+  worktrees?(list: OrcaWorktree[]): void;
   /** A poll failed (Orca not running, CLI missing): the kind of failure only. */
   error(what: string): void;
 }
@@ -43,6 +50,10 @@ export interface PollSink {
 export class CliPoller {
   private timer: ReturnType<typeof setTimeout> | null = null;
   private botsTimer: ReturnType<typeof setInterval> | null = null;
+  private worktreesTimer: ReturnType<typeof setTimeout> | null = null;
+  private worktreesRunning = false;
+  private worktreesKicked = false;
+  private worktreesAt = 0;
   private running = false;
   private again = false;
   private lastRun = 0;
@@ -58,12 +69,39 @@ export class CliPoller {
     void this.poll();
     void this.pollBots();
     this.botsTimer = setInterval(() => void this.pollBots(), BOTS_EVERY_MS);
+    if (this.sink.worktrees) void this.pollWorktrees();
   }
 
   stop(): void {
     if (this.timer) clearTimeout(this.timer);
     if (this.botsTimer) clearInterval(this.botsTimer);
-    this.timer = this.botsTimer = null;
+    if (this.worktreesTimer) clearTimeout(this.worktreesTimer);
+    this.timer = this.botsTimer = this.worktreesTimer = null;
+  }
+
+  /** A workspace came or went: read the worktrees' links again soon (once, however many events). */
+  kickWorktrees(): void {
+    if (!this.sink.worktrees || this.worktreesKicked) return;
+    this.worktreesKicked = true;
+    if (this.worktreesTimer) clearTimeout(this.worktreesTimer);
+    // Never sooner than WORKTREES_KICK_MS after the last read, however many events come.
+    const wait = Math.max(WORKTREES_KICK_MS, this.worktreesAt + WORKTREES_MIN_GAP_MS - Date.now());
+    this.worktreesTimer = setTimeout(() => void this.pollWorktrees(), wait);
+  }
+
+  async pollWorktrees(): Promise<void> {
+    if (!this.sink.worktrees || this.worktreesRunning) return;
+    this.worktreesRunning = true;
+    this.worktreesKicked = false;
+    this.worktreesAt = Date.now();
+    if (this.worktreesTimer) clearTimeout(this.worktreesTimer);
+    try {
+      this.sink.worktrees(parseWorktreeList(await this.run(['worktree', 'list', '--json'])));
+    } catch (err) {
+      this.sink.error((err as Error).message);
+    }
+    this.worktreesRunning = false;
+    this.worktreesTimer = setTimeout(() => void this.pollWorktrees(), WORKTREES_EVERY_MS);
   }
 
   /** Poll again soon: an event named an agent the model doesn't know yet. */

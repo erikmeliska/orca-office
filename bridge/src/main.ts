@@ -209,6 +209,7 @@ const poller = new CliPoller(cli, {
   agents: (host, list) => (model.applyAgents(host, list.agents, Date.now()), changed()),
   bots: (bots) => (model.applyBots(bots), changed()),
   terminals: (list) => model.applyTerminals(list),
+  worktrees: (list) => (model.applyWorktrees(list), changed()),
   error: (what) => logOnce(what),
 });
 
@@ -231,8 +232,13 @@ function feedModel(msg: { type?: string; name?: unknown; payload?: unknown; [k: 
     const ev = parseStatusEvent(msg.payload, now);
     if (ev && model.applyStatus(ev)) poller.kick();
   } else if (msg.type === 'event' && (msg.name === 'workspace.created' || msg.name === 'workspace.removed')) {
-    // The next snapshot has it; ask for one now.
+    // The next snapshot has it; ask for one now (and for the worktrees' links).
     link.send({ type: 'resync' });
+    poller.kickWorktrees();
+  } else if (msg.type === 'event' && msg.name === 'workspace.changed') {
+    // A link may have come (a PR opened from the worktree): read the links again soon.
+    poller.kickWorktrees();
+    return;
   } else if (msg.type === 'hook' && msg.name === 'agent.tool.before') {
     const h = parseToolHook(msg.payload, now);
     if (h) model.applySubagentStart(h);

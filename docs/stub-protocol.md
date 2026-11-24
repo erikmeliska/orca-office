@@ -128,3 +128,23 @@ The page renders the text as sanitized markdown without pictures or media (nothi
 The text goes only to that panel over the authenticated `/client`: never logged, stored or put
 in tests or screenshots (those use `npm run dev:fake`'s made-up chat). Writing to a chat is not
 possible (Orca has no API); the panel has a slot for it for M5 (bots, `orchestration send`).
+
+## Desk links (M4, #32)
+
+`orca worktree list --json` (this machine, every 30 s and ~1.5 s after a `workspace.*` event, at most
+every 5 s; ~0.17 s a call) says what Orca links to each worktree: `linkedItems[]` (`provider`, `type`
+`pr`/`issue`, `number`, `url`, `title`) and the older single fields (`linkedPR`, `linkedIssue`,
+`linkedGitLabMR`, `linkedGitLabIssue`, `linkedLinearIssue` + `linkedLinearIssueOrganizationUrlKey`,
+`linkedWorkItem`, …). Real shape checked on Orca 1.4.272; some items come without a `url`, and the
+bridge then derives it from another url of the same repository. The office never calls `gh`/`glab`.
+
+| Bridge → page | What |
+|---------------|------|
+| `orca.links` | `{ floor, desks: { [seatId]: OrcaLink[] } }` on arriving and on change; every seat of a desk carries its links. |
+| `plan` | The desk sign gets `pins` ("🔀 #12 · 📌 #34 +1"), drawn as a sticky strip under the name. |
+| `gh.pulls` / `gh.issues` | The floor's wall boards: the linked PRs/MRs and issues (number, url, title), nothing else. |
+
+`OrcaLink`: `provider`, `kind` (`pr`/`mr`/`issue`/`item`), `ref` ("#12", "!7", "ENG-42"), `url` (https
+only), `title` (cut to 60 chars with `toBubble`, design #20). At a desk, **L** lists its links; E at a
+wall board lists the floor's; each opens in the browser. On Orca the PR and issue windows inherited from
+agent-office (which called its `/api/gh/*`) are never opened: a card or palette entry opens its url.
