@@ -73,7 +73,14 @@
 .budget .fill, .meter .fill { height: 100%; background: var(--good); transition: width .3s; }
 .budget.near .fill, .meter.near .fill { background: var(--warn); }
 .budget.over .fill, .meter.over .fill { background: var(--bad); }
-/* Claude plan limits: the 5-hour session and the week */
+/* The top bar's usage meter: the plan limit closest to running out, in Orca's colours */
+.dock-limits .lbl b { font-weight: 900; font-variant-numeric: tabular-nums; }
+.dock-limits .lbl b::before { content: ''; display: inline-block; width: 9px; height: 9px; margin-right: 5px; border-radius: 50%; border: 2px solid var(--ink); background: var(--good); vertical-align: 0; }
+.dock-limits.lim-near .lbl b::before { background: var(--warn); }
+.dock-limits.lim-over .lbl b::before { background: var(--bad); }
+.dock-limits.lim-over .lbl b { color: var(--bad); }
+.dock-limits .lbl b.none::before { display: none; }
+/* Plan limits per provider: the 5-hour session, the week and per-model weeks */
 .side .limits { flex: none; cursor: pointer; font-size: 12px; font-weight: 700; display: flex; flex-direction: column; gap: 4px; }
 .limits h3 { margin-bottom: 2px; }
 .limits .plan { margin-left: auto; font-size: 12px; text-transform: none; letter-spacing: 0; color: var(--muted); font-weight: 800; }
@@ -84,6 +91,12 @@
 .limits .reset { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted); font-variant-numeric: tabular-nums; }
 .limits .meter + .row { margin-top: 3px; }
 .limits .muted { color: var(--muted); font-weight: 600; }
+.limits .provider { display: flex; flex-direction: column; gap: 4px; }
+.limits .provider + .provider { margin-top: 6px; padding-top: 6px; border-top: 2px dashed rgba(0,0,0,.15); }
+.limits h4 { display: flex; align-items: baseline; gap: 6px; margin: 0; font-size: 13px; font-weight: 900; }
+.limits h4 .note { margin-left: auto; font-size: 11px; font-weight: 600; color: var(--muted); }
+.limits .provider.off h4 .plan { margin-left: 0; }
+.limits .row b.near { color: #a05a00; }
 
 /* Workers waiting on you: a count in the Workers panel (click or N to go to them) and arrows at the edge of the screen. */
 #waiting { display: flex; align-items: center; gap: 6px; width: 100%; margin: 0 0 8px; padding: 5px 8px; border: 2px solid var(--ink); border-radius: 10px; background: #ffe3ea; color: var(--ink); font: inherit; font-size: 13px; font-weight: 900; text-align: left; cursor: pointer; }
@@ -213,6 +226,9 @@ body.telescope-active #hud { visibility: hidden; }
 @media (max-width: 800px) {
   .side { width: min(250px, calc(100vw - 24px)); max-height: calc(100vh - 290px); }
   .dock-btn .lbl { display: none; }
+  /* The usage meter keeps its number on a phone, without the provider's name. */
+  .dock-btn.dock-limits .lbl { display: inline; }
+  .dock-limits .lim-name { display: none; }
   .hint { max-width: calc(100vw - 24px); bottom: 190px; }
   .shot-meter { bottom: 254px; }
   .chat { width: calc(100vw - 24px); }

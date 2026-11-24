@@ -15,6 +15,7 @@ import type {
   FloorInfo,
   FloorView,
   PeerInfo,
+  PlanLimits,
   ServerMsg,
   WorkerAction,
   WorkerInfo,
@@ -160,7 +161,7 @@ export class StubSession {
       version: 'stub',
       upgrade: { available: false, phase: 'idle' },
       usage: { total: zeroUsage(), today: zeroUsage(), day: '2026-11-24', pauseHiring: false },
-      limits: { windows: [], at: T0 },
+      limits: stubLimits(),
       me: { admin: true },
       notify: {},
       machine: { cpu: 0.2, cores: 8, memUsed: 8e9, memTotal: 16e9, history: [], workers: FLOORS.reduce((s, f) => s + f.workers.length, 0) },
@@ -210,4 +211,16 @@ export class StubSession {
 
 function zeroUsage() {
   return { input: 0, output: 0, cacheWrite: 0, cacheRead: 0, cost: 0, calls: 0 };
+}
+
+/** Made-up plan limits, relative to now so the resets count down (docs/usage.md). */
+export function stubLimits(now = Date.now()): PlanLimits {
+  const h = 3_600_000;
+  return {
+    at: now,
+    providers: [
+      { id: 'claude', name: 'Claude', status: 'ok', plan: 'max', at: now, windows: [{ label: '5h session', pct: 34, resetsAt: now + 2.2 * h }, { label: 'Week', pct: 41, resetsAt: now + 5.6 * 24 * h }, { label: 'Fable week', pct: 12, resetsAt: now + 5.6 * 24 * h }] },
+      { id: 'codex', name: 'Codex', status: 'ok', plan: 'pro', at: now, resets: 2, windows: [{ label: '5h session', pct: 18, resetsAt: now + 3.1 * h }, { label: 'Week', pct: 83, resetsAt: now + 2.4 * 24 * h }] },
+    ],
+  };
 }

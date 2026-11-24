@@ -16,6 +16,7 @@ import { CliPoller, orcaBotSend, orcaCli, orcaSend } from './live/cli.js';
 import { LiveModel } from './live/model.js';
 import { parseStatusEvent, parseToolHook, parseWorkspaces } from './live/orca.js';
 import { LiveSession } from './live/session.js';
+import { claudeProbe, codexProbe, findCli, LimitsReader } from './live/limits.js';
 import { RunsPoller } from './live/runs-poller.js';
 import { Actions } from './live/actions.js';
 import { BotChats } from './live/bots.js';
@@ -251,6 +252,19 @@ const forgeOf = (floor: string) => {
   return t ? forge.board(t) : null;
 };
 
+// The providers' plan limits (docs/usage.md): read through their own CLIs while a page is open.
+const claudeBin = findCli('claude');
+const codexBin = findCli('codex');
+const limits = new LimitsReader({
+  probes: { claude: claudeBin ? claudeProbe(claudeBin) : null, codex: codexBin ? codexProbe(codexBin) : null },
+  wanted: () => liveSessions.size > 0,
+  changed: (state) => {
+    const out = JSON.stringify({ t: 'limits', state });
+    for (const ws of liveSessions.keys()) if (ws.readyState === ws.OPEN) ws.send(out);
+  },
+  error: (what) => logOnce(what),
+});
+
 /** One line per kind of failure, not one every 5 s. */
 const logged = new Set<string>();
 function logOnce(what: string) {
@@ -307,6 +321,7 @@ function flush() {
 
 if (!config.stub) {
   poller.start();
+  limits.start();
   runsPoller.start();
   // The done debounce and fading actions run on the clock.
   setInterval(() => {
@@ -337,7 +352,9 @@ function onLiveClient(ws: WebSocket, query: URLSearchParams) {
   const send = (msgs: unknown[]) => {
     for (const m of msgs) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
   };
-  send(session.welcome(model.building(), `live-${PROTOCOL_VERSION}`, link.connected));
+  send(session.welcome(model.building(), `live-${PROTOCOL_VERSION}`, link.connected, limits.state));
+  // Someone walked in: fresh numbers, unless they were just read.
+  limits.refresh();
   // What the page may make Orca do (actions.ts); the socket is the office page's (client-auth.ts).
   const page = { floor: () => session.peer.floor, send, limits: pageLimits() };
   ws.on('message', (data) => {
@@ -349,6 +366,7 @@ function onLiveClient(ws: WebSocket, query: URLSearchParams) {
     }
     if (typeof msg !== 'object' || msg === null || typeof (msg as { t?: unknown }).t !== 'string') return;
     const t = (msg as { t: string }).t;
+    if (t === 'limits.refresh') return limits.refresh();
     if (Actions.handles(t)) {
       // Never logged: what is typed, prompts and comments are private.
       actions.handle(page, msg as never).catch(() => send([{ t: 'orca.result', action: 'type', ok: false, error: 'failed' }]));

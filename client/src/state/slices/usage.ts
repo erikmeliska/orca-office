@@ -4,7 +4,7 @@ import type { Slice } from '../store';
 declare module '../store' {
   interface Store {
     usage: UsageState;
-    /** The Claude plan's 5-hour and weekly limits. */
+    /** The providers' plan limits (Claude, Codex): 5-hour, weekly and per-model windows. */
     limits: PlanLimits;
   }
   interface Topics {
@@ -19,7 +19,7 @@ const zeroUsage = (): Usage => ({ input: 0, output: 0, cacheWrite: 0, cacheRead:
 export const usage: Slice = {
   init(s) {
     s.usage = { total: zeroUsage(), today: zeroUsage(), day: '', pauseHiring: false };
-    s.limits = { windows: [], at: 0 };
+    s.limits = { providers: [], at: 0 };
   },
   on: {
     welcome(s, m) {
