@@ -4,11 +4,25 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 import type { OrcaWorkerApi } from 'orca/worker';
 
-// M0 spike: forwards Orca workspace/agent state to the local orca-office bridge.
+// Forwards Orca workspace/agent state to the local orca-office bridge, and carries out the
+// office's light control (M3) through an allowlist of host calls.
 // Self-contained on purpose: Orca loads plugin files as is and refuses imports
 // outside the plugin folder, so nothing here comes from ../shared.
 
-const BRIDGE_URL = 'ws://127.0.0.1:4317/plugin';
+/**
+ * The bridge's port: 4317, or what `~/.orca-office/port` says (one number), for a second bridge
+ * next to the usual one while developing.
+ */
+function bridgeUrl(): string {
+  let port = 4317;
+  try {
+    const n = Number(readFileSync(join(homedir(), '.orca-office', 'port'), 'utf8').trim());
+    if (Number.isInteger(n) && n > 0 && n < 65536) port = n;
+  } catch {
+    // No override.
+  }
+  return `ws://127.0.0.1:${port}/plugin`;
+}
 const PROTOCOL = 0;
 const RESYNC_MS = 10_000;
 const MAX_BACKOFF_MS = 30_000;
@@ -21,10 +35,26 @@ const MAX_BACKOFF_MS = 30_000;
 const TOKEN_PATH = join(homedir(), '.orca-office', 'token');
 
 /**
- * Host methods the bridge may call through this worker (design #14, #19).
- * Only after the handshake; nothing that creates terminals or launches.
+ * Host methods the bridge may call through this worker (design #14, #19), each with the exact
+ * shape of params it may pass (validParams below); only after the handshake. Light control (M3):
+ * read and type into a terminal, show a workspace or a terminal in Orca, create a workspace with an
+ * agent. Nothing that deletes, closes, merges or runs a bare command.
  */
-const ALLOWED_CALLS = new Set(['workspace.list', 'agents.list', 'terminal.list', 'terminal.read', 'terminal.sendText']);
+export const ALLOWED_CALLS = new Set([
+  'workspace.list',
+  'agents.list',
+  'terminal.list',
+  'terminal.read',
+  'terminal.sendText',
+  'terminal.focus',
+  'workspace.open',
+  'workspace.create',
+]);
+
+/** Agents the office may start in a new workspace (bridge/src/live/actions.ts offers the same). */
+export const LAUNCH_AGENTS = new Set(['claude', 'codex', 'gemini', 'opencode', 'copilot', 'cursor', 'pi']);
+export const MAX_SEND_CHARS = 4096;
+export const MAX_PROMPT_CHARS = 8000;
 
 function readToken(): string | null {
   try {
@@ -47,6 +77,7 @@ export default function activate(orca: OrcaWorkerApi) {
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
   let resyncTimer: ReturnType<typeof setInterval> | null = null;
   let stopped = false;
+  let url = bridgeUrl();
 
   const status = (text: string, tone: 'neutral' | 'success' | 'warning' | 'danger', tooltip: string) =>
     orca.host.call('statusBar.update', { id: 'office', text, tone, tooltip }).catch(() => {});
@@ -77,7 +108,8 @@ export default function activate(orca: OrcaWorkerApi) {
 
   function connect() {
     if (stopped) return;
-    status('Office…', 'neutral', `Connecting to ${BRIDGE_URL}`);
+    url = bridgeUrl();
+    status('Office…', 'neutral', `Connecting to ${url}`);
     token = readToken();
     verified = false;
     if (!token) {
@@ -87,7 +119,7 @@ export default function activate(orca: OrcaWorkerApi) {
     }
     let ws: WebSocket;
     try {
-      ws = new WebSocket(BRIDGE_URL);
+      ws = new WebSocket(url);
     } catch (err) {
       orca.log(`connect threw: ${String(err)}`);
       scheduleReconnect();
@@ -129,7 +161,7 @@ export default function activate(orca: OrcaWorkerApi) {
   function onVerified() {
     verified = true;
     backoff = 1_000;
-    status('Office', 'success', `Connected to ${BRIDGE_URL}`);
+    status('Office', 'success', `Connected to ${url}`);
     send({
       type: 'hello',
       role: 'plugin',
@@ -167,7 +199,7 @@ export default function activate(orca: OrcaWorkerApi) {
       return;
     }
     try {
-      // The allowlist above bounds the methods; params are checked by Orca.
+      // The allowlist and validParams bound the methods and their params; Orca checks the rest.
       const call = orca.host.call as (m: string, p?: unknown) => Promise<unknown>;
       const value = await call(msg.method, msg.params ?? undefined);
       send({ type: 'result', id: msg.id, ok: true, value });
@@ -226,18 +258,46 @@ export default function activate(orca: OrcaWorkerApi) {
   };
 }
 
-/** Shape checks before anything reaches a terminal; Orca validates the rest. */
-function validParams(method: string, params: Json | undefined): boolean {
-  if (method !== 'terminal.sendText') return true;
-  if (!params || typeof params !== 'object' || Array.isArray(params)) return false;
-  const { terminalId, text, enter } = params as Record<string, Json>;
-  return (
-    typeof terminalId === 'string' &&
-    terminalId.startsWith('term_') &&
-    typeof text === 'string' &&
-    text.length <= 4096 &&
-    (enter === undefined || typeof enter === 'boolean')
-  );
+/**
+ * Shape checks before a call reaches Orca: only the keys each method may take, each of the right
+ * type and size; Orca validates the rest. Anything else is refused as `not_allowed`.
+ */
+export function validParams(method: string, params: Json | undefined): boolean {
+  const p = params === undefined || params === null ? {} : params;
+  if (typeof p !== 'object' || Array.isArray(p)) return false;
+  const o = p as Record<string, Json>;
+  const only = (...keys: string[]) => Object.keys(o).every((k) => keys.includes(k));
+  const id = (v: Json | undefined, max = 512) => typeof v === 'string' && v.length > 0 && v.length <= max;
+  const term = (v: Json | undefined) => typeof v === 'string' && /^term_[A-Za-z0-9_-]{1,120}$/.test(v);
+  switch (method) {
+    case 'workspace.list':
+      return only('includeStatus') && (o.includeStatus === undefined || typeof o.includeStatus === 'boolean');
+    case 'agents.list':
+    case 'terminal.list':
+      return only('workspaceId') && (o.workspaceId === undefined || id(o.workspaceId));
+    case 'terminal.read':
+      return only('terminalId', 'maxLines') && term(o.terminalId) && (o.maxLines === undefined || (Number.isInteger(o.maxLines) && (o.maxLines as number) >= 1 && (o.maxLines as number) <= 2000));
+    case 'terminal.sendText':
+      return only('terminalId', 'text', 'enter') && term(o.terminalId) && typeof o.text === 'string' && o.text.length <= MAX_SEND_CHARS && (o.enter === undefined || typeof o.enter === 'boolean');
+    case 'terminal.focus':
+      return only('terminalId') && term(o.terminalId);
+    case 'workspace.open':
+      return only('workspaceId') && id(o.workspaceId);
+    case 'workspace.create':
+      return (
+        only('projectId', 'hostId', 'name', 'agent', 'prompt') &&
+        id(o.projectId) &&
+        (o.hostId === undefined || id(o.hostId, 200)) &&
+        (o.name === undefined || (typeof o.name === 'string' && /^[A-Za-z0-9][A-Za-z0-9._-]{0,59}$/.test(o.name))) &&
+        typeof o.agent === 'string' &&
+        LAUNCH_AGENTS.has(o.agent) &&
+        typeof o.prompt === 'string' &&
+        o.prompt.trim().length > 0 &&
+        o.prompt.length <= MAX_PROMPT_CHARS
+      );
+    default:
+      return false;
+  }
 }
 
 /** Same computation as `proof()` in bridge/src/auth.ts. */

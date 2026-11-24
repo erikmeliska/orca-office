@@ -11,6 +11,7 @@ import {
   type StatusEvent,
   type Workspace,
 } from './office-state.js';
+import { forgetBridgeToken, openBridge } from './bridge-auth.js';
 
 // Live list of what Orca reports, until the 3D office lands (M1/M2).
 const BRIDGE = `ws://127.0.0.1:${__ORCA_OFFICE_BRIDGE_PORT__}/client?list=1`;
@@ -23,9 +24,12 @@ const flashes = new Map<string, number>();
 
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
-function connect() {
-  const ws = new WebSocket(BRIDGE);
+async function connect() {
+  const ws = await openBridge(BRIDGE);
+  if (!ws) return void setTimeout(connect, 2000);
+  let opened = false;
   ws.addEventListener('open', () => {
+    opened = true;
     bridgeUp = true;
     render();
   });
@@ -43,6 +47,7 @@ function connect() {
     render();
   });
   ws.addEventListener('close', () => {
+    if (!opened) forgetBridgeToken();
     bridgeUp = false;
     pluginUp = false;
     render();
