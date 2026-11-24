@@ -35,6 +35,9 @@ export interface Stage {
   readonly holiday: Holiday;
 }
 
+/** The most device pixels the office is drawn at per CSS pixel (see createScene). */
+export const MAX_PIXEL_RATIO = 1.5;
+
 export function makeRenderer(canvas: HTMLCanvasElement): THREE.WebGLRenderer | null {
   try {
     return new THREE.WebGLRenderer({ canvas, antialias: true, powerPreference: 'high-performance' });
@@ -52,7 +55,9 @@ export function noWebGL(): Promise<never> {
 
 /** Sets up the renderer on `canvas`, and builds the scene: its lights, the camera, the office, the sky. */
 export function createScene(canvas: HTMLCanvasElement, renderer: THREE.WebGLRenderer): Stage {
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  // At most 1.5 device pixels to a CSS pixel: on a retina screen that's about half the pixels of 2, and the
+  // toon shading and outlines look much the same.
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, MAX_PIXEL_RATIO));
   renderer.shadowMap.enabled = true;
   renderer.shadowMap.type = THREE.PCFShadowMap;
   renderer.outputColorSpace = THREE.SRGBColorSpace;

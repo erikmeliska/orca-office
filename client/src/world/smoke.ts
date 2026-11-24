@@ -84,6 +84,11 @@ export class Smoke {
     this.live.push(p);
   }
 
+  /** Whether there's a puff drifting (the frame rate stays up for it: see ctx.motion). */
+  busy(): boolean {
+    return this.live.length > 0;
+  }
+
   /** Drifts, grows and fades every puff, turned to face the camera. */
   update(dt: number, camera: THREE.Camera) {
     for (let i = this.live.length - 1; i >= 0; i--) {

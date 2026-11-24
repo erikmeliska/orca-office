@@ -215,6 +215,9 @@ export function installBasketball(ctx: Ctx, deps: BasketballDeps) {
   ctx.ticks.add('others', ({ dt, now }) => {
     if (!ctx.upTop() && ctx.inOffice()) updateBall(now, dt);
   });
+  // The full frame rate while the ball's flying or rolling, or you're winding up a shot.
+  ctx.motion.watch(() => [ball.group.position]);
+  ctx.motion.add(() => windFrom > 0);
 
   /** The wind-up meter over the hint, while you hold E: a green band where the shot drops in, when you're shooting at the hoop. */
   let meterKey = '';

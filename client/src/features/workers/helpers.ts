@@ -61,6 +61,11 @@ export class Helpers {
     return this.models.length;
   }
 
+  /** Whether one's doing something new (see Worker.lively). */
+  lively(): boolean {
+    return this.models.some((m) => m.lively());
+  }
+
   update(dt: number, t: number) {
     for (const m of this.models) m.update(dt, t);
   }

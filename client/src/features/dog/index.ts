@@ -28,6 +28,12 @@ export function installDog(ctx: Ctx): Dog {
     // The dog is the office's: on a map of its own it stays at home, quiet.
     if (ctx.inOffice()) dog.update(dt);
   });
+  // The full frame rate while it trots about, or turns round.
+  const heading = { x: 0, y: 0, z: 0 };
+  ctx.motion.watch(() => {
+    heading.x = dog.root.rotation.y;
+    return [dog.root.position, heading];
+  });
   ctx.interactions.define('dog', {
     reach: 3.2,
     hint: () => {

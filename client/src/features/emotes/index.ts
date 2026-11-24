@@ -26,10 +26,20 @@ export function installEmotes(ctx: Ctx, deps: EmotesDeps) {
     }
     ctx.me.emote(id);
     ctx.hands.emote(id);
+    playing(id);
     if (ctx.player.view === 'first') popEmoji(id);
     ctx.net.send({ t: 'emote', emote: id });
   }
-  ctx.messages.on('peer.emote', (msg) => deps.personOf(msg.id)?.emote(msg.emote));
+  ctx.messages.on('peer.emote', (msg) => {
+    const who = deps.personOf(msg.id);
+    if (!who) return;
+    who.emote(msg.emote);
+    playing(msg.emote);
+  });
+  /** An emote's under way: the full frame rate till it's played out (see ctx.motion). */
+  function playing(id: EmoteId) {
+    ctx.motion.wake((EMOTE_BY_ID.get(id)?.seconds ?? 2) * 1000 + 500);
+  }
   const emoteWheel = new EmoteWheel(emote, (open) => (ctx.player.mouseLook = !open));
   $('hud').append(emoteWheel.el);
   // A window opening puts the wheel away.
