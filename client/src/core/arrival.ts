@@ -25,7 +25,7 @@ import type { CoreState } from './ctx';
 import { builtFloors, pastTheWing } from './floors';
 import type { Parts } from './parts';
 
-export type ArrivalParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'maps' | 'views' | 'cards' | 'hoops' | 'bar' | 'golf' | 'bargames' | 'cars' | 'focus'>;
+export type ArrivalParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'maps' | 'views' | 'cards' | 'hoops' | 'bar' | 'bargames' | 'focus'>;
 
 /**
  * Registers arriving's messages and the routers (see the order below), and what follows the upgrade,
@@ -106,12 +106,10 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
     if (carrying) net.send({ t: 'carry', issue: carrying.issue, title: carrying.title });
     const shownDrink = parts.bar.shownDrink();
     if (shownDrink) net.send({ t: 'act', drink: shownDrink });
-    if (parts.golf.golf.active) net.send({ t: 'act', golf: true });
     const { thrower } = parts.bargames;
     if (thrower.playing) net.send({ t: 'act', throwing: thrower.playing });
-    // The office let go of the ball for you while you were away, and of your seat in a car.
+    // The office let go of the ball for you while you were away.
     parts.hoops.ballNews(false);
-    parts.cars.carAgain();
     // After a reconnect the server has forgotten which terminal we had open, and what we're doing.
     parts.focus.sendDoing(true);
     const openId = openTerminalFor();

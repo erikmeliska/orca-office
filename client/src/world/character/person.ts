@@ -14,7 +14,6 @@ import { disposeSprite, mesh, textSprite, toon, toonUnique } from '../toon';
 import { EXHALE_AT, REACH_TIME, SMOKE_CYCLE, dragCurve, reachCurve } from './curves';
 import { cigarette, coffeeMug, drinkGlass, putDownGlass } from './props';
 import { styleHair } from './person-hair';
-import { clubSwing, strike, swingStep, type Golf } from './person-golf';
 import { propPosition, throwStep, type Oche } from './person-throw';
 import { poseEmote, type Emoting } from './person-emote';
 
@@ -34,7 +33,7 @@ const DOING_LIFT = 0.25;
 export class Person {
   readonly root = new THREE.Group();
   private body = new THREE.Group();
-  /** Its moving parts, for what poses them from the other files here (a golf swing, a throw, an emote). */
+  /** Its moving parts, for what poses them from the other files here (a throw, an emote). */
   readonly rig: PersonRig;
   private legL: THREE.Object3D;
   private legR: THREE.Object3D;
@@ -99,12 +98,6 @@ export class Person {
   private sitK = 0;
   /** Holding on to the ladder or a fire pole (see setGrip). */
   private grip: 'ladder' | 'pole' | null = null;
-  /**
-   * At the golf tee with a club (see setGolf): the club's swing, how far back it's been taken (and
-   * `want`, where it's going), and a swing under way (`swingT` seconds in, from `top`), or -1.
-   * `autoT` is a whole swing playing by itself (golfSwing), taken back to `power`.
-   */
-  private golf: Golf | null = null;
   /**
    * At the dart board's oche or the axe lane's line (see setThrowing): the dart or axe in hand, how
    * far it's been drawn back (`back`, easing to `want`), a throw under way (`throwT` seconds in, from
@@ -488,50 +481,6 @@ export class Person {
     this.grip = grip;
   }
 
-  /** At the golf tee with a club in both hands, over the ball (the ball in front of their feet, the hole off to their left), or not. */
-  setGolf(on: boolean) {
-    if (on === !!this.golf) return;
-    if (!on) {
-      const { swing } = this.golf!;
-      this.body.remove(swing);
-      swing.traverse((o) => (o as THREE.Mesh).geometry?.dispose());
-      this.golf = null;
-      // The swing turned the arms and legs every which way; standing, they only swing back and forth.
-      for (const limb of [this.armL, this.armR, this.legL, this.legR]) limb.rotation.set(0, 0, 0);
-      return;
-    }
-    const swing = clubSwing();
-    this.body.add(swing);
-    this.golf = { swing, back: 0, want: 0, top: 0, swingT: -1, autoT: -1, power: 0 };
-  }
-
-  /** Taking the club back, `k` of the way (0 at the ball, 1 as far as it goes), the harder to hit it. */
-  golfBack(k: number) {
-    const g = this.golf;
-    if (g && g.swingT < 0) g.want = THREE.MathUtils.clamp(k, 0, 1);
-  }
-
-  /** Down through the ball from wherever it was taken back to, up into the finish, and back to the ball. */
-  golfHit() {
-    const g = this.golf;
-    if (!g) return;
-    strike(g);
-  }
-
-  /** A whole swing, all by itself: back `power` of the way over BACKSWING_TIME, then through (someone else's shot). */
-  golfSwing(power: number) {
-    const g = this.golf;
-    if (!g) return;
-    g.swingT = -1;
-    g.autoT = 0;
-    g.power = THREE.MathUtils.clamp(power, 0, 1);
-  }
-
-  /** The golf swing, over whatever the arms and legs were doing (see swingStep). */
-  private golfStep(dt: number) {
-    swingStep(this.rig, this.golf!, dt);
-  }
-
   /** At the oche with a dart in the right hand, or the axe lane's line with an axe in both, or neither (null). */
   setThrowing(game: BarGame | null) {
     if (game === (this.oche?.game ?? null)) return;
@@ -688,7 +637,6 @@ export class Person {
     this.head.rotation.y = this.head.rotation.z = 0;
     this.body.rotation.y = this.body.rotation.z = 0;
     if (this.emoting) this.emoteStep(dt, moving || airborne ? 0 : 1 - sit);
-    if (this.golf && !sit && !airborne) this.golfStep(dt);
     if (this.oche && !sit) this.ocheStep(dt);
   }
 }

@@ -11,7 +11,7 @@ import type { CoreState } from './ctx';
 import { builtFloors } from './floors';
 import type { Parts } from './parts';
 
-export function installPlace(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'worlds' | 'seating' | 'climbing' | 'cars'>) {
+export function installPlace(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'worlds' | 'seating' | 'climbing'>) {
   const { player, me, net } = ctx;
   const { inOffice, plan } = parts.worlds;
 
@@ -29,7 +29,7 @@ export function installPlace(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'worl
 
   /**
    * Inside the office on your floor, its back office as far as it's built out too: not out on the
-   * balcony, the fire escape, the street or the golf course across it, nor down in the garage.
+   * balcony, the fire escape, the street, nor down in the garage.
    */
   function indoors(): boolean {
     const p = player.pos;
@@ -40,8 +40,6 @@ export function installPlace(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'worl
   /** On your feet at `at`, facing `rotY` and looking straight ahead. */
   function placeAt(at: { x: number; y: number; z: number; rotY: number }) {
     if (player.seat) parts.seating.standUp();
-    // Out of the car, wherever you are (none before the cars are there: nobody's in one yet).
-    ctx.activities.stop('driver', 'desk');
     player.pos.set(at.x, at.y, at.z);
     player.vy = 0;
     player.facing = at.rotY;
@@ -52,9 +50,8 @@ export function installPlace(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'worl
   /** Where you're standing, to come back to (see lastSpot): nowhere while you're between floors, or climbing between them. */
   function spotHere(): Spot | null {
     if (!store.floor || core.trip || parts.climbing.climber.active) return null;
-    // Sitting, it's where you'd get up to; in a car, where you'd get out.
-    const { driver } = parts.cars;
-    const at = (driver.active ? driver.wayOut() : player.standingSpot()) ?? player.pos;
+    // Sitting, it's where you'd get up to.
+    const at = player.standingSpot() ?? player.pos;
     const name = store.floor === ROOF ? ROOF_NAME : (store.currentFloor()?.name ?? '');
     return { floor: store.floor, name, map: plan().id, x: at.x, y: at.y, z: at.z, facing: player.facing, ...(onThrone() ? { throne: true } : {}) };
   }

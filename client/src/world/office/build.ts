@@ -2,14 +2,12 @@ import * as THREE from 'three';
 import type { WallRect } from '@orca-office/shared/office/decor';
 import type { FloorPalette } from '@orca-office/shared/office/floors';
 import { street } from '../outside';
-import { cars } from '../../features/cars/world';
 import { scenic } from '../scenic';
 import { toon, toonUnique } from '../toon';
 import { elevator, garageLift } from '../elevator';
 import { gong } from '../../features/gong/world';
 import { bookshelf } from '../../features/bookshelf/world';
 import { cabinet } from '../../features/cabinet/world';
-import { green, tee } from '../../features/golf/world';
 import { stack } from '../stack';
 import { tower } from '../tower';
 import { hoop } from '../../features/basketball/world';
@@ -42,8 +40,7 @@ function floorPlan() {
     nightLights,
     walls,
     balcony,
-    tee,
-    ...downstairs(cars, street, green, scenic),
+    ...downstairs(street, scenic),
     plug,
     tower,
     desks,

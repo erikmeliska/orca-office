@@ -11,10 +11,10 @@
 .needs-you-more { flex: none; padding: 2px 8px; border-radius: 999px; background: var(--ink); font-size: 12px; font-weight: 900; white-space: nowrap; }
 .needs-you .key { flex: none; margin: 0; box-shadow: 0 2px 0 var(--ink); }
 .needs-you-x { flex: none; width: 34px; font-size: 13px; font-weight: 900; border-left: 2px solid rgba(43, 45, 66, .35); border-radius: 0 12px 12px 0; }
-/* The toasts come out under it, and it steps down from under the golf and darts meters. */
+/* The toasts come out under it, and it steps down from under the darts meter. */
 #hud:has(.needs-you:not(.hidden)) #toasts { translate: 0 64px; }
-#hud:has(:is(.golf, .throw):not(.hidden)) .needs-you { translate: 0 48px; }
-#hud:has(.needs-you:not(.hidden)):has(:is(.golf, .throw):not(.hidden)) #toasts { translate: 0 112px; }
+#hud:has(:is(.throw):not(.hidden)) .needs-you { translate: 0 48px; }
+#hud:has(.needs-you:not(.hidden)):has(:is(.throw):not(.hidden)) #toasts { translate: 0 112px; }
 
 .needs-you-flash { position: fixed; inset: 0; z-index: 60; opacity: 0; pointer-events: none !important; box-shadow: inset 0 0 0 8px var(--bad), inset 0 0 150px 36px rgba(239, 71, 111, .8); }
 .needs-you-flash.on { animation: needs-you-flash 2.4s ease-out; }

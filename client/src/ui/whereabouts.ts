@@ -1,25 +1,20 @@
 import { BALCONY, DANCE_FLOOR, FIRE_PIT, FLOOR, LOFT, MEETING_ROOM, ROOF_BAR, ROOF_TABLES, SEATING_BY_ID, STAGE, WING, inWing, seatAt } from '@orca-office/shared/office/layout';
 import type { PeerInfo } from '@orca-office/shared/office/protocol';
 import { ROOF } from '@orca-office/shared/office/rooftop';
-import { CARS, type CarSeat } from '@orca-office/shared/office/garage';
 import { seatOn, type MapPlan } from '@orca-office/shared/office/maps/index';
 import { store } from '../state';
 
 /**
  * What a teammate is up to, for the line under their name tag and in the sidebar: whatever they have
  * open ("💻 in Pixel's terminal", "🔀 reading PR #12"), else somewhere worth saying they are ("🌇 on
- * the balcony", "🛋️ on the couch", "🏎️ driving the Orange Lambo"). Nothing while they're just walking around
+ * the balcony", "🛋️ on the couch"). Nothing while they're just walking around
  * the office.
  */
-export function whereabouts(p: PeerInfo, car?: { car: number; seat: CarSeat }, plan: MapPlan = store.plan()): string | undefined {
+export function whereabouts(p: PeerInfo, plan: MapPlan = store.plan()): string | undefined {
   if (p.doing) return p.doing;
   // Not standing anywhere: in on the 2D view, from a phone, say.
   if (p.lite) return '📱 on the 2D view';
-  // In one of the garage's cars (see Store.carOf).
-  const def = car && CARS[car.car];
-  if (def) return `🏎️ ${car.seat === 'driver' ? 'driving' : 'riding in'} the ${def.name}`;
   if (p.smoking) return '🚬 on a smoke break';
-  if (p.golfing) return '🏌️ teeing off';
   if (p.throwing) return p.throwing === 'darts' ? '🎯 playing darts' : '🪓 throwing axes';
   const office = plan.style === 'office' || p.floor === ROOF;
   const place = p.seat ? (office ? seatAt(p.seat) : seatOn(plan, p.seat)) : undefined;

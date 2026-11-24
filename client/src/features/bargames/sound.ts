@@ -74,7 +74,7 @@ export function toss(a: AudioCore, kind: TossSound, at: Pos) {
       a.clink(out, t0 + 0.02, rand(1300, 1500), 0.04);
       break;
     case 'cheer':
-      // Ta-da-da-DAAA, as at the golf tee.
+      // Ta-da-da-DAAA.
       [523, 659, 784, 1047].forEach((f, i) => {
         const when = t0 + 0.1 + i * 0.12;
         const len = i === 3 ? 0.8 : 0.18;

@@ -13,7 +13,6 @@
 import * as THREE from 'three';
 import { DESKS } from '@orca-office/shared/office/layout';
 import { buildCabinet } from '../features/cabinet/world';
-import { supercar } from '../features/cars/world';
 import { buildGong } from '../features/gong/world';
 import { buildKitchen } from '../world/kitchen';
 import { preloadModels } from '../world/models';
@@ -70,8 +69,6 @@ const SHOW: Record<string, () => Shown> = {
     [loungeCouch(), coffeeTable(), pouf('#06d6a0'), pouf('#ffd166')].forEach((o, i) => object.add(o.translateX(at[i])));
     return { object };
   },
-  lambo: () => ({ object: supercar('lambo', '#ffd166').root }),
-  ferrari: () => ({ object: supercar('ferrari', '#ef476f').root }),
 };
 
 const q = new URLSearchParams(location.search);

@@ -10,7 +10,7 @@
  * OfficeSound is all the rest of the office sees. What every sound shares (the context, the buses,
  * where your ears are, what runs every frame) is AudioCore in core.ts; each sound is a recipe in a
  * file of its own, beside this one (weather.ts, steps.ts and so on) or in its feature's folder
- * (features/golf/sound.ts, features/dog/sound.ts and so on), and this class only hands them the core.
+ * (features/dog/sound.ts and so on), and this class only hands them the core.
  */
 import type { GongWhy } from '@orca-office/shared/office/protocol';
 import { birdsong, Fridge, nightCrickets, startRoomTone, startWind } from './ambience';
@@ -18,13 +18,11 @@ import { ding } from './alerts';
 import { arcade } from '../features/cabinet/sound';
 import { ball, type BallSound } from '../features/basketball/sound';
 import { Dj, hiccup, pour } from '../features/bar/sound';
-import { carDoor, crash, honk, Motors, type Engine } from '../features/cars/sound';
 import { bonk, hatch, poleLanding, rung, slide, twirl } from '../features/climbing/sound';
 import { coffee } from '../features/coffee/sound';
 import { AudioCore, type Hall, type Listener } from './core';
 import { bark, yip } from '../features/dog/sound';
 import { airlock, cellDoor, thud } from '../features/workers/sound';
-import { golf, type GolfSound } from '../features/golf/sound';
 import { gong } from '../features/gong/sound';
 import { MusicBus } from './music-bus';
 import { needsYou } from '../features/needsyou/sound';
@@ -40,7 +38,6 @@ export class OfficeSound {
   private readonly dj = new Dj(this.a);
   private readonly typing = new Typing(this.a);
   private readonly feet = new Footsteps(this.a);
-  private readonly motors = new Motors(this.a);
   private readonly fridge = new Fridge(this.a);
   private readonly rain = new Rain(this.a);
   private readonly birds = birdsong(this.a);
@@ -194,11 +191,7 @@ export class OfficeSound {
     poleLanding(this.a, speed, at);
   }
 
-  // ---- Games (features/golf, bargames, basketball and cabinet) -------------------------------------
-
-  golf(kind: GolfSound, at?: Pos, speed = 5) {
-    golf(this.a, kind, at, speed);
-  }
+  // ---- Games (features/bargames, basketball and cabinet) -------------------------------------------
 
   toss(kind: TossSound, at: Pos) {
     toss(this.a, kind, at);
@@ -210,24 +203,6 @@ export class OfficeSound {
 
   arcade(kind: 'land' | 'clear' | 'over', lines = 1) {
     arcade(this.a, kind, lines);
-  }
-
-  // ---- The cars in the garage (features/cars) -----------------------------------------------------
-
-  setEngines(running: Engine[]) {
-    this.motors.setEngines(running);
-  }
-
-  honk(at: Pos, high: boolean) {
-    honk(this.a, at, high);
-  }
-
-  carDoor(at: Pos) {
-    carDoor(this.a, at);
-  }
-
-  crash(at: Pos, speed: number) {
-    crash(this.a, at, speed);
   }
 
   // ---- The kitchen, the dog, the weather, the gong, the dings --------------------------------------

@@ -299,7 +299,6 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     const { seating } = parts;
     if (player.seat) seating.standUp();
     // The car first (the activities' own order has it last).
-    ctx.activities.stop('driver', 'desk');
     ctx.activities.stopAll('desk');
     parts.walking.stopWalkingTo();
     // In line for the throne: in front of it, where it stands.

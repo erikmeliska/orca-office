@@ -24,7 +24,7 @@ declare module '../world/types' {
   }
 }
 
-export type TravelParts = Pick<Parts, 'stage' | 'worlds' | 'place' | 'walking' | 'seating' | 'climbing' | 'cars' | 'rooftop' | 'telescope' | 'bar' | 'bargames' | 'hanging' | 'golf' | 'maps' | 'arrival'>;
+export type TravelParts = Pick<Parts, 'stage' | 'worlds' | 'place' | 'walking' | 'seating' | 'climbing' | 'rooftop' | 'telescope' | 'bar' | 'bargames' | 'hanging' | 'maps' | 'arrival'>;
 
 /** Registers what follows the building's floors (store 'floors'). */
 export function installTravel(ctx: Ctx, core: CoreState, parts: TravelParts) {
@@ -68,10 +68,6 @@ export function installTravel(ctx: Ctx, core: CoreState, parts: TravelParts) {
   // Closing the tab, or reloading: the frame loop saves it every second, and here's the last word.
   window.addEventListener('pagehide', () => {
     parts.place.saveSpot();
-    // Mid-drive, the car stops right where you left it, not where the office last heard it was.
-    const { driver } = parts.cars;
-    const p = driver.driving ? driver.pose : null;
-    if (p) net.send({ t: 'car.drive', car: driver.car!, x: p.x, z: p.z, rotY: p.rotY, speed: 0, steer: p.steer });
   });
 
   function fade(on: boolean, quick = false) {
@@ -160,7 +156,7 @@ export function installTravel(ctx: Ctx, core: CoreState, parts: TravelParts) {
    * car last, for keys and the hint bar).
    */
   function stopForTrip() {
-    ctx.activities.stopAll('trip', ['golf', 'thrower']);
+    ctx.activities.stopAll('trip', ['thrower']);
     ctx.activities.stopAll('trip');
   }
 
@@ -297,8 +293,6 @@ export function installTravel(ctx: Ctx, core: CoreState, parts: TravelParts) {
    * the pole…). `back` is standing in the spot you left from last time, the doors open already.
    */
   function arrive(how: TripKind | 'back' = core.trip?.how ?? 'elevator') {
-    // The balls lying about were this floor's.
-    parts.golf.balls.clear();
     setPlace();
     parts.maps.paintFloor();
     parts.arrival.renderProject();

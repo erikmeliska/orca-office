@@ -1,9 +1,8 @@
-// The toys on every floor: pictures, the arcade, the ball, the cars and the dog.
+// The toys on every floor: pictures, the arcade, the ball and the dog.
 
 import type { CabinetFrame, CabinetState } from '../cabinet.js';
 import type { DecorPlacement, Decoration } from '../decor.js';
 import type { DogState } from '../dog.js';
-import type { CarSeat, CarState } from '../garage.js';
 import type { BallState } from '../hoop.js';
 
 export type DecorClientMsg =
@@ -12,7 +11,6 @@ export type DecorClientMsg =
   /** Move, resize, re-frame or swap the image of a picture. */
   | { t: 'decor.update'; id: string; decor: Partial<DecorPlacement> }
   | { t: 'decor.remove'; id: string };
-
 
 export type CabinetClientMsg =
   /**
@@ -34,16 +32,6 @@ export type BallClientMsg =
   /** Throw the basketball in your hands from (x, y, z) at (vx, vy, vz) m/s, or drop it; everyone on the floor sees it fly. */
   | { t: 'ball.throw'; x: number; y: number; z: number; vx: number; vy: number; vz: number };
 
-export type CarClientMsg =
-  /** Get into a seat of one of the floor's cars (by its place in CARS): yours if nobody's in it. */
-  | { t: 'car.enter'; car: number; seat: CarSeat }
-  /** Get out of the car you're in; driving, it stays parked where you left it. */
-  | { t: 'car.leave' }
-  /** Where the car you're driving has got to, and how it's going; everyone else on the floor sees it there. */
-  | { t: 'car.drive'; car: number; x: number; z: number; rotY: number; speed: number; steer: number }
-  /** Honk the horn of the car you're in. */
-  | { t: 'car.honk' };
-
 export type DogClientMsg =
   /** Give the dog on your floor a pat; it has to be within reach. */
   | { t: 'dog.pet' }
@@ -60,12 +48,6 @@ export type ToysServerMsg =
   | { t: 'dog'; dog: DogState }
   /** The basketball on your floor was picked up, thrown, or put back under the hoop. */
   | { t: 'ball'; ball: BallState }
-  /** Someone got into one of your floor's cars, or out of one; `answer` to each car.enter and car.leave of yours, whether you got in or not. */
-  | { t: 'cars'; cars: CarState[]; answer?: boolean }
-  /** A car on your floor is being driven (see car.drive). */
-  | { t: 'car.move'; car: number; x: number; z: number; rotY: number; speed: number; steer: number }
-  /** Someone in a car on your floor honked its horn. */
-  | { t: 'car.honk'; car: number }
   /** Who's at the arcade cabinet on your floor now, and the building's high scores. */
   | { t: 'cabinet'; state: CabinetState }
   /** The game on your floor's cabinet, as its player sees it (sent to everyone else on the floor). */

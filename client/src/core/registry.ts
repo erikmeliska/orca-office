@@ -207,7 +207,7 @@ export class Ticks {
 
 /**
  * Something you can be in the middle of that takes over the controls (hanging a picture, the ladder,
- * the golf tee…). `Why` names what's making you stop (see Activities.stopAll), `E` is a key press and
+ * the darts…). `Why` names what's making you stop (see Activities.stopAll), `E` is a key press and
  * `El` is where the hint bar draws.
  */
 export interface Activity<Why extends string = string, E = unknown, El = unknown> {
