@@ -3,7 +3,6 @@
  * it hands out: where you are, what you're holding, the hint bar, the view's shake.
  */
 import type * as THREE from 'three';
-import type { CarriedIssue } from '@orca-office/shared/office/protocol';
 import type { Grip } from '../features/climbing/controller';
 import { store } from '../state';
 import type { Interactable } from '../world/types';
@@ -20,8 +19,6 @@ export interface CoreState {
   hintKey: string;
   /** How hard the view shakes (a landing off a pole, a bump in a car, a hiccup), easing off to 0. */
   thud: number;
-  /** The issue card in your hands, taken off this floor's issues board (see features/carrying), or null. */
-  carrying: CarriedIssue | null;
   /** Where you are now: up on the roof (true), or on a floor of the office. */
   upTop: boolean;
   /** A trip to another floor under way (see Trip, and core/travel.ts). */
@@ -33,7 +30,7 @@ export interface CoreState {
  * in `parts` by the time anything asks for them (see main.ts).
  */
 export function createCtx(parts: Parts): { ctx: Ctx; core: CoreState } {
-  const core: CoreState = { hintKey: '', thud: 0, carrying: null, upTop: false, trip: null };
+  const core: CoreState = { hintKey: '', thud: 0, upTop: false, trip: null };
   const ctx: Ctx = {
     get scene() {
       return parts.stage.scene;
@@ -88,7 +85,6 @@ export function createCtx(parts: Parts): { ctx: Ctx; core: CoreState } {
     inOffice: () => parts.worlds.inOffice(),
     upTop: () => core.upTop,
     trip: () => core.trip,
-    carrying: () => core.carrying,
     holdingBall: () => parts.hoops.holding(),
     hint: {
       // Not '': that reads as "no hint shown", and a hint still up (the darts one, say) would stay up.

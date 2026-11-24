@@ -21,7 +21,6 @@ import { store } from '../../state';
 import { openAsk } from '../../ui/ask';
 import { STATUS_LABEL, clip, closeAllModals, h, toast } from '../../ui/dom';
 import { openDeskLabel } from '../../ui/floorplan';
-import type { MeetingPreset } from '../../ui/meeting';
 import { confirmDialog, lostWorktreeDialog, openPrompt, routeWorktreeMessage, sendHomeDialog } from '../../ui/prompt';
 import { providerLabel, resolvedProvider } from '../../ui/provider';
 import { openPull } from '../../ui/pull';
@@ -37,7 +36,7 @@ declare module '../../world/types' {
   }
 }
 
-export type WorkerActionsParts = Pick<Parts, 'worlds' | 'seating' | 'walking' | 'waiting' | 'meeting' | 'cards'>;
+export type WorkerActionsParts = Pick<Parts, 'worlds' | 'seating' | 'walking' | 'waiting'>;
 
 /** Registers the worktree answer (worker.worktree), and defines what's done at a desk and at a board agent. */
 export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerActionsParts) {
@@ -150,13 +149,6 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     if (!w) return;
     const where = plan().byId.get(w.deskId)?.label ?? 'the desk';
     const session = w.kind === 'shell' ? 'shared shell' : `${providerLabel(w.provider, store.project)} session`;
-    if (w.meeting) {
-      // The meeting's worktree is the whole table's: it's tidied away once they've all gone.
-      const m = store.meeting.current;
-      const on = m?.id === w.meeting && m.status === 'running';
-      confirmDialog(`Send ${w.name} home?`, on ? `${w.name} is in the meeting on “${m.title}”, which stops without it.` : `${w.name} leaves the meeting room.`, 'Send home', () => net.send({ t: 'worker.kill', workerId: id }));
-      return;
-    }
     if (w.worktree) {
       // A worker with its own worktree: choose what becomes of the worktree and its branch.
       sendHomeDialog({
@@ -344,7 +336,6 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
 
   function deskHint(deskId: string): Hint {
     const w = store.workerAtDesk(deskId);
-    if (!w && plan().byId.get(deskId)?.room) return { k: 'room', parts: [h('span.title', {}, `🤝 ${plan().byId.get(deskId)!.label} · free`), key('E', 'Call a meeting')] };
     // The sign over it, if it has one, and L to hang one (or change it).
     const sign = store.floorPlan.labels[deskId]?.text;
     const labelKey = canLabel(deskId) ? key('L', sign ? 'Sign' : 'Label') : '';
@@ -449,8 +440,6 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
       if (!it.deskId) return;
       if (key === 'L') return openDeskLabel(net, it.deskId);
       const w = store.workerAtDesk(it.deskId);
-      // Nobody is hired at the meeting table: a meeting seats its own workers there.
-      if (!w && plan().byId.get(it.deskId)?.room) return key === 'E' ? parts.meeting.showMeeting() : undefined;
       if (key === 'B' && !w) return openShell(it.deskId);
       if (key === 'P') return promptAtDesk(it.deskId);
       if (key === 'E') return w ? openWorkerTerminal(w.id) : hireAtDesk(it.deskId);
@@ -495,15 +484,12 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     });
   }
 
-  /** What the boards' buttons do: hand an issue to a worker, queue it, call a meeting about it, go to a desk, take its card. */
+  /** What the pull request and issue windows' buttons do: hand it to a worker, ask one about it, go to a desk. */
   function boardActions() {
     return {
-      queue: (prompt: string, title: string, issue: number, provider?: AgentProvider, model?: string, effort?: AgentEffort) => net.send({ t: 'queue.add', prompt, title, issue, provider, model, effort }),
       assign: (prompt: string, title: string, issue?: number) => sendToWorker(`🤖 ${title}`, { initial: prompt }, issue),
       ask: (context: string, title: string) => sendToWorker(`✍️ ${title}`, { context }),
-      meeting: (preset: MeetingPreset) => parts.meeting.showMeeting(preset),
       goToDesk,
-      pickUp: parts.cards.pickUp,
     };
   }
 

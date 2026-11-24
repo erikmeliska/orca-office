@@ -88,7 +88,6 @@ export function installMaps(ctx: Ctx, core: CoreState, parts: MapsParts) {
     // The boards name seats the way this map does.
     boards.renderPullsBoard();
     boards.renderServicesBoard();
-    boards.renderQueueBoard();
     if (store.floor && !core.upTop && !core.trip) {
       parts.place.placeInCar();
       // Back in the office, in its elevator: the doors open onto it.

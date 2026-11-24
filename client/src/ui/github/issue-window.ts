@@ -3,8 +3,6 @@ import type { GhIssue, GhIssueDetail } from '@orca-office/shared/office/protocol
 import type { Net } from '../../net';
 import { store } from '../../state';
 import { h, openModal, timeAgo } from '../dom';
-import { issueMeeting } from '../meeting';
-import { providerPicker } from '../provider';
 import { getJson } from './api';
 import { openClose } from './close';
 import { commentBox } from './comment-box';
@@ -32,15 +30,6 @@ export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
   // The footer stays put and renderFrame only shows, hides and relabels, so a board refresh never
   // pulls focus out of the provider picker.
   const closeIssue = h('button.btn', { type: 'button', title: 'Close this issue on GitHub', onclick: () => openClose('issue', it, net, load) }, '✔️ Close issue…');
-  const queueProvider = providerPicker(store.project, `issue-provider-${it.number}`, 'Queue on');
-  const addIssueToQueue = () => {
-    if (!queueProvider.valid()) return;
-    modal.close();
-    actions.queue(issuePrompt(it), `#${it.number} ${it.title}`, it.number, queueProvider.value(), queueProvider.model(), queueProvider.effort());
-  };
-  const queue = h('button.btn', { type: 'button', onclick: addIssueToQueue }) as HTMLButtonElement;
-  const carry = actions.pickUp;
-  const pickUp = carry ? h('button.btn', { type: 'button', title: 'Carry its card to an empty desk, a worker or the queue board, and press E there', onclick: () => carry(it) }, '✋ Pick it up') : null;
   const meta = h('div.gh-meta');
   const el = h(
     'div.modal.gh-window.issue',
@@ -53,11 +42,7 @@ export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
       {},
       h('a.grow', { href: it.url, target: '_blank', rel: 'noopener noreferrer' }, 'Open on GitHub ↗'),
       h('button.btn', { type: 'button', title: 'Send a worker your own prompt about this issue', onclick: () => actions.ask(issueContext(it), `Ask about issue #${it.number}`) }, '✍️ Ask a worker…'),
-      h('button.btn', { type: 'button', title: 'Workers take it on together in the meeting room: a debate, lead & team, map-reduce or red / blue', onclick: () => actions.meeting(issueMeeting(it.number, it.title)) }, '🤝 Meeting…'),
       closeIssue,
-      queueProvider.element,
-      queue,
-      pickUp,
       h('button.btn.primary', { type: 'button', onclick: () => actions.assign(issuePrompt(it), `Hand issue #${it.number} to a worker`, it.number) }, '🤖 Hand to a worker'),
     ),
   );
@@ -75,15 +60,7 @@ export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
     );
     pill.className = `pill ${isOpen ? 'done' : 'offline'}`;
     pill.textContent = isOpen ? 'open' : 'closed';
-    const task = store.taskForIssue(it.number);
-    const onQueue = !!task && task.status !== 'done';
     closeIssue.classList.toggle('hidden', !isOpen);
-    pickUp?.classList.toggle('hidden', !isOpen);
-    queueProvider.element.classList.toggle('hidden', !isOpen || onQueue);
-    queue.classList.toggle('hidden', !isOpen);
-    queue.disabled = onQueue;
-    queue.title = onQueue ? '' : 'A worker picks it up by itself when a desk is free and there is room under the worker limit';
-    queue.textContent = onQueue ? (task!.status === 'running' ? `🤖 ${task!.workerName ?? 'A worker'} is on it` : '📋 On the queue') : '📋 Add to queue';
   };
   const render = () => {
     thread.replaceChildren(commentCard({ id: 'body', author: it.author, body: detail?.body ?? it.body, createdAt: it.createdAt, url: it.url }, itemUrl, 'opened this'));
@@ -115,7 +92,6 @@ export function openIssue(first: GhIssue, net: Net, actions: BoardActions) {
       it = detail ? { ...fresh, state: fresh.state === 'OPEN' ? detail.state : fresh.state } : fresh;
       renderFrame();
     }),
-    store.on('queue', renderFrame),
   ];
   const modal = openModal(el, {
     doing: `📋 reading issue #${it.number}`,

@@ -4,7 +4,6 @@
  * else's (see installLoop), so within a phase they come first.
  */
 import * as THREE from 'three';
-import { SlowFrames } from '../framerate';
 import { EYE_HEIGHT } from '../player';
 import { renderCaffeine } from '../features/coffee/meter';
 import type { Ctx } from './context';
@@ -17,15 +16,9 @@ import { FirstPersonBody } from '../world/character/person-first';
 /** Covering less ground than this (m/s) since your last footstep, your feet make no sound: a walk is 4.6. */
 const QUIET_FEET = 1.2;
 
-export interface LoopDeps {
-  /** Offers the 2D view (/lite), where the 3D is hard going (see main.ts). */
-  offer2d(why: 'slow'): void;
-}
-
 /** Registers the office's own ticks: install it before anything else registers one. */
-export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage' | 'coffee' | 'peers' | 'views' | 'worlds' | 'place'>, deps: LoopDeps) {
+export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage' | 'coffee' | 'peers' | 'views' | 'worlds' | 'place'>) {
   // Registered before anything else's, so within a phase they come first.
-  ctx.ticks.add('pre', watchFrameRate);
   ctx.ticks.add('pre', feelTheCoffee);
   ctx.ticks.add('move', ({ dt }) => ctx.player.update(dt));
   ctx.ticks.add('me', moveMe);
@@ -45,14 +38,6 @@ export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage
   let fallV = 0;
   const lookDir = new THREE.Vector3();
   const headPos = new THREE.Vector3();
-  /** Frames coming too slowly for the 3D to be any fun: the 2D view is offered. */
-  const slowFrames = new SlowFrames();
-
-  /** Frames coming too slowly for the 3D to be any fun: the 2D view is offered. */
-  function watchFrameRate({ now, delta }: Frame) {
-    if (slowFrames.frame(now, delta * 1000)) deps.offer2d('slow');
-  }
-
   /** Coffee, and the view's shake easing off. */
   function feelTheCoffee({ dt, now }: Frame) {
     const { me, hands, reduceMotion } = ctx;

@@ -11,7 +11,6 @@ import type { Parts } from '../../core/parts';
 import { waitingInOrder, waitingLabel } from '../../nextup';
 import { saveSettings, store } from '../../state';
 import { openAccounts } from '../../ui/accounts';
-import { openBoard } from '../../ui/boards';
 import { openCharacter } from '../../ui/character';
 import { $ } from '../../ui/dom';
 import { toggleFloorMenu } from '../../ui/floormenu';
@@ -24,13 +23,13 @@ import { openTeam } from '../../ui/team';
 import { openUpgrade } from '../../ui/upgrade';
 import { describeSky } from '../../world/sky';
 
-export type HudParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'you' | 'actions' | 'waiting' | 'meeting' | 'bookshelf' | 'hanging' | 'notifier'>;
+export type HudParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'you' | 'actions' | 'waiting' | 'bookshelf' | 'hanging' | 'notifier'>;
 
 /** Listens for clicks on the HUD and the project, registers what the HUD follows (see mountHud), and binds Tab, H and F. */
 export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
   const { net, settings, player, sound } = ctx;
   const { inOffice } = parts.worlds;
-  const { travel, waiting, actions, hanging } = parts;
+  const { travel, waiting, hanging } = parts;
 
   // Buttons must not keep focus, or Space (jump) would click them again.
   $('hud').addEventListener('click', (e) => {
@@ -47,21 +46,7 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
   const waitingNow = () => waitingInOrder(store.workers.values());
   const hud = mountHud(
     [
-      { id: 'issues', icon: '📌', label: 'Issues', section: 'Open', count: () => store.issues.items.filter((i) => i.state === 'OPEN').length, run: () => openBoard('issues', net, actions.boardActions()) },
-      { id: 'pulls', icon: '🔀', label: 'Pull requests', section: 'Open', count: () => store.pulls.items.filter((p) => p.state === 'OPEN').length, run: () => openBoard('pulls', net, actions.boardActions()) },
-      { id: 'queue', icon: '📋', label: 'Task queue', section: 'Open', count: () => store.queue.tasks.filter((t) => t.status !== 'done').length, title: () => 'Issues and tasks waiting for a worker', run: waiting.showQueue },
       { id: 'services', icon: '🌐', label: 'Services', section: 'Open', count: () => store.services.items.length, title: () => 'Web servers the workers are running', run: () => openServices() },
-      // Up on the top bar while a meeting is on: what's being worked through in the meeting room.
-      {
-        id: 'meeting',
-        icon: '🤝',
-        label: 'Meeting room',
-        section: 'Open',
-        status: () => store.meeting.current?.status === 'running',
-        chip: () => 'In a meeting',
-        title: () => 'Call a meeting: workers work through a question or a task together',
-        run: () => parts.meeting.showMeeting(),
-      },
       { id: 'search', icon: '🔎', label: 'Search', section: 'Open', key: '/', title: () => 'Search the chat and every terminal', run: waiting.showSearch },
       // The office has its bookshelf for them; a map of its own may not.
       { id: 'docs', icon: '📚', label: 'Docs', section: 'Open', shown: () => !inOffice(), title: () => 'Read the project’s docs', run: parts.bookshelf.showBookshelf },
@@ -73,7 +58,6 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
       { id: 'signins', icon: '🔐', label: 'Your sign-ins', section: 'Together', shown: () => !!store.me.account, tone: () => (needsSigningIn() ? 'danger' : undefined), status: needsSigningIn, chip: () => 'Sign in to Claude', title: () => 'The Claude plan and GitHub account your workers run on: your own', run: () => openSignIns(net) },
       { id: 'settings', icon: '⚙️', label: 'Settings', section: 'Office', run: showSettings },
       { id: 'help', icon: '❓', label: 'Controls', section: 'Office', key: 'H', run: openHelp },
-      { id: 'lite', icon: '📱', label: '2D view', section: 'Office', title: () => 'The workers, their terminals and the boards without the 3D: for a phone or a slow computer', run: () => location.assign('/lite') },
       {
         id: 'upgrade',
         icon: '⬆️',

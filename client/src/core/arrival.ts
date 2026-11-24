@@ -25,7 +25,7 @@ import type { CoreState } from './ctx';
 import { builtFloors, pastTheWing } from './floors';
 import type { Parts } from './parts';
 
-export type ArrivalParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'maps' | 'views' | 'cards' | 'hoops' | 'bar' | 'bargames' | 'focus'>;
+export type ArrivalParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'maps' | 'views' | 'hoops' | 'bar' | 'bargames' | 'focus'>;
 
 /**
  * Registers arriving's messages and the routers (see the order below), and what follows the upgrade,
@@ -94,14 +94,11 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
     } else if (store.floor && store.floor !== wasOn) {
       // Back after the office restarted, but not on your floor: it went while the office was down.
       travel.takenAway();
-      if (core.carrying) parts.cards.setCarrying(null);
       travel.arrive();
       floorWentWhileAway(wasOn);
     } else if (!store.floor) travel.arrive();
     maps.offTheRoof();
     if (player.seat) net.send({ t: 'sit', seat: player.seat.key });
-    const carrying = core.carrying;
-    if (carrying) net.send({ t: 'carry', issue: carrying.issue, title: carrying.title });
     const shownDrink = parts.bar.shownDrink();
     if (shownDrink) net.send({ t: 'act', drink: shownDrink });
     const { thrower } = parts.bargames;
@@ -125,13 +122,7 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
     const { travel } = parts;
     // Not a trip of yours: the floor you were on was taken off the building, and the elevator took you away.
     if (!core.trip) travel.takenAway();
-    // The card belongs to the board downstairs (or up): the office already put it back there.
-    const carrying = core.carrying;
-    if (carrying) {
-      toast(`📌 #${carrying.issue} stayed behind on the other floor's board`);
-      parts.cards.setCarrying(null);
-    }
-    // So does the ball: it's back under that floor's hoop.
+    // The ball: it's back under that floor's hoop.
     if (parts.hoops.holding()) toast('🏀 The ball stayed behind, back under the other floor’s hoop');
     parts.hoops.ballNews(false);
     travel.arrive();

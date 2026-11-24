@@ -7,9 +7,7 @@ import type { FloorPlan } from '../floorplan.js';
 import type { BallState } from '../hoop.js';
 import type { AgentProvider } from './agents.js';
 import type { GhIssue, GhPull, GhState } from './github.js';
-import type { MeetingState } from './meetings.js';
 import type { PeerInfo } from './presence.js';
-import type { QueueState } from './queue.js';
 import type { ServicesState } from './settings.js';
 import type { JailState, WorkerInfo } from './workers.js';
 
@@ -24,8 +22,7 @@ export interface ProjectInfo {
 }
 
 /**
- * One floor of the building: a project in its own checkout, with its own desks, workers, boards
- * and queue. You go between them in the elevator.
+ * One floor of the building: a project in its own checkout, with its own desks, workers and boards. You go between them in the elevator.
  */
 export interface FloorInfo {
   id: string;
@@ -49,7 +46,7 @@ export interface FloorInfo {
   addedAt: number;
   /**
    * For the elevator panel: who's there and what they're up to. `workers` counts the ones hired onto
-   * desks, bean bags and the meeting room's table, not the board agents at their kiosks.
+   * desks and bean bags, not the board agents at their kiosks.
    */
   workers: number;
   busy: number;
@@ -99,7 +96,6 @@ export interface FloorView {
   workers: WorkerInfo[];
   issues: GhState<GhIssue>;
   pulls: GhState<GhPull>;
-  queue: QueueState;
   /** Pictures on this floor's walls. */
   decor: Decoration[];
   /** The signs over this floor's desks, and how far its back office is built out. */
@@ -109,8 +105,6 @@ export interface FloorView {
   dog: DogState | null;
   /** Who's at the arcade cabinet, what's on its screen, and the building's high scores. */
   cabinet: CabinetView;
-  /** The meeting room: who's meeting about what, and the meetings before. */
-  meeting: MeetingState;
   /** The basketball by the hoop: who has it, or how it was last thrown. */
   ball: BallState;
   /** Workers sent home and locked up in the dungeon, on a map that has one. */

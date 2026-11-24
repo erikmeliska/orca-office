@@ -7,7 +7,7 @@ import type { Drink } from '@orca-office/shared/office/rooftop';
 import { HIPS, type PersonRig } from './rig';
 import { axeModel, dartModel } from '../../features/bargames/world';
 import { OpenBook } from '../../features/bookshelf/book';
-import { HeldCard } from '../../features/carrying/card';
+import { HeldCard } from '../held-card';
 import { UNDEAD_SKIN } from '../costumes';
 import { HolidayOutfit } from './person-outfit';
 import { disposeSprite, mesh, textSprite, toon, toonUnique } from '../toon';

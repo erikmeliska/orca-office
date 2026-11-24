@@ -1,7 +1,6 @@
-import type { AgentEffort, AgentProvider, GhIssue, GhMergeMethod, GhPull } from '@orca-office/shared/office/protocol';
+import type { GhIssue, GhMergeMethod, GhPull } from '@orca-office/shared/office/protocol';
 import { store } from '../../state';
 import { repoUrlOf } from '../markdown';
-import type { MeetingPreset } from '../meeting';
 import { officePrompt } from '../prompts';
 
 // ---- Prompts for workers ------------------------------------------------------------------------
@@ -13,15 +12,9 @@ export interface BoardActions {
   ask(context: string, title: string): void;
   /** Walks you to the desk a pull request came from. */
   goToDesk(deskId: string): void;
-  /** Put an issue on the 📋 task queue; a worker is seated for it when there's room. */
-  queue(prompt: string, title: string, issue: number, provider?: AgentProvider, model?: string, effort?: AgentEffort): void;
-  /** Take the issue's card off the board, to carry to a desk or the queue (not on the 2D view, where there's nobody to carry it). */
-  pickUp?(issue: GhIssue): void;
-  /** Call a meeting about it: the meeting room's form, filled in. */
-  meeting(preset: MeetingPreset): void;
 }
 
-/** The task a worker gets for an issue, from the board, a carried card or the queue (the 'issue.work' prompt). */
+/** The task a worker gets for an issue (the 'issue.work' prompt). */
 export function issuePrompt(it: Pick<GhIssue, 'number' | 'title'> & { url?: string }): string {
   return officePrompt('issue.work', issueVars(it));
 }

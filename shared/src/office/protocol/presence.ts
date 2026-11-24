@@ -9,7 +9,7 @@ import type { FloorInfo, FloorView, ProjectsDirState } from './floors.js';
 import type { LeaveOnMergeState, MachineState, MapState, NotifyState, PromptsState, SkyState, ThemeState, UpgradeState } from './settings.js';
 import type { PlanLimits, UsageState } from './usage.js';
 
-/** The issue on a card someone carries around the floor (see PeerInfo.carrying). */
+/** The issue on a card in someone's hands (see client/src/world/held-card.ts; nothing carries one in orca-office yet). */
 export interface CarriedIssue {
   issue: number;
   title: string;
@@ -32,8 +32,6 @@ export interface PeerInfo {
   throwing?: BarGame;
   /** Sitting down: the place they're in (see seatAt in layout), like "couch:1". */
   seat?: string;
-  /** An issue card they took off the issues board, on its way to a desk or the queue. */
-  carrying?: CarriedIssue;
   /** A drink from the rooftop bar in their hand. */
   drink?: DrinkId;
   /** Signed in with their own account, so `name` is theirs and nobody else can take it. */
@@ -87,8 +85,6 @@ export type PresenceClientMsg =
   | { t: 'act'; smoke?: boolean; drink?: DrinkId | null; throwing?: BarGame | null }
   /** You sat down in a place on a couch, a beanbag, a chair or the bench (see seatAt in layout), or got up again (no seat). */
   | { t: 'sit'; seat?: string }
-  /** You picked an issue card up off the board (or put it down again, no issue): everyone sees it in your hands. */
-  | { t: 'carry'; issue?: number; title?: string }
   /** An emote (hold G, or 1–6): everyone else on your floor sees your character do it. Rate limited, see EmoteBucket. */
   | { t: 'emote'; emote: EmoteId }
   | { t: 'profile'; name: string; color: string; look: Look }

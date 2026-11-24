@@ -67,7 +67,6 @@ export function installBasketball(ctx: Ctx, deps: BasketballDeps) {
 
   /** E at the ball: it's yours, if nobody beats you to it. */
   function takeBall() {
-    if (ctx.carrying()) return toast('🗂️ Your hands are full: put the card back first (Q)', 'warn');
     if (ball.holder) return;
     deps.reach();
     ctx.sound.ball('bounce', ball.at, 1.5);

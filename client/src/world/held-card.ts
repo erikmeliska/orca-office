@@ -1,7 +1,9 @@
 import * as THREE from 'three';
+// An issue card in someone's hands. agent-office's features/carrying (issue cards carried from the
+// board to a desk) is dropped (design.md #16); the characters keep the card for now, never shown.
 import type { CarriedIssue } from '@orca-office/shared/office/protocol';
-import { NOTE_COLORS, PINS, wrap } from '../boards/world';
-import { toon, toonUnique } from '../../world/toon';
+import { NOTE_COLORS, PINS, wrap } from '../features/boards/world';
+import { toon, toonUnique } from './toon';
 
 const W = 320;
 const H = 240;

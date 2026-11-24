@@ -3,7 +3,6 @@ import type { GhPull, GhPullDetail, GhReviewComment } from '@orca-office/shared/
 import type { Net } from '../../net';
 import { store, workerForPull } from '../../state';
 import { h, openModal, type Modal } from '../dom';
-import { officePrompt } from '../prompts';
 import { getJson, getText } from './api';
 import { openClose } from './close';
 import { commentBox } from './comment-box';
@@ -11,7 +10,7 @@ import { labelButton, labelChip } from './labels';
 import { checksList, conflicted, mergeStatus, openMerge } from './merge';
 import { avatar, commentCard, errorBox, nodes, REVIEW_BADGE, spinnerRow, stateOf } from './pieces';
 import { FILES_KEY, mergePref, pref, savePref, TAB_KEY } from './prefs';
-import { fixAndMergePrompt, fixConflictsPrompt, pullContext, pullVars, reviewPrompt, type BoardActions } from './prompts';
+import { fixAndMergePrompt, fixConflictsPrompt, pullContext, reviewPrompt, type BoardActions } from './prompts';
 import { buildTree, looksGenerated, parseDiff, renderFileDiff, renderThread, repliesOf, Reviewed, STATUS_WORD, treeOrder, type DiffFile, type TreeDir } from './pulldiff';
 
 // The window behind a card on the PR board. A PR opens on its conversation (description, comments,
@@ -113,9 +112,6 @@ export function openPull(first: GhPull, net: Net, actions: BoardActions) {
       w ? h('button.btn', { type: 'button', onclick: () => actions.goToDesk(w.deskId) }, `🪑 Go to ${w.name}'s desk`) : null,
       h('button.btn', { type: 'button', title: 'Send a worker your own prompt about this PR', onclick: () => actions.ask(pullContext(it), `Ask about PR #${it.number}`) }, '✍️ Ask a worker…'),
       isOpen ? h('button.btn', { type: 'button', onclick: () => actions.assign(reviewPrompt(it), `Review PR #${it.number}`) }, '🔍 Review') : null,
-      isOpen
-        ? h('button.btn', { type: 'button', title: 'A few workers review it in the meeting room, each through its own lens, and the office posts one combined review', onclick: () => actions.meeting({ pattern: 'review', pr: it.number, title: `Review of PR #${it.number}`, prompt: officePrompt('pull.panel', pullVars(it)) }) }, '🤝 Review panel…')
-        : null,
       conflicts
         ? h('button.btn.primary', { type: 'button', title: 'A new worker merges the base in, resolves the conflicts, gets the checks green, then merges', onclick: handToWorker }, '✨ Fix conflicts & merge')
         : isOpen

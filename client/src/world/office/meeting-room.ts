@@ -1,5 +1,5 @@
 import * as THREE from 'three';
-import { MEETING_BOARD, MEETING_LAPTOP, MEETING_ROOM, MEETING_SEATS, MEETING_TABLE, deskSeat, type DeskDef } from '@orca-office/shared/office/layout';
+import { MEETING_BOARD, MEETING_LAPTOP, MEETING_ROOM, MEETING_SEATS, MEETING_TABLE, type DeskDef } from '@orca-office/shared/office/layout';
 import type { NightParts } from '../outside';
 import { mesh, roundedBox, textPlane, toon } from '../toon';
 import type { Collider, DeskView, Interactable } from '../types';
@@ -128,17 +128,11 @@ export function buildMeetingRoom(group: THREE.Group, colliders: Collider[], inte
   table.position.set(top.x, 0, top.z);
   group.add(table);
   colliders.push({ minX: top.x - top.width / 2, maxX: top.x + top.width / 2, minZ: top.z - top.depth / 2, maxZ: top.z + top.depth / 2, top: top.height });
-  const talk: Interactable = { kind: 'meeting', x: top.x, z: top.z, radius: 2.9 };
-  interactables.push(talk);
-  table.userData.interact = talk;
+  // orca-office has no meetings (design.md #16): the table and its chairs are furniture.
   MEETING_SEATS.forEach((def, i) => {
     const view = buildMeetingSeat(def, i);
     group.add(view.group);
     desks.set(def.id, view);
-    const at = deskSeat(def, 1.2);
-    const it: Interactable = { kind: 'desk', deskId: def.id, x: at.x, z: at.z, radius: 1 };
-    interactables.push(it);
-    view.group.userData.interact = it;
   });
 
   // The board on the back wall: the meeting's output file as it's being written.
@@ -147,9 +141,6 @@ export function buildMeetingRoom(group: THREE.Group, colliders: Collider[], inte
   frame.position.set(b.x, b.y, b.z);
   frame.rotation.y = Math.PI;
   group.add(frame);
-  const read: Interactable = { kind: 'meeting', x: b.x, z: b.z - 1.4, radius: 2.4 };
-  interactables.push(read);
-  frame.userData.interact = read;
 
   // The panel on the glass beside the door, like a room-booking screen: what's on, the round, the
   // tokens, and the summary once it's over. Beside the door rather than past it, so the board shows.
@@ -161,10 +152,6 @@ export function buildMeetingRoom(group: THREE.Group, colliders: Collider[], inte
   group.add(sign);
   const plate = mesh(roundedBox(0.66, 1.03, 0.03, 0.03), toon(PALETTE.ink), sign.position.x, sign.position.y, R.minZ + T / 2 + 0.05, false);
   group.add(plate);
-  const door: Interactable = { kind: 'meeting', x: sign.position.x, z: R.minZ - 1.2, radius: 1.8 };
-  interactables.push(door);
-  sign.userData.interact = door;
-  plate.userData.interact = door;
 
   // Flat lights set in the loft's floor over the table: a hanging lamp would be in front of the board.
   for (const dx of [-0.95, 0.95]) {

@@ -100,9 +100,6 @@ export function buildCouncil(kit: Kit, plan: MapPlan): { board?: THREE.Mesh; sig
   // A square inside the round top, so its corners don't stick out past the edge.
   const r = COUNCIL.radius * Math.SQRT1_2;
   kit.colliders.push({ minX: cp.x - r, maxX: cp.x + r, minZ: cp.z - r, maxZ: cp.z + r, top: COUNCIL.height });
-  const meeting: Interactable = { kind: 'meeting', x: cp.x, z: cp.z, radius: 2.5 };
-  t.userData.interact = meeting;
-  kit.interactables.push(meeting);
   for (const def of plan.meeting) kit.desks.set(def.id, councilChair(kit, def));
   // An easel behind the table, away from its head, with the meeting's board and how it's going.
   const easel = new THREE.Group();
@@ -126,7 +123,6 @@ export function buildCouncil(kit: Kit, plan: MapPlan): { board?: THREE.Mesh; sig
   title.scale.multiplyScalar(0.62);
   title.position.set(0, 2.98, 0.06);
   easel.add(title);
-  easel.userData.interact = meeting;
   kit.group.add(easel);
   const [minX, maxX, minZ, maxZ] = boxFootprint(easel.position.x, easel.position.z, 2.6, 0.5, cp.rotY);
   kit.colliders.push({ minX, maxX, minZ, maxZ, top: 99 });

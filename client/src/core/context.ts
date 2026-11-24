@@ -5,7 +5,7 @@
  */
 import type * as THREE from 'three';
 import type { MapPlan } from '@orca-office/shared/office/maps/index';
-import type { CarriedIssue, GhIssue, ServerMsg } from '@orca-office/shared/office/protocol';
+import type { GhIssue, ServerMsg } from '@orca-office/shared/office/protocol';
 import type { Grip } from '../features/climbing/controller';
 import type { DeskKey } from '../interaction';
 import type { Net } from '../net';
@@ -101,8 +101,6 @@ export interface Ctx {
   /** The trip to another floor under way, if any. */
   trip(): Trip | null;
 
-  /** The issue card in your hands, if any. */
-  carrying(): CarriedIssue | null;
   /** Whether the basketball's in your hands. */
   holdingBall(): boolean;
 

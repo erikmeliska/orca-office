@@ -20,7 +20,6 @@ import { jail } from './jail';
 import { leaveOnMerge } from './leave-on-merge';
 import { machine } from './machine';
 import { map } from './map';
-import { meeting } from './meeting';
 import { notify } from './notify';
 import { prompts } from './prompts';
 import { services } from './services';
@@ -45,7 +44,6 @@ export const SLICES: readonly Slice[] = [
   leaveOnMerge,
   map,
   floor,
-  meeting,
   decor,
   floorPlan,
   services,

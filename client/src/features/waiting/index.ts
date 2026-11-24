@@ -1,7 +1,7 @@
 /**
  * Who's waiting on you: N (and the count in the Workers panel) takes you to each in turn, and the
  * compass points to the ones you can't see. Also going to a worker's desk, opening its terminal
- * (waking it if it's asleep) and its changes, the search over every terminal, and the task queue's window.
+ * (waking it if it's asleep) and its changes and the search over every terminal.
  */
 import * as THREE from 'three';
 import { isAsleep } from '@orca-office/shared/office/status';
@@ -14,7 +14,6 @@ import { store } from '../../state';
 import { openChanges } from '../../ui/changes';
 import { Compass, type Bearing } from '../../ui/compass';
 import { $, closeAllModals, h, modalOpen, toast } from '../../ui/dom';
-import { openQueue } from '../../ui/queue';
 import { openSearch } from '../../ui/search';
 import { openTerminal, type TerminalFind } from '../../ui/terminal';
 
@@ -140,9 +139,5 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     openChanges(net, id, () => openWorkerTerminal(id), repo);
   }
 
-  function showQueue() {
-    openQueue(net, { openTerminal: openWorkerTerminal });
-  }
-
-  return { goToNextWaiting, goToWorker, answerWorker, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch, showQueue };
+  return { goToNextWaiting, goToWorker, answerWorker, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch };
 }

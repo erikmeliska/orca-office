@@ -8,7 +8,7 @@ import type { CoreState } from './ctx';
 import { key } from './hint';
 import type { Parts } from './parts';
 
-export function installHintBar(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'pointer' | 'focus' | 'place' | 'hoops' | 'cards'>) {
+export function installHintBar(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'pointer' | 'focus' | 'place' | 'hoops'>) {
   const { player } = ctx;
 
   function renderHint() {
@@ -17,10 +17,9 @@ export function installHintBar(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'po
     const doing = modalOpen() ? undefined : ctx.activities.current((a) => !!a.hint);
     if (doing) return doing.hint!(el);
     const target = parts.pointer.target();
-    const carrying = core.carrying;
     const { hoops } = parts;
     const withBall = hoops.holding();
-    if ((!target && !carrying && !withBall) || modalOpen()) {
+    if ((!target && !withBall) || modalOpen()) {
       // Still up after a redraw was asked for (hintKey cleared) just as you walked away from it, too.
       if (core.hintKey || !el.classList.contains('hidden')) {
         el.classList.add('hidden');
@@ -28,14 +27,14 @@ export function installHintBar(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'po
       }
       return;
     }
-    const hint = withBall ? hoops.ballHint() : carrying ? parts.cards.carryHint(carrying, target) : ctx.interactions.hint(target!);
+    const hint = withBall ? hoops.ballHint() : ctx.interactions.hint(target!);
     // On the throne, whoever's in line: the herald's a key away, and how to get up.
-    const throne = parts.place.onThrone() && !carrying && !withBall;
+    const throne = parts.place.onThrone() && !withBall;
     if (throne) {
       if (ctx.world().herald && target?.kind !== 'herald') hint.parts.push(key('K', ctx.plan().herald!.name));
       if (target?.kind !== 'seat') hint.parts.push(key('W A S D', 'Get up'));
     }
-    const k = `${withBall ? 'ball!' : `${target?.kind}${target?.deskId ?? ''}`}|${carrying?.issue ?? ''}|${throne}|${hint.k}`;
+    const k = `${withBall ? 'ball!' : `${target?.kind}${target?.deskId ?? ''}`}|${throne}|${hint.k}`;
     if (k === core.hintKey) return;
     core.hintKey = k;
     el.replaceChildren(...hint.parts);

@@ -82,7 +82,7 @@ export const building: Slice = {
   },
 };
 
-/** The floor you're on: its project, its workers and their screens, its issues, pull requests and queue. */
+/** The floor you're on: its project, its workers and their screens, its issues and pull requests. */
 export const floor: Slice = {
   enter(s, v) {
     s.floor = v.floor;
@@ -92,8 +92,7 @@ export const floor: Slice = {
     s.screens.clear(); // fresh full frames follow
     s.issues = v.issues;
     s.pulls = v.pulls;
-    s.queue = v.queue;
-    return ['floor', 'project', 'workers', 'issues', 'pulls', 'queue'];
+    return ['floor', 'project', 'workers', 'issues', 'pulls'];
   },
   on: {
     'worker.update'(s, m) {
@@ -123,10 +122,6 @@ export const floor: Slice = {
     'gh.pulls'(s, m) {
       s.pulls = m.state;
       return ['pulls'];
-    },
-    queue(s, m) {
-      s.queue = m.state;
-      return ['queue'];
     },
   },
 };

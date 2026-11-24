@@ -12,7 +12,6 @@ import { STATION_INFO } from '../../core/stations';
 import { isTyping } from '../../player';
 import { store } from '../../state';
 import { openAccounts } from '../../ui/accounts';
-import { openBoard } from '../../ui/boards';
 import { STATUS_LABEL, toast } from '../../ui/dom';
 import { paletteOpen, togglePalette, type PaletteEntry } from '../../ui/palette';
 import { openIssue, openPull } from '../../ui/pull';
@@ -21,13 +20,12 @@ import { openTeam } from '../../ui/team';
 import { IS_MAC } from '../../ui/termkeys';
 import type { InteractKind, Interactable } from '../../world/types';
 
-export type PaletteParts = Pick<Parts, 'walking' | 'waiting' | 'actions' | 'hud' | 'hanging' | 'meeting' | 'telescope'>;
+export type PaletteParts = Pick<Parts, 'walking' | 'waiting' | 'actions' | 'hud' | 'hanging' | 'telescope'>;
 
 /** Listens for Ctrl+K (⌘K) on the window. */
 export function installPalette(ctx: Ctx, parts: PaletteParts) {
   const { office, player, net } = ctx;
   const walkThen = (...a: Parameters<Parts['walking']['walkThen']>) => parts.walking.walkThen(...a);
-  const showQueue = () => parts.waiting.showQueue();
   const showSearch = () => parts.waiting.showSearch();
 
   /** Where you stand to use something of this kind on this floor, like the Issues board. */
@@ -64,7 +62,7 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
 
   /** Everything the palette finds, in the order it lists them before you type. */
   function paletteEntries(): PaletteEntry[] {
-    const { waiting, actions, meeting, hanging } = parts;
+    const { waiting, actions, hanging } = parts;
     const out: PaletteEntry[] = [];
     for (const w of store.workers.values()) {
       const desk = DESK_BY_ID.get(w.deskId);
@@ -92,17 +90,13 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
       open: free ? hireAt(free) : () => toast('Every desk on this floor is taken', 'warn'),
       walk: free ? () => walkThen(deskSpot(free)!, free.label, hireAt(free), free) : undefined,
     });
-    out.push(at('queue', 'the task queue', { icon: '📋', kind: 'Action', title: 'Open the task queue', detail: 'Issues and tasks waiting for a worker', keywords: ['backlog', 'tasks'], open: showQueue }));
     out.push({ icon: '⚙️', kind: 'Action', title: 'Settings', keywords: ['preferences', 'options'], open: () => parts.hud.showSettings() });
     if (store.invites) out.push({ icon: '👥', kind: 'Action', title: 'Invite teammates', keywords: ['team', 'add people'], open: () => openTeam(net) });
     else if (store.me.admin) out.push({ icon: '👥', kind: 'Action', title: 'Invite people', detail: 'Accounts', keywords: ['invite teammates', 'accounts', 'team'], open: () => openAccounts(net) });
     out.push({ icon: '🖼️', kind: 'Action', title: 'Hang a picture', detail: 'On a wall of this floor', keywords: ['decorate', 'frame', 'art'], open: hanging.startHanging });
     out.push({ icon: '🔎', kind: 'Action', title: 'Search the chat and every terminal', keywords: ['find'], open: showSearch });
 
-    out.push(at('issues', 'the Issues board', { icon: '📌', kind: 'Board', title: 'Issues board', open: () => openBoard('issues', net, actions.boardActions()) }));
-    out.push(at('pulls', 'the PR board', { icon: '🔀', kind: 'Board', title: 'PR board', keywords: ['pull requests'], open: () => openBoard('pulls', net, actions.boardActions()) }));
     out.push(at('services', 'the Services board', { icon: '🌐', kind: 'Board', title: 'Services board', detail: 'Web servers the workers are running', open: () => openServices() }));
-    out.push(at('meeting', 'the meeting room', { icon: '🤝', kind: 'Board', title: 'Meeting room', keywords: ['call a meeting'], open: () => meeting.showMeeting() }));
 
     for (const pr of store.pulls.items) {
       out.push(

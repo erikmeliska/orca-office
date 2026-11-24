@@ -15,7 +15,7 @@ import { store } from '../state';
 import { modalOpen, toast } from '../ui/dom';
 import type { Interactable } from '../world/types';
 
-export type PointerParts = Pick<Parts, 'worlds' | 'rooftop' | 'place' | 'you' | 'boards' | 'cards' | 'seating' | 'hoops' | 'emotes' | 'hanging' | 'telescope' | 'hintbar'>;
+export type PointerParts = Pick<Parts, 'worlds' | 'rooftop' | 'place' | 'you' | 'boards' | 'seating' | 'hoops' | 'emotes' | 'hanging' | 'telescope' | 'hintbar'>;
 
 /** Listens for the mouse over the canvas, registers the aim tick ('aim'), and takes the player's clicks. */
 export function installPointer(ctx: Ctx, core: CoreState, parts: PointerParts) {
@@ -62,8 +62,6 @@ export function installPointer(ctx: Ctx, core: CoreState, parts: PointerParts) {
   function interact(target: Interactable | null, key: DeskKey, note = aimedNote) {
     if (!target) return;
     if (target.kind !== 'issues') note = null;
-    const carrying = core.carrying;
-    if (key === 'E' && carrying && parts.cards.dropCard(target, carrying, note)) return;
     // What each kind of thing does is defined with it (see ctx.interactions).
     ctx.interactions.use(target, key, note);
   }
@@ -72,7 +70,7 @@ export function installPointer(ctx: Ctx, core: CoreState, parts: PointerParts) {
   function use(it: Interactable | null, key: DeskKey, note = aimedNote): boolean {
     const worker = it?.deskId ? store.workerAtDesk(it.deskId) : undefined;
     const room = !!(it?.deskId && plan().byId.get(it.deskId)?.room);
-    if (!interactionAvailable(it, key, { worker, room, note, carrying: !!core.carrying })) return false;
+    if (!interactionAvailable(it, key, { worker, room, note })) return false;
     reach();
     interact(it, key, note);
     return true;

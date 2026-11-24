@@ -2,13 +2,13 @@
 // topics it fires as that changes (store.on / store.emit).
 //
 // The fields declared here are the core: who you are, the people, the building's floors, and the floor
-// you're on with its workers, their screens, its issues, pull requests and queue (./core.ts keeps them
+// you're on with its workers, their screens, its issues and pull requests (./core.ts keeps them
 // up to date). Everything else is a slice (./slices): a module that adds its own fields and topics to
 // Store and Topics by module augmentation, sets where they start, and says what it takes in from each
 // server message and from each floor you arrive on. The store runs the slices in the one order they're
 // registered in (./slices/index.ts), and that order is the order their topics fire in.
 
-import type { ChatLine, FloorInfo, FloorView, GhIssue, GhPull, GhState, Me, PeerInfo, ProjectInfo, ProjectsDirState, QueueState, QueueTask, RepoChoice, Run, ServerMsg, WorkerInfo } from '@orca-office/shared/office/protocol';
+import type { ChatLine, FloorInfo, FloorView, GhIssue, GhPull, GhState, Me, PeerInfo, ProjectInfo, ProjectsDirState, RepoChoice, Run, ServerMsg, WorkerInfo } from '@orca-office/shared/office/protocol';
 import { randomLook } from '@orca-office/shared/office/avatar';
 import { AVATAR_COLORS, type Profile } from './persist';
 
@@ -38,7 +38,6 @@ export interface Topics {
   screens: true;
   issues: true;
   pulls: true;
-  queue: true;
 }
 
 export type Topic = keyof Topics;
@@ -108,7 +107,6 @@ export class Store {
   chat: ChatLine[] = [];
   /** Whether this office can invite teammates (deployed with deploy/aws.sh). */
   invites = false;
-  queue: QueueState = { tasks: [], maxWorkers: 0 };
   /** Who you're signed in as (see /api/whoami). */
   me: Me = { admin: false };
   private subs = new Map<Topic, Set<() => void>>();
@@ -157,12 +155,6 @@ export class Store {
   workerAtDesk(deskId: string): WorkerInfo | undefined {
     for (const w of this.workers.values()) if (w.deskId === deskId) return w;
     return undefined;
-  }
-
-  /** The queue task for an issue: the one on the queue if there is one, else the latest finished one. */
-  taskForIssue(issue: number): QueueTask | undefined {
-    const tasks = this.queue.tasks.filter((t) => t.issue === issue);
-    return tasks.find((t) => t.status !== 'done') ?? tasks[tasks.length - 1];
   }
 
   /**

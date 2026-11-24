@@ -3,7 +3,7 @@ import { EMOTE_BY_ID, type Emote, type EmoteId } from '@orca-office/shared/offic
 import type { CarriedIssue, Theme } from '@orca-office/shared/office/protocol';
 import type { Drink } from '@orca-office/shared/office/rooftop';
 import { OpenBook } from '../features/bookshelf/book';
-import { HeldCard } from '../features/carrying/card';
+import { HeldCard } from './held-card';
 import { REACH_TIME, SMOKE_CYCLE, cigarette, coffeeMug, dragCurve, drinkGlass, emoteEnvelope, putDownGlass, reachCurve } from './character';
 import { UNDEAD_SKIN, raggedCuff, warlockHand, witchFire } from './costumes';
 import { mesh, toon, toonUnique } from './toon';

@@ -78,7 +78,6 @@ export function installPeers(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'puff
       r.person.setSmoking(!!peer.smoking);
       r.person.setThrowing(peer.throwing ?? null);
       r.person.holdDrink(peer.drink ? (DRINK_BY_ID.get(peer.drink) ?? null) : null);
-      r.person.carry(peer.carrying);
       r.person.read(!!peer.reading);
       r.person.sit(peer.seat ? (seatOn(plan(), peer.seat)?.hips ?? null) : null);
       r.person.setDoing(whereabouts(peer, plan()));

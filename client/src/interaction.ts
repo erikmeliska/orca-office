@@ -10,21 +10,15 @@ export interface InteractionState {
   worker?: WorkerInfo;
   room: boolean;
   note: GhIssue | null;
-  carrying: boolean;
 }
 
 /** Whether a desk key has an action at the interaction currently in reach. */
 export function interactionAvailable(it: Interactable | null, key: DeskKey, state: InteractionState): boolean {
   if (!it) return false;
 
-  // A carried issue can be handed to any desk, queued, returned/swapped, or taken into a meeting.
-  if (key === 'E' && state.carrying && (it.kind === 'desk' || it.kind === 'queue' || it.kind === 'issues' || it.kind === 'meeting')) {
-    return it.kind !== 'desk' || !!it.deskId;
-  }
-
   if (it.kind === 'desk') {
     if (!it.deskId) return false;
-    // Any desk can have a sign hung over it, whoever sits there (not a bean bag or a meeting chair).
+    // Any desk can have a sign hung over it, whoever sits there (not a bean bag).
     if (key === 'L') return canLabel(it.deskId);
     if (!state.worker && state.room) return key === 'E';
     if (key === 'B') return !state.worker;

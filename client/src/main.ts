@@ -11,7 +11,6 @@ import { openCharacter } from './ui/character';
 import { elevatorPanelOpen } from './ui/elevator';
 import { onModelsProgress, preloadModels } from './world/models';
 import { loadingScreen } from './ui/loading';
-import { offerLite, touchOnly } from './ui/litesuggest';
 import { createCtx } from './core/ctx';
 import type { Parts } from './core/parts';
 import { createScene, fitWindow, installSky, makeRenderer, noWebGL } from './core/scene';
@@ -33,7 +32,6 @@ import { installBasketball } from './features/basketball';
 import { installBoards } from './features/boards';
 import { installBookshelf } from './features/bookshelf';
 import { installCabinet } from './features/cabinet';
-import { installCarrying } from './features/carrying';
 import { installChat } from './features/chat';
 import { installClimbing } from './features/climbing';
 import { installCoffee } from './features/coffee';
@@ -43,7 +41,6 @@ import { installGong } from './features/gong';
 import { installGallery, installHanging } from './features/hanging';
 import { installHerald } from './features/herald';
 import { installHud } from './features/hud';
-import { installMeeting } from './features/meeting';
 import { installNeedsYou } from './features/needsyou';
 import { installPalette } from './features/palette';
 import { installPeers } from './features/peers';
@@ -60,13 +57,6 @@ import { installWorkerViews } from './features/workers/views';
 
 // The loading screen stays up until there's an office to see (see boot and whoami at the end).
 const loading = loadingScreen(onModelsProgress);
-// Came here from the 2D view's 🏢 3D button: it isn't offered straight back.
-const chose3d = new URLSearchParams(location.search).has('3d');
-if (chose3d) history.replaceState(null, '', location.pathname);
-/** Offers the 2D view (/lite) where the 3D is hard going. */
-const offer2d = (why: 'touch' | 'slow') => chose3d || offerLite(why);
-// A phone can't walk around the office: the 2D view is made for it.
-if (touchOnly()) offer2d('touch');
 // The models made in Blender, loaded before the world they're in is built (see world/models.ts).
 await preloadModels();
 
@@ -78,7 +68,7 @@ await preloadModels();
 const parts = {} as Parts;
 const { ctx, core } = createCtx(parts);
 // The office's own parts of each frame, before anything else's.
-installLoop(ctx, core, parts, { offer2d });
+installLoop(ctx, core, parts);
 
 // ---- Renderer & scene ---------------------------------------------------------------------------
 const canvas = $('scene') as HTMLCanvasElement;
@@ -87,7 +77,7 @@ parts.worlds = createWorlds(ctx);
 installSky(ctx);
 
 // ---- The install list ---------------------------------------------------------------------------
-parts.boards = installBoards(ctx, { aimedNote: () => parts.pointer.aimedNote(), pickUp: (it) => parts.cards.pickUp(it), boardActions: () => parts.actions.boardActions(), showQueue: () => parts.waiting.showQueue() });
+parts.boards = installBoards(ctx);
 parts.gallery = installGallery(ctx);
 // Onto whatever you're walking on: the office's floor and furniture, or the roof's.
 parts.confetti = new Confetti((x, z, y) => groundAt(ctx.player.colliders, x, z, y, false));
@@ -134,7 +124,6 @@ parts.actions = installWorkerActions(ctx, core, parts);
 parts.waiting = installWaiting(ctx, core, parts);
 parts.needsYou = installNeedsYou(ctx, parts);
 installPalette(ctx, parts);
-parts.meeting = installMeeting(ctx, parts);
 parts.bookshelf = installBookshelf(ctx);
 installHerald(ctx, parts);
 
@@ -143,18 +132,6 @@ parts.coffee = installCoffee(ctx);
 parts.smoking = installSmoke(ctx);
 installLamplight(ctx, parts);
 parts.hoops = installBasketball(ctx, { remotes: parts.peers.remotes, reach });
-parts.cards = installCarrying(ctx, {
-  hold: (card) => void (core.carrying = card),
-  boards: parts.boards,
-  aimedNote: () => parts.pointer.aimedNote(),
-  reach,
-  dropBall: parts.hoops.dropBall,
-  hire: parts.actions.hire,
-  heraldSeat: parts.views.heraldSeat,
-  heraldHires: parts.views.heraldHires,
-  officeIsFull: parts.actions.officeIsFull,
-  showMeeting: parts.meeting.showMeeting,
-});
 parts.seating = installSeating(ctx, { arcade: parts.arcade, showBar: parts.bar.showBar, usable: () => parts.pointer.usable() });
 installGong(ctx, { burstOver: parts.views.burstOver, workerViews: parts.views.workerViews, court: () => parts.worlds.court(), idleAgents: () => parts.worlds.idleAgents() });
 
@@ -224,6 +201,6 @@ void whoami().then(() => {
 
 // Debug handle for quick checks from the console / headless screenshots.
 const { worlds, views, rooftop, bar, coffee, bargames, hanging, climbing, emotes, hoops } = parts;
-(window as unknown as Record<string, unknown>).__office = { world: () => worlds.world(), court: () => worlds.court(), sendoffs: views.sendoffs, jail: views.jail, adrift: views.adrift, plan: worlds.plan, applyMap: parts.maps.applyMap, roof: rooftop.roof, booze: bar.booze, dj: () => djFrame(rooftop.djAt()), store, player: parts.player, caffeine: coffee.caffeine, camera: ctx.camera, arcade: parts.arcade, cabinet: parts.cabinet, workerViews: views.workerViews, departures: views.departures, arrivals: views.arrivals, scene: ctx.scene, net: parts.net, renderer: ctx.renderer, hands: parts.hands, me: parts.me, remotes: parts.peers.remotes, settings: parts.settings, gallery: parts.gallery, hanger: hanging.hanger, office: ctx.office, ride: parts.travel.ride, switchFloor: parts.travel.switchFloor, climber: climbing.climber, thrower: bargames.thrower, elevatorPanelOpen, confetti: parts.confetti, dog: parts.dog, sky: ctx.sky, holiday: parts.stage.holiday, carried: () => core.carrying, emoteWheel: emotes.emoteWheel, emote: emotes.emote, ball: hoops.ball };
+(window as unknown as Record<string, unknown>).__office = { world: () => worlds.world(), court: () => worlds.court(), sendoffs: views.sendoffs, jail: views.jail, adrift: views.adrift, plan: worlds.plan, applyMap: parts.maps.applyMap, roof: rooftop.roof, booze: bar.booze, dj: () => djFrame(rooftop.djAt()), store, player: parts.player, caffeine: coffee.caffeine, camera: ctx.camera, arcade: parts.arcade, cabinet: parts.cabinet, workerViews: views.workerViews, departures: views.departures, arrivals: views.arrivals, scene: ctx.scene, net: parts.net, renderer: ctx.renderer, hands: parts.hands, me: parts.me, remotes: parts.peers.remotes, settings: parts.settings, gallery: parts.gallery, hanger: hanging.hanger, office: ctx.office, ride: parts.travel.ride, switchFloor: parts.travel.switchFloor, climber: climbing.climber, thrower: bargames.thrower, elevatorPanelOpen, confetti: parts.confetti, dog: parts.dog, sky: ctx.sky, holiday: parts.stage.holiday, emoteWheel: emotes.emoteWheel, emote: emotes.emote, ball: hoops.ball };
 (window as unknown as Record<string, unknown>).__sound = parts.sound;
 (window as unknown as Record<string, unknown>).__notify = parts.notifier;

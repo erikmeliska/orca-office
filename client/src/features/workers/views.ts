@@ -7,8 +7,7 @@
 import * as THREE from 'three';
 import { FLOOR, WING, beanbagsOut, deskBuilt, vacantSeats, wingMinZ, wingRowZ } from '@orca-office/shared/office/layout';
 import { OFFICE_PLAN } from '@orca-office/shared/office/maps/index';
-import { MEETING_PATTERNS } from '@orca-office/shared/office/meetings';
-import type { WorkerInfo, WorkerTask } from '@orca-office/shared/office/protocol';
+import type { WorkerInfo } from '@orca-office/shared/office/protocol';
 import { workerPr } from '@orca-office/shared/office/status';
 import type { Ctx } from '../../core/context';
 import type { CoreState } from '../../core/ctx';
@@ -161,10 +160,10 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
         noOutline(v.model.root);
       }
       v.model.setAction(w.action);
-      v.model.setPr(workerPr(w, store.pulls.items, store.queue.tasks));
+      v.model.setPr(workerPr(w, store.pulls.items));
       v.model.setLost(!!w.lost);
       const engineBadge = w.kind === 'agent' ? modelBadge(w.provider, w.model, w.effort, w.usage?.model) : undefined;
-      v.model.setTask(meetingCard(w) ?? (w.task && w.kind === 'agent' ? { ...w.task, name: `${providerLabel(w.provider, store.project)}${engineBadge ? ` · ${engineBadge}` : ''} · ${w.task.name}` } : w.task));
+      v.model.setTask((w.task && w.kind === 'agent' ? { ...w.task, name: `${providerLabel(w.provider, store.project)}${engineBadge ? ` · ${engineBadge}` : ''} · ${w.task.name}` } : w.task));
       const deskDef = plan().byId.get(w.deskId);
       // Keys clack while it types, not while it reads, watches its tests or browses.
       if (deskDef) sound.setTyping(w.id, deskDef.x, deskDef.z, w.status === 'working' && (!w.action || w.action === 'edit'));
@@ -200,10 +199,10 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     renderTitle();
   }
 
-  /** A worker that sits at the tables (not a board agent or at the meeting table): it gets up and lines up for the throne. */
+  /** A worker that sits at the tables (not a board agent): it gets up and lines up for the throne. */
   function inCourt(w: WorkerInfo): boolean {
     const d = plan().byId.get(w.deskId);
-    return w.kind === 'agent' && !!d && !d.station && !d.room && !w.meeting;
+    return w.kind === 'agent' && !!d && !d.station && !d.room;
   }
 
   /**
@@ -251,23 +250,6 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
   function yours(w: WorkerInfo): boolean {
     const name = store.peers.get(store.you)?.name ?? store.profile.name;
     return w.createdBy === name || w.createdBy === `${name} (queue)` || w.lastInput?.by === name;
-  }
-
-  /**
-   * The card over a worker at the meeting table: its role, the round, and whether it has the floor
-   * (working on its part) or is listening while the others work on theirs.
-   */
-  function meetingCard(w: WorkerInfo): WorkerTask | undefined {
-    const m = store.meeting.current;
-    if (!w.meeting || !m || m.id !== w.meeting) return undefined;
-    const i = m.seats.findIndex((s) => s.workerId === w.id);
-    if (i < 0) return undefined;
-    const role = m.seats[i].role;
-    const p = MEETING_PATTERNS[m.pattern];
-    if (m.status !== 'running') return { name: `${role} · ${p.icon} ${p.label}`, summary: m.status === 'done' ? `✅ The meeting wrote ${m.output}` : `⛔ Stopped: ${m.reason ?? 'stopped'}` };
-    const t = m.turns.find((x) => x.seat === i);
-    if (!t || t.state === 'done') return { name: `👂 ${role} · round ${m.round} of ${m.rounds}`, summary: t ? 'Part written: listening' : 'Listening' };
-    return { name: `💬 ${role} · round ${m.round} of ${m.rounds}`, summary: t.state === 'working' ? t.doing : `${t.doing} (up next)` };
   }
 
   /**
@@ -358,17 +340,14 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     },
     use: onE(() => openExpand(net)),
   });
-  // A worker at the meeting table shows its role and round over its head (see meetingCard).
-  store.on('meeting', syncWorkers);
   // A worker's bubble shows whether it has a pull request open (green) or merged (purple: send it home).
   const paintPrs = () => {
     for (const [id, v] of workerViews) {
       const w = store.workers.get(id);
-      if (w) v.model.setPr(workerPr(w, store.pulls.items, store.queue.tasks));
+      if (w) v.model.setPr(workerPr(w, store.pulls.items));
     }
   };
   store.on('pulls', paintPrs);
-  store.on('queue', paintPrs);
   store.on('workers', renderUsage);
 
   /**
