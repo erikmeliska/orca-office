@@ -1,0 +1,31 @@
+{
+  "manifestVersion": 2,
+  "execution": "trusted-worker",
+  "id": "office-feed",
+  "name": "orca-office feed",
+  "version": "0.0.1",
+  "description": "Feeds workspaces, agent status and tool hooks to the local orca-office bridge on 127.0.0.1.",
+  "license": "MIT",
+  "repository": "https://github.com/erikmeliska/orca-office",
+  "engines": { "orca": ">=1.4.259" },
+  "main": "src/worker.ts",
+  "capabilities": [
+    { "kind": "workspace:read" },
+    { "kind": "agent:read" },
+    { "kind": "terminal:read" },
+    { "kind": "terminal:send" }
+  ],
+  "contributes": {
+    "events": [
+      { "on": "agent.status.changed" },
+      { "on": "workspace.created" },
+      { "on": "workspace.removed" },
+      { "on": "workspace.changed" }
+    ],
+    "hooks": [{ "event": "agent.tool.after" }],
+    "commands": [{ "id": "office.reconnect", "title": "orca-office: Reconnect to bridge" }],
+    "statusBarItems": [
+      { "id": "office", "text": "Office", "icon": "blocks", "tone": "neutral", "tooltip": "orca-office bridge", "command": "office.reconnect" }
+    ]
+  }
+}
