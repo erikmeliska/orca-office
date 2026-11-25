@@ -17,6 +17,8 @@ import { toggleFloorMenu } from '../../ui/floormenu';
 import { firstRunHint, openHelp } from '../../ui/hud';
 import { mountHud } from '../../ui/menu';
 import { openServices } from '../../ui/services';
+import { isOrca } from '../../ui/orca';
+import { openReviewQueue, reviewItems } from '../../ui/review';
 import { openSettings, type SettingsPane } from '../../ui/settings';
 import { openUpgrade } from '../../ui/upgrade';
 import { describeSky } from '../../world/sky';
@@ -83,6 +85,18 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
         tone: () => (needsNow() ? 'danger' : undefined),
         title: () => 'Go to the next one waiting for you, on any floor: the ones that need you first, longest first (N)',
         run: waiting.goToNextWaiting,
+      },
+      // The review queue (M7 B4): on the top bar while someone done waits on a review here.
+      {
+        id: 'review',
+        icon: '👀',
+        label: 'Review queue',
+        section: 'Open',
+        shown: () => isOrca(),
+        status: () => reviewItems().length > 0,
+        chip: () => `${reviewItems().length} to review`,
+        title: () => 'Done agents on this floor whose pull request waits on a review: checks, size, how long',
+        run: () => openReviewQueue((id) => waiting.goToWorker(id)),
       },
       {
         id: 'command',

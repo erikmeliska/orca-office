@@ -105,7 +105,7 @@ export const WORKTREES = [
   row('demo-web', 'fix-login', { workspaceStatus: 'in-review', linkedPR: 128, linkedIssue: 97, linkedItems: [gh('pr', 128, 'Redirect to the login page when the session expires'), gh('issue', 97, 'Expired sessions land on a blank dashboard')] }),
   row('demo-web', 'dark-mode', { workspaceStatus: 'in-progress', linkedLinearIssue: 'WEB-311', linkedLinearIssueOrganizationUrlKey: 'example', linkedItems: [gh('pr', 131, 'Dark mode palette tokens')] }),
   row('demo-web', 'settings-migration', { workspaceStatus: 'in-progress', linkedWorkItem: { key: 'OPS-42', url: 'https://example.atlassian.net/browse/OPS-42', title: 'Move settings to the new table' } }),
-  row('demo-web', 'flaky-tests', { workspaceStatus: 'in-progress' }),
+  row('demo-web', 'flaky-tests', { workspaceStatus: 'in-review', linkedItems: [gh('pr', 136, 'Retry the login test on CI timeouts')] }),
   row('demo-web', 'old-spike'),
   row('demo-web', 'readme', { linkedItems: [{ provider: 'github', type: 'issue', number: 88, title: 'Install steps are out of date' }] }),
   row('demo-api', 'main'),

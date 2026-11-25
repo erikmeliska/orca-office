@@ -1,0 +1,17 @@
+/* The review queue (M7 B4). */
+.modal.review-queue { width: min(640px, calc(100vw - 32px)); max-height: calc(100vh - 64px); display: flex; flex-direction: column; }
+.review-list { list-style: none; margin: 0; padding: 0 0 4px; display: grid; gap: 10px; overflow: auto; }
+.review-item { display: grid; gap: 6px; padding: 10px 12px; border: 2px solid var(--ink); border-radius: 12px; background: #fffaf3; box-shadow: inset 6px 0 0 #adb5bd; }
+.review-item.passing { box-shadow: inset 6px 0 0 #06d6a0; }
+.review-item.failing { box-shadow: inset 6px 0 0 #ef476f; }
+.review-item.pending { box-shadow: inset 6px 0 0 #ffd166; }
+.review-head { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; padding-left: 4px; }
+.review-who { font-weight: 800; color: var(--muted); }
+.review-when { margin-left: auto; font-size: 12px; font-weight: 800; color: var(--muted); }
+.review-title { margin: 0; padding-left: 4px; font-weight: 700; }
+.review-meta { display: flex; gap: 12px; padding-left: 4px; font-size: 13px; font-weight: 800; }
+.review-ci.failing { color: #c9184a; }
+.review-size .add { color: #2b9348; }
+.review-size .del { color: #c9184a; }
+.review-acts { display: flex; gap: 8px; flex-wrap: wrap; padding-left: 4px; }
+.review-empty { padding: 12px; font-weight: 700; color: var(--muted); }

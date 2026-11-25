@@ -511,3 +511,22 @@ bridge.
 
 ![Permission, failed and done bubbles](img/m7-signals-desktop.png)
 ![Summarize and Continue in the terminal](img/m7-steer-terminal-desktop.png)
+
+## Review queue (M7, roadmap B4)
+
+A done agent whose worktree has a pull/merge request in Orca (`linkedItems`, #32) waits on a review.
+The repo board's `gh pr list` (#38) now also asks for `additions,deletions,statusCheckRollup`: still
+one call per repository, kept 3 min, so the checks cost nothing extra. Only the checks' states are
+read (`ciOf`: any failure → `failing`, anything running → `pending`, all passed or skipped →
+`passing`, none → `none`); their names, links and output are dropped. `glab mr list` gives a head
+pipeline's status where it has one. `OrcaForgeItem` carries `ci`, `additions`, `deletions`.
+
+On the floor: the top bar shows **👀 2 to review** while anyone waits, which opens the **Review queue**
+(also in ☰): longest waiting first, each with `🔀 #131`, the worktree, the title, ✅ / ❌ / ⏳ checks,
+`+318 −96` and how long it has waited; **↗ Open the PR** (https, a new tab) or **Go to its desk**. The
+figure wears its PR on its card (🔀 PR #131 OPEN, green) instead of DONE. A merged or closed one drops
+off with the board's next read. Without `gh` (or not logged in) the queue still lists what Orca links,
+with the checks unknown. Figures don't walk to a review desk: the queue is a list (see the M7 issue).
+
+![Review queue](img/m7-review-desktop.png)
+![Review queue on a phone](img/m7-review-mobile.png)

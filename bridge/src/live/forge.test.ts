@@ -1,7 +1,7 @@
 import { expect, test, vi } from 'vitest';
 import { LiveModel } from './model.js';
 import { LiveSession, wallBoards } from './session.js';
-import { boardOf, parseForgeHosts, setForgeHosts, FORGE_RETRY_MS, FORGE_TTL_MS, ForgeBoards, ForgeError, ghAdapter, glabAdapter, parseRemote, runCli, type ForgeAdapter, type ForgeTarget, type RunCli } from './forge.js';
+import { boardOf, ciOf, parseForgeHosts, setForgeHosts, FORGE_RETRY_MS, FORGE_TTL_MS, ForgeBoards, ForgeError, ghAdapter, glabAdapter, parseRemote, runCli, type ForgeAdapter, type ForgeTarget, type RunCli } from './forge.js';
 import type { OrcaWorkspace } from './orca.js';
 
 // Made-up repositories, issues and pull requests only.
@@ -36,11 +36,11 @@ test('gh is asked read-only, with -R and JSON, and its answer is cut to the boar
   const lists = await ghAdapter(run, 'gh').list({ kind: 'github', host: 'github.com', path: 'acme/widgets' });
   expect(calls).toEqual([
     ['gh', 'issue', 'list', '-R', 'github.com/acme/widgets', '--state', 'open', '--limit', '30', '--json', 'number,title,url'],
-    ['gh', 'pr', 'list', '-R', 'github.com/acme/widgets', '--state', 'open', '--limit', '30', '--json', 'number,title,url,headRefName,isDraft'],
+    ['gh', 'pr', 'list', '-R', 'github.com/acme/widgets', '--state', 'open', '--limit', '30', '--json', 'number,title,url,headRefName,isDraft,additions,deletions,statusCheckRollup'],
   ]);
   expect(lists.issues).toHaveLength(1);
   expect(lists.issues[0]!.title.length).toBeLessThanOrEqual(60);
-  expect(lists.pulls).toEqual([{ number: 9, title: 'Made-up PR', branch: 'feat/x', draft: true }]);
+  expect(lists.pulls).toEqual([{ ci: 'none', number: 9, title: 'Made-up PR', branch: 'feat/x', draft: true }]);
 });
 
 test('glab is asked with the repository url and only open items are kept', async () => {
@@ -188,4 +188,16 @@ test('a page gets its floor’s board on arriving, and the walls and queue again
   const msgs = s.forgeUpdate(m.building());
   expect(msgs.map((x) => x.t)).toEqual(['gh.pulls', 'gh.issues', 'orca.forge']);
   expect(s.update(m.building())).toEqual([]);
+});
+
+test("a pull request's checks in one word, and its size (M7 B4)", async () => {
+  expect(ciOf([])).toBe('none');
+  expect(ciOf([{ status: 'COMPLETED', conclusion: 'SUCCESS' }, { state: 'SUCCESS' }, { status: 'COMPLETED', conclusion: 'SKIPPED' }])).toBe('passing');
+  expect(ciOf([{ status: 'IN_PROGRESS', conclusion: '' }, { state: 'SUCCESS' }])).toBe('pending');
+  expect(ciOf([{ status: 'IN_PROGRESS' }, { status: 'COMPLETED', conclusion: 'FAILURE' }])).toBe('failing');
+  expect(ciOf([{ state: 'PENDING' }])).toBe('pending');
+  const run: RunCli = async (_bin, args) => (args[0] === 'pr' ? [{ number: 7, title: 'Made-up', url: 'https://github.com/acme/widgets/pull/7', headRefName: 'x', isDraft: false, additions: 120, deletions: 8, statusCheckRollup: [{ status: 'COMPLETED', conclusion: 'FAILURE', name: 'secret-name', detailsUrl: 'https://x' }] }] : []);
+  const lists = await ghAdapter(run, 'gh').list({ kind: 'github', host: 'github.com', path: 'acme/widgets' });
+  expect(lists.pulls[0]).toMatchObject({ number: 7, ci: 'failing', additions: 120, deletions: 8 });
+  expect(JSON.stringify(lists)).not.toContain('secret-name');
 });

@@ -125,7 +125,14 @@ export interface OrcaForgeItem {
   url?: string;
   draft?: boolean;
   worktree: boolean;
+  /** A pull request's checks (M7 B4): all passed, any failed, some still running, or none. */
+  ci?: OrcaCi;
+  /** Lines added and removed (M7 B4). */
+  additions?: number;
+  deletions?: number;
 }
+
+export type OrcaCi = 'passing' | 'failing' | 'pending' | 'none';
 
 /**
  * A floor's repo-wide board (v2, design #17, #38), read through the bridge's ForgeAdapter (`gh`,
