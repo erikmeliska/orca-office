@@ -27,6 +27,9 @@ import { ForgeBoards, ghAdapter, gitRemote, glabAdapter, runCli } from './live/f
 import { pageLimits } from './rate.js';
 import { lanConfig, lanHostAllowed, lanReply, lanStaticPath, lanUpgradeAllowed, lanView } from './lan.js';
 import { LAN_LIMITS } from '@orca-office/shared/office/protocol/lan';
+import { OfficeApi, loadOrCreateApiToken } from './api/server.js';
+import { PrivateTexts } from './api/private-texts.js';
+import { SnapshotClock, snapshotBody } from './api/snapshot.js';
 
 const config = loadConfig();
 // The read-only LAN view (#39): off unless ORCA_OFFICE_LAN_PORT and ORCA_OFFICE_LAN_HOST are set.
@@ -69,6 +72,8 @@ const server = createServer(async (req, res) => {
     res.writeHead(code, { 'content-type': 'application/json' });
     res.end(JSON.stringify(value));
   };
+  // The Office API (docs/api.md): for local processes with the API token, read-only.
+  if (OfficeApi.handles(req.url)) return api.handle(req, res);
   if (req.method === 'GET' && req.url === '/health') {
     return json(200, { ok: true, protocol: PROTOCOL_VERSION, stub: config.stub, plugin: link.connected, lastSnapshotAt, hello: lastPluginHello });
   }
@@ -200,15 +205,19 @@ function broadcastPlugin() {
   const orca = JSON.stringify({ t: 'orca', online: link.connected });
   for (const s of liveSessions.keys()) if (s.readyState === s.OPEN) s.send(orca);
   pushLan();
+  api.changed();
 }
 
 // ---- Live office (M2): Orca's workspaces and agents on the 3D client's protocol -------------------
 
 const model = new LiveModel();
+// The private texts the Office API gives in full (design #20): memory only, never logged.
+const texts = new PrivateTexts();
 const liveSessions = new Map<WebSocket, LiveSession>();
 let sentVersion = -1;
 let flushTimer: ReturnType<typeof setTimeout> | null = null;
-const cli = orcaCli();
+// The CLI's answers the office polls also fill the Office API's private texts (api/private-texts.ts).
+const cli = texts.tap(orcaCli());
 const poller = new CliPoller(cli, {
   agents: (host, list) => (model.applyAgents(host, list.agents, Date.now()), changed()),
   bots: (bots) => (model.applyBots(bots), changed()),
@@ -219,7 +228,7 @@ const poller = new CliPoller(cli, {
 
 // Orchestration Runs and the mailbox (#29, #30, #33, #34): project rooms on the roof and deliveries.
 const runsPoller = new RunsPoller(cli, {
-  runs: (runs, now) => (model.applyRuns(runs, now), changed()),
+  runs: (runs, now) => (texts.keepRuns(runs.map((r) => r.id)), model.applyRuns(runs, now), changed()),
   inbox: (messages, now) => (model.applyInbox(messages, now), changed()),
   error: (what) => logOnce(what),
 });
@@ -253,10 +262,11 @@ const claudeBin = findCli('claude');
 const codexBin = findCli('codex');
 const limits = new LimitsReader({
   probes: { claude: claudeBin ? claudeProbe(claudeBin) : null, codex: codexBin ? codexProbe(codexBin) : null },
-  wanted: () => liveSessions.size > 0,
+  wanted: () => liveSessions.size > 0 || api.listeners > 0,
   changed: (state) => {
     const out = JSON.stringify({ t: 'limits', state });
     for (const ws of liveSessions.keys()) if (ws.readyState === ws.OPEN) ws.send(out);
+    api.changed();
   },
   error: (what) => logOnce(what),
 });
@@ -265,9 +275,24 @@ const limits = new LimitsReader({
 const ports = new PortsPoller({
   run: cli,
   skip: new Set([config.port, config.clientPort, ...(lan ? [lan.port] : [])]),
-  wanted: () => liveSessions.size > 0,
+  wanted: () => liveSessions.size > 0 || api.listeners > 0,
   changed: (rows) => (model.applyPorts(rows), changed()),
   error: (what) => logOnce(what),
+});
+
+// ---- The Office API (docs/api.md) ----------------------------------------------------------------
+
+const apiToken = loadOrCreateApiToken();
+const apiClock = new SnapshotClock();
+const api = new OfficeApi({
+  port: config.port,
+  token: () => apiToken,
+  connected: () => link.connected,
+  snapshot: () => {
+    const now = Date.now();
+    const body = snapshotBody({ state: model.apiState(), texts, connected: link.connected, lastSnapshotAt, limits: config.stub ? null : limits.state, now });
+    return apiClock.stamp(body, now);
+  },
 });
 
 /** One line per kind of failure, not one every 5 s. */
@@ -283,6 +308,7 @@ function feedModel(msg: { type?: string; name?: unknown; payload?: unknown; [k: 
   const now = Date.now();
   if (msg.type === 'snapshot') model.applyWorkspaces(parseWorkspaces(msg));
   else if (msg.type === 'event' && msg.name === 'agent.status.changed') {
+    texts.statusEvent(msg.payload);
     const ev = parseStatusEvent(msg.payload, now);
     if (ev && model.applyStatus(ev)) poller.kick();
   } else if (msg.type === 'event' && (msg.name === 'workspace.created' || msg.name === 'workspace.removed')) {
@@ -311,6 +337,7 @@ function changed() {
 
 function flush() {
   flushTimer = null;
+  api.changed();
   if (model.version === sentVersion) return;
   sentVersion = model.version;
   const b = model.building();
