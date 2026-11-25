@@ -71,7 +71,7 @@ else if (args.startsWith('orchestration task-list')) out({ tasks: TASKS, runId: 
 else if (args.startsWith('orchestration gate-list')) out({ gates: GATES, runId: RUN.id });
 else if (args.startsWith('orchestration worker-list')) out({ workers: WORKERS, scope: { run: RUN.id, source: 'flag' } });
 else if (args.startsWith('orchestration inbox')) out({ messages: inbox() });
-else if (args.startsWith('worktree list')) out({ worktrees: [...WORKTREES, ...st.workspaces.map((w) => ({ id: `${w.projectId}::${w.path}`, repoId: w.projectId, path: w.path, hostId: 'local', displayName: w.name, linkedItems: [], childWorktreeIds: [] }))], totalCount: WORKTREES.length, truncated: false });
+else if (args.startsWith('worktree list')) out({ worktrees: [...WORKTREES, ...st.workspaces.map((w) => ({ id: `${w.projectId}::${w.path}`, repoId: w.projectId, projectId: w.projectId, isMainWorktree: false, path: w.path, hostId: 'local', displayName: w.name, linkedItems: [], childWorktreeIds: [] }))], totalCount: WORKTREES.length, truncated: false });
 else if (args.startsWith('agent read') && BOTS.some((b) => botChats(b.name).some((c) => c.id === argv[2]))) {
   out(botConversation(BOTS.flatMap((b) => botChats(b.name)).find((c) => c.id === argv[2])));
 } else if (args.startsWith('agent read')) {

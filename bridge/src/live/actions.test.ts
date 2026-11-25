@@ -9,9 +9,9 @@ import { TerminalWatch } from './terminals.js';
 
 // Made-up Orca only: fake repos, ids and text.
 
-const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo', projectId: 'proj-demo', path: `/code/demo/${id}`, branch: id, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
+const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo', projectId: `proj-${over.project ?? 'demo'}`, path: `/code/demo/${id}`, branch: id, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
 const agent = (paneKey: string, wt: string, over: Partial<CliAgent> = {}): CliAgent => ({ paneKey, sessionId: `s-${paneKey}`, kind: 'terminal', agent: 'claude', state: 'working', worktreeId: `r::/code/demo/${wt}`, workspace: wt, repo: 'demo', hostId: 'local', bubble: null, updatedAt: 1, ...over });
-const FLOOR = floorId('demo');
+const FLOOR = floorId('demo', 'p:proj-demo');
 const T = 'term_aaa';
 
 let now = 1_000;

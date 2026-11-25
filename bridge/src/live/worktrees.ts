@@ -21,6 +21,10 @@ export interface OrcaWorktree {
   /** `<repoId>::<path>`, the form the CLI and orchestration use. */
   id: string;
   repoId: string | null;
+  /** Orca's project (`repo:…`, `github:owner/name`…), the id `workspace.list` rows name as `projectId`. */
+  projectId: string | null;
+  /** The repository's own checkout, not a worktree Orca added (a floor's directory). */
+  isMain: boolean;
   path: string;
   hostId: string;
   /** Orca's name for it (the desk sign shows it already). */
@@ -133,6 +137,8 @@ export function parseWorktreeList(json: unknown): OrcaWorktree[] {
     out.push({
       id,
       repoId,
+      projectId: str(w.projectId),
+      isMain: w.isMainWorktree === true,
       path,
       hostId: str(w.hostId) ?? 'local',
       name: str(w.displayName) ?? path.split('/').pop() ?? id,

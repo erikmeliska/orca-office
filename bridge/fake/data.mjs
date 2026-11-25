@@ -67,7 +67,7 @@ export function screen(name) {
 
 // What `orca worktree list --json` links to the made-up worktrees (#32): made-up forges and numbers.
 const gh = (type, number, title) => ({ provider: 'github', type, number, url: `https://github.com/example/demo-web/${type === 'pr' ? 'pull' : 'issues'}/${number}`, title, origins: [] });
-const row = (repo, name, over = {}) => ({ id: `repo-${repo}::/code/${repo}/${name}`, repoId: `repo-${repo}`, path: `/code/${repo}/${name}`, hostId: 'local', displayName: name, branch: `refs/heads/${name}`, linkedPR: null, linkedIssue: null, linkedGitLabMR: null, linkedGitLabIssue: null, linkedLinearIssue: null, linkedLinearIssueOrganizationUrlKey: null, linkedWorkItem: null, linkedItems: [], parentWorktreeId: null, childWorktreeIds: [], lineage: null, ...over });
+const row = (repo, name, over = {}) => ({ id: `repo-${repo}::/code/${repo}/${name}`, repoId: `repo-${repo}`, projectId: `repo-${repo}`, isMainWorktree: name === 'main', path: `/code/${repo}/${name}`, hostId: 'local', displayName: name, branch: `refs/heads/${name}`, linkedPR: null, linkedIssue: null, linkedGitLabMR: null, linkedGitLabIssue: null, linkedLinearIssue: null, linkedLinearIssueOrganizationUrlKey: null, linkedWorkItem: null, linkedItems: [], parentWorktreeId: null, childWorktreeIds: [], lineage: null, ...over });
 export const WORKTREES = [
   row('demo-web', 'main'),
   row('demo-web', 'fix-login', { linkedPR: 128, linkedIssue: 97, linkedItems: [gh('pr', 128, 'Redirect to the login page when the session expires'), gh('issue', 97, 'Expired sessions land on a blank dashboard')] }),

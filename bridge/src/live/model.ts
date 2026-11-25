@@ -1,7 +1,9 @@
 /**
  * The live office (M2, #16): Orca's workspaces and agents mapped onto the building.
  *
- *   floor  = repository (the worktree's Orca project, or the repo a remote agent names)
+ *   floor  = repository: the worktree's Orca project, keyed by its id (two repos called the same are two
+ *            floors), its directory the repository's own checkout; folders, and a remote agent's repo
+ *            Orca has no project for, by name
  *   desk   = worktree: 1–4 seats side by side in one desk cluster, "+N" on its sign past 4
  *   figure = agent session (terminal or chat), on any host; a remote host is a tag on its card
  *   Staff  = a floor of its own for Orca's bots, one desk each
@@ -70,7 +72,8 @@ interface AgentRec {
   paneKey: string;
   /** The desk (worktree) it sits at: a workspace.list id, or `<host>|<worktreeId>` for a remote one. */
   deskKey: string;
-  floorName: string;
+  /** Its floor's key (floorKeyOf). */
+  floor: string;
   kind: 'chat' | 'terminal';
   agent: string | null;
   hostId: string;
@@ -97,7 +100,7 @@ interface AgentRec {
 
 interface DeskRec {
   key: string;
-  floorName: string;
+  floor: string;
   name: string;
   hostId: string;
   /** A desk shows even without agents (Orca has it open). */
@@ -213,7 +216,7 @@ export class LiveModel {
     for (const w of rows) if (w.kind === 'folder' && /[/\\]\.orca[/\\]bots[/\\]/.test(w.path)) this.botFolders.add(w.id);
     for (const a of this.agents.values()) {
       const ws = this.workspaces.get(a.deskKey);
-      if (ws) a.floorName = floorNameOf(ws);
+      if (ws) a.floor = floorKeyOf(ws);
     }
     this.version++;
   }
@@ -226,8 +229,8 @@ export class LiveModel {
       seen.add(c.paneKey);
       const desk = this.deskFor(c);
       const prev = this.agents.get(c.paneKey);
-      const rec: AgentRec = prev ?? newAgent(c.paneKey, desk.key, desk.floorName, now);
-      Object.assign(rec, { deskKey: desk.key, floorName: desk.floorName, kind: c.kind, agent: c.agent, hostId: c.hostId, bubble: c.bubble, sessionId: c.sessionId, provisional: false, lastSeen: now });
+      const rec: AgentRec = prev ?? newAgent(c.paneKey, desk.key, desk.floor, now);
+      Object.assign(rec, { deskKey: desk.key, floor: desk.floor, kind: c.kind, agent: c.agent, hostId: c.hostId, bubble: c.bubble, sessionId: c.sessionId, provisional: false, lastSeen: now });
       if (!prev) {
         rec.shown = c.state;
         rec.shownSince = c.updatedAt || now;
@@ -254,7 +257,7 @@ export class LiveModel {
     if (!rec) {
       const ws = ev.workspaceListId ? this.workspaces.get(ev.workspaceListId) : undefined;
       if (!ws || this.botFolders.has(ws.id)) return false;
-      rec = newAgent(ev.paneKey, ws.id, floorNameOf(ws), ev.at);
+      rec = newAgent(ev.paneKey, ws.id, floorKeyOf(ws), ev.at);
       Object.assign(rec, { kind: ev.terminalId ? 'terminal' : 'chat', hostId: ws.hostId ?? LOCAL, provisional: true, shown: ev.state, shownSince: ev.at, workingSince: ev.state === 'working' ? ev.at : null });
       this.agents.set(ev.paneKey, rec);
       this.version++;
@@ -320,13 +323,15 @@ export class LiveModel {
    */
   forgeTarget(floor: string): ForgeTarget | null {
     const rowsByPath = new Map(this.worktreeRows.map((r) => [r.path, r]));
-    const paths = [...this.workspaces.values()].filter((w) => w.kind === 'worktree' && (w.hostId ?? LOCAL) === LOCAL && w.path && floorId_(floorNameOf(w)) === floor).map((w) => w.path);
-    if (!paths.length) return null;
+    const mine = [...this.workspaces.values()].filter((w) => w.kind === 'worktree' && (w.hostId ?? LOCAL) === LOCAL && w.path && this.floorIdOf(w) === floor);
+    if (!mine.length) return null;
+    const paths = mine.map((w) => w.path);
     const repoId = paths.map((p) => rowsByPath.get(p)?.repoId).find((r): r is string => !!r) ?? null;
     const rows = repoId ? this.worktreeRows.filter((r) => r.repoId === repoId) : [];
+    const dir = this.mainCheckout(floorKeyOf(mine[0]!)) ?? rows[0]?.path ?? paths[0]!;
     const linked = new Set<string>();
     for (const r of rows) for (const l of r.links) if ((l.provider === 'github' || l.provider === 'gitlab') && l.kind !== 'item') linked.add(`${l.kind === 'issue' ? 'issue' : 'pr'}:${l.ref.slice(1)}`);
-    return { floor, dir: rows[0]?.path ?? paths[0]!, branches: new Set(rows.map((r) => r.branch).filter((b): b is string => !!b)), linked };
+    return { floor, dir, branches: new Set(rows.map((r) => r.branch).filter((b): b is string => !!b)), linked };
   }
 
   /** The Runs as last read: new dispatches are handoffs from the head to the worker (#34). */
@@ -448,7 +453,7 @@ export class LiveModel {
   floorProject(floorId: string): { projectId: string } | null {
     for (const w of this.workspaces.values()) {
       if (w.kind !== 'worktree' || !w.projectId || (w.hostId ?? LOCAL) !== LOCAL) continue;
-      if (floorId === floorId_(floorNameOf(w))) return { projectId: w.projectId };
+      if (floorId === this.floorIdOf(w)) return { projectId: w.projectId };
     }
     return null;
   }
@@ -504,18 +509,18 @@ export class LiveModel {
     this.workerIds.clear();
     this.deskSeats.clear();
     const floors = new Map<string, { desks: Map<string, DeskRec>; agents: Map<string, AgentRec[]> }>();
-    const floorOf = (name: string) => {
-      let f = floors.get(name);
-      if (!f) floors.set(name, (f = { desks: new Map(), agents: new Map() }));
+    const floorOf = (key: string) => {
+      let f = floors.get(key);
+      if (!f) floors.set(key, (f = { desks: new Map(), agents: new Map() }));
       return f;
     };
     for (const w of this.workspaces.values()) {
       if (w.kind === 'folder' && this.botFolders.has(w.id)) continue;
       if (w.state === 'inactive') continue;
-      floorOf(floorNameOf(w)).desks.set(w.id, deskOf(w));
+      floorOf(floorKeyOf(w)).desks.set(w.id, deskOf(w));
     }
     for (const a of this.agents.values()) {
-      const f = floorOf(a.floorName);
+      const f = floorOf(a.floor);
       if (!f.desks.has(a.deskKey)) {
         const ws = this.workspaces.get(a.deskKey);
         f.desks.set(a.deskKey, ws ? deskOf(ws) : remoteDesk(a));
@@ -523,7 +528,9 @@ export class LiveModel {
       f.agents.set(a.deskKey, [...(f.agents.get(a.deskKey) ?? []), a]);
     }
     const out: LiveFloor[] = [];
-    for (const [name, f] of [...floors].sort(([a], [b]) => a.localeCompare(b))) out.push(this.floor(name, f.desks, f.agents));
+    const names = this.floorNames([...floors.keys()]);
+    const order = [...floors].sort(([a], [b]) => names.get(a)!.localeCompare(names.get(b)!) || a.localeCompare(b));
+    for (const [key, f] of order) out.push(this.floor(key, names.get(key)!, f.desks, f.agents));
     // Project rooms on the roof (#29, #30): Runs first, worktree lineage where no Run covers it.
     const rooms = this.roomSpecs();
     this.botAway = new Map(rooms.flatMap((r) => (r.head && 'bot' in r.head ? [[r.head.bot.id, roomFloorId(r.key)] as [string, string]] : [])));
@@ -610,7 +617,7 @@ export class LiveModel {
         key: `lin:${root.id}`,
         source: 'lineage',
         runId: null,
-        objective: root.name,
+        objective: this.lineageName(root),
         head: rootAgent ? { agent: rootAgent } : { path: root.id, name: root.name },
         seats: desc.map((d) => ({ path: d.id, name: d.name, status: null, dispatchId: null, taskId: null })),
         tasks: [],
@@ -618,6 +625,17 @@ export class LiveModel {
       });
     }
     return specs;
+  }
+
+  /**
+   * A lineage room's name: "<repo> · <root>" (the root is often the repository's own checkout, which
+   * Orca calls "main"), the root's name alone when it already names the repository.
+   */
+  private lineageName(root: OrcaWorktree): string {
+    const ws = this.byPath.get(`${LOCAL}|${root.path}`) ?? [...this.workspaces.values()].find((w) => w.kind === 'worktree' && !!root.projectId && w.projectId === root.projectId);
+    const repo = ws?.project ?? (root.isMain ? (root.path.split(/[/\\]/).filter(Boolean).pop() ?? null) : null);
+    const label = root.isMain && root.branch ? root.branch : root.name;
+    return !repo || repo === label ? label : `${repo} · ${label}`;
   }
 
   /** Who coordinates a Run: its coordinator handle's terminal, else the sender of its dispatches' mail (a bot's chat or an agent). */
@@ -724,8 +742,8 @@ export class LiveModel {
 
   // ---- internals ------------------------------------------------------------------------------
 
-  private floor(name: string, desks: Map<string, DeskRec>, agents: Map<string, AgentRec[]>): LiveFloor {
-    const id = floorId(name);
+  private floor(key: string, name: string, desks: Map<string, DeskRec>, agents: Map<string, AgentRec[]>): LiveFloor {
+    const id = floorId(nameOfKey(key), key);
     const ordered = [...desks.values()].sort((a, b) => deskRank(agents.get(a.key)) - deskRank(agents.get(b.key)) || b.lastActivityAt - a.lastActivityAt || a.key.localeCompare(b.key));
     const want = new Map(ordered.map((d) => [d.key, Math.max(1, Math.min(MAX_SEATS, agents.get(d.key)?.length ?? 0))]));
     const seats = allocate(this.seats.get(id) ?? new Map(), ordered.map((d) => d.key), want);
@@ -761,15 +779,17 @@ export class LiveModel {
     // Servers in this repository's worktrees that have no desk here (Orca has them closed).
     for (const [path, ports] of this.portsByPath) {
       const ws = this.byPath.get(`${LOCAL}|${path}`);
-      if (listed.has(path) || !ws || floorNameOf(ws) !== name) continue;
+      if (listed.has(path) || !ws || floorKeyOf(ws) !== key) continue;
       for (const p of ports) services.push(serviceOf(p, '', undefined, ws.branch));
     }
     services.sort((a, b) => a.port - b.port);
     const busy = workers.filter((w) => w.status === 'working').length;
     const waiting = workers.filter((w) => w.status === 'needs_input').length;
-    const dir = ordered.find((d) => d.hostId === LOCAL)?.key;
+    // The repository's own checkout; without one Orca lists, the first local desk's worktree.
+    const first = ordered.find((d) => d.hostId === LOCAL)?.key;
+    const dir = this.mainCheckout(key) ?? (first ? (this.workspaces.get(first)?.path ?? '') : '');
     return {
-      info: { id, name, dir: dir ? (this.workspaces.get(dir)?.path ?? '') : '', palette: hash(name) % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing, ...(this.floorProject(id) ? { orcaCreate: true } : {}) },
+      info: { id, name, dir, palette: hash(name) % FLOOR_PALETTES.length, addedBy: 'orca', addedAt: 0, workers: workers.length, busy, waiting, people: 0, wing, ...(this.floorProject(id) ? { orcaCreate: true } : {}) },
       workers,
       plan: { wing, labels },
       links,
@@ -891,12 +911,51 @@ export class LiveModel {
   }
 
   /** The desk (worktree) a CLI agent sits at, and its floor. */
-  private deskFor(c: CliAgent): { key: string; floorName: string } {
+  private deskFor(c: CliAgent): { key: string; floor: string } {
     if (c.hostId === LOCAL) {
       const ws = this.workspaces.get(c.worktreeId) ?? this.byPath.get(`${LOCAL}|${worktreePath(c.worktreeId) ?? ''}`);
-      if (ws) return { key: ws.id, floorName: floorNameOf(ws) };
+      if (ws) return { key: ws.id, floor: floorKeyOf(ws) };
     }
-    return { key: `${c.hostId}|${c.worktreeId}|${c.workspace}`, floorName: c.repo ?? (c.worktreeId.startsWith('folder:') ? 'Folders' : 'Other') };
+    return { key: `${c.hostId}|${c.worktreeId}|${c.workspace}`, floor: this.floorKeyNamed(c.repo ?? (c.worktreeId.startsWith('folder:') ? 'Folders' : 'Other')) };
+  }
+
+  /** A repo a remote agent names: the floor of the one Orca project called that, else a floor by the name. */
+  private floorKeyNamed(name: string): string {
+    const keys = new Set([...this.workspaces.values()].filter((w) => w.kind === 'worktree' && w.projectId && w.project === name).map(floorKeyOf));
+    return keys.size === 1 ? [...keys][0]! : `n:${name}`;
+  }
+
+  /** A workspace's floor id. */
+  private floorIdOf(w: OrcaWorkspace): string {
+    return floorId(floorNameOf(w), floorKeyOf(w));
+  }
+
+  /**
+   * The directory of a project's floor: the repository's own checkout (`isMainWorktree` in `orca
+   * worktree list`), by project id, or by the repository of the floor's worktrees on an Orca whose
+   * rows have no project id. Null for a floor by name, or when Orca doesn't list the checkout.
+   */
+  private mainCheckout(key: string): string | null {
+    if (!key.startsWith('p:')) return null;
+    const projectId = key.slice(2);
+    const main = this.worktreeRows.filter((r) => r.isMain);
+    const byProject = main.find((r) => r.projectId === projectId);
+    if (byProject) return byProject.path;
+    const paths = new Set([...this.workspaces.values()].filter((w) => w.kind === 'worktree' && (w.hostId ?? LOCAL) === LOCAL && floorKeyOf(w) === key).map((w) => w.path));
+    const repoId = this.worktreeRows.find((r) => paths.has(r.path) && r.repoId)?.repoId;
+    return (repoId && main.find((r) => !r.projectId && r.repoId === repoId)?.path) || null;
+  }
+
+  /** The name each floor shows: its repository's; two repositories called the same get their project's id after it. */
+  private floorNames(keys: string[]): Map<string, string> {
+    const base = new Map(keys.map((k) => [k, nameOfKey(k)]));
+    for (const w of this.workspaces.values()) {
+      const k = floorKeyOf(w);
+      if (base.has(k)) base.set(k, floorNameOf(w));
+    }
+    const count = new Map<string, number>();
+    for (const n of base.values()) count.set(n, (count.get(n) ?? 0) + 1);
+    return new Map([...base].map(([k, n]) => [k, (count.get(n) ?? 0) > 1 && k.startsWith('p:') ? `${n} · ${projectTag(k.slice(2))}` : n]));
   }
 
   private agentForHook(h: ToolHook): AgentRec | undefined {
@@ -950,11 +1009,11 @@ export function roomFloorId(key: string): string {
 
 const SUMMARY: Record<OrcaState, string> = { working: 'Working…', blocked: 'Waiting for you', waiting: 'Waiting for you', done: 'Done' };
 
-function newAgent(paneKey: string, deskKey: string, floorName: string, now: number): AgentRec {
+function newAgent(paneKey: string, deskKey: string, floor: string, now: number): AgentRec {
   return {
     paneKey,
     deskKey,
-    floorName,
+    floor,
     kind: 'terminal',
     agent: null,
     hostId: LOCAL,
@@ -979,12 +1038,36 @@ export function floorNameOf(w: OrcaWorkspace): string {
   return w.project ?? (w.kind === 'folder' ? 'Folders' : 'Other');
 }
 
-/** floorId under another name, for the methods above whose locals are called floorId. */
-const floorId_ = (name: string) => floorId(name);
+/**
+ * A floor's key: `p:<projectId>` for a worktree of an Orca project, so two repositories called the same
+ * are two floors and renaming one keeps its floor; `n:<name>` for folders and anything without a project.
+ */
+export function floorKeyOf(w: OrcaWorkspace): string {
+  return w.kind === 'worktree' && w.projectId ? `p:${w.projectId}` : `n:${floorNameOf(w)}`;
+}
 
-export function floorId(name: string): string {
-  const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'floor';
-  return `f-${slug}-${(hash(name) % 1296).toString(36)}`;
+/** The name in a floor key (a project's key has the id, the name comes from its workspaces). */
+function nameOfKey(key: string): string {
+  return key.slice(2);
+}
+
+/** A short tag for a project id, to tell apart two repositories called the same: "owner/name", or the start of an id. */
+export function projectTag(projectId: string): string {
+  const rest = projectId.replace(/^[a-z]+:/, '');
+  const parts = rest.split('/').filter(Boolean);
+  if (parts.length >= 2) return parts.slice(-2).join('/');
+  return /^[0-9a-f-]{20,}$/i.test(rest) ? rest.slice(0, 8) : rest;
+}
+
+const slug = (s: string) => s.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'floor';
+
+/**
+ * A floor's id. A repository's comes from its project id only, so it stays when the repository is
+ * renamed; a floor without a project (folders, a remote repo Orca has no project for) by its name.
+ */
+export function floorId(name: string, key = `n:${name}`): string {
+  if (key.startsWith('p:')) return `f-${slug(projectTag(key.slice(2)))}-${hash(key).toString(36)}`;
+  return `f-${slug(name)}-${(hash(name) % 1296).toString(36)}`;
 }
 
 /** A dev server as the services board lists it (B7). */
@@ -1032,12 +1115,12 @@ function roster(floors: LiveFloor[]): OrcaRosterFloor[] {
 }
 
 function deskOf(w: OrcaWorkspace): DeskRec {
-  return { key: w.id, floorName: floorNameOf(w), name: w.name, hostId: w.hostId ?? LOCAL, open: true, unread: w.unread, lastActivityAt: w.lastActivityAt ?? 0 };
+  return { key: w.id, floor: floorKeyOf(w), name: w.name, hostId: w.hostId ?? LOCAL, open: true, unread: w.unread, lastActivityAt: w.lastActivityAt ?? 0 };
 }
 
 function remoteDesk(a: AgentRec): DeskRec {
   const name = a.deskKey.split('|')[2] || 'remote';
-  return { key: a.deskKey, floorName: a.floorName, name, hostId: a.hostId, open: false, unread: false, lastActivityAt: a.shownSince };
+  return { key: a.deskKey, floor: a.floor, name, hostId: a.hostId, open: false, unread: false, lastActivityAt: a.shownSince };
 }
 
 function hostLabel(hostId: string): string {

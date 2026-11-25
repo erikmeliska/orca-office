@@ -96,7 +96,7 @@ describe('PortsPoller', () => {
 });
 
 describe('the model', () => {
-  const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo-web', projectId: 'p', path: `/code/demo-web/${id}`, branch: `feat/${id}`, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
+  const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo-web', projectId: `p-${over.project ?? 'demo-web'}`, path: `/code/demo-web/${id}`, branch: `feat/${id}`, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
   const port = (n: number, path: string): PortRow => ({ port: n, pid: n, host: '127.0.0.1', processName: 'node', http: true, url: null, path, worktree: path.split('/').pop()!, command: 'vite', title: 'Demo', since: 5 });
 
   test("puts each server on its worktree's floor and desk, and on the desk's sign", () => {

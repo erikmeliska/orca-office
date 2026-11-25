@@ -158,15 +158,15 @@ test('wall boards: the forge once read, else the desks’ links with the board�
   expect(w2.pulls.items).toEqual([]);
 });
 
-const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo', projectId: 'p-demo', path: `/code/demo/${id}`, branch: id, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
+const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo', projectId: `p-${over.project ?? 'demo'}`, path: `/code/demo/${id}`, branch: id, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
 
 test('a floor’s forge target: its repository’s worktrees, their branches and Orca’s links', () => {
   const m = new LiveModel();
   m.applyWorkspaces([ws('a'), ws('b'), ws('x', { project: 'other', path: '/code/other/x' })]);
   m.applyWorktrees([
-    { id: 'r::/code/demo/a', repoId: 'r', path: '/code/demo/a', hostId: 'local', name: 'a', branch: 'main', links: [{ provider: 'github', kind: 'issue', ref: '#7' }], parentId: null, childIds: [] },
-    { id: 'r::/code/demo/c', repoId: 'r', path: '/code/demo/c', hostId: 'local', name: 'c', branch: 'feat/x', links: [{ provider: 'linear', kind: 'issue', ref: 'ENG-1' }], parentId: null, childIds: [] },
-    { id: 'q::/code/other/x', repoId: 'q', path: '/code/other/x', hostId: 'local', name: 'x', branch: 'main', links: [], parentId: null, childIds: [] },
+    { id: 'r::/code/demo/a', repoId: 'r', projectId: null, isMain: false, path: '/code/demo/a', hostId: 'local', name: 'a', branch: 'main', links: [{ provider: 'github', kind: 'issue', ref: '#7' }], parentId: null, childIds: [] },
+    { id: 'r::/code/demo/c', repoId: 'r', projectId: null, isMain: false, path: '/code/demo/c', hostId: 'local', name: 'c', branch: 'feat/x', links: [{ provider: 'linear', kind: 'issue', ref: 'ENG-1' }], parentId: null, childIds: [] },
+    { id: 'q::/code/other/x', repoId: 'q', projectId: null, isMain: false, path: '/code/other/x', hostId: 'local', name: 'x', branch: 'main', links: [], parentId: null, childIds: [] },
   ]);
   const floor = m.building().floors.find((f) => f.info.name === 'demo')!.info.id;
   const t = m.forgeTarget(floor)!;

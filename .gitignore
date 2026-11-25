@@ -6,3 +6,5 @@ dist/
 .orca/
 bridge/.spike/
 .playwright-mcp/
+# Orca loads plugin/src/worker.ts itself; a compiled copy must never be committed.
+plugin/**/*.js
