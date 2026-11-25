@@ -1,6 +1,7 @@
 import './hud.css';
 import { h, openModal } from './dom';
-import { HELP_ROWS, SUPERVISE_ROWS } from './help';
+import { funOn } from '../fun';
+import { FUN_ROWS, HELP_ROWS, SUPERVISE_ROWS } from './help';
 
 export function openHelp() {
   const close = h('button.btn.close', { 'aria-label': 'Close' }, '✕');
@@ -12,7 +13,7 @@ export function openHelp() {
       'div.body',
       {},
       h('div.help-grid', {}, ...SUPERVISE_ROWS.flatMap(([k, v]) => [h('span.key', {}, k), h('span', {}, v)])),
-      h('details.help-more', {}, h('summary', {}, 'All controls'), h('div.help-grid', {}, ...HELP_ROWS.flatMap(([k, v]) => [h('span.key', {}, k), h('span', {}, v)]))),
+      h('details.help-more', {}, h('summary', {}, 'All controls'), h('div.help-grid', {}, ...HELP_ROWS.filter(([k]) => funOn() || !FUN_ROWS.has(k)).flatMap(([k, v]) => [h('span.key', {}, k), h('span', {}, v)]))),
     ),
   );
   const modal = openModal(el);

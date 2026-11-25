@@ -13,6 +13,7 @@ import { interactionAvailable, type DeskKey } from '../interaction';
 import { EYE_HEIGHT } from '../player';
 import { store } from '../state';
 import { modalOpen, toast } from '../ui/dom';
+import { usableKind } from '../fun';
 import { deskLinks } from '../ui/links';
 import { isOrca } from '../ui/orca';
 import type { Interactable } from '../world/types';
@@ -39,7 +40,7 @@ export function installPointer(ctx: Ctx, core: CoreState, parts: PointerParts) {
     let bestD = Infinity;
     for (const list of usable()) {
       for (const it of list) {
-        if (it.off) continue;
+        if (it.off || !usableKind(it.kind)) continue;
         if (below !== (it.y ?? 0) < -SLAB - 1) continue;
         // Up on the loft, or down underneath it.
         if (Math.abs((it.y ?? 0) - player.pos.y) > 1.5) continue;
@@ -98,7 +99,7 @@ export function installPointer(ctx: Ctx, core: CoreState, parts: PointerParts) {
         it ??= o.userData.interact as Interactable | undefined;
       }
       if (!shown) continue;
-      if (!it || it.off) return null; // a wall, the floor, a plant… is in the way
+      if (!it || it.off || !usableKind(it.kind)) return null; // a wall, the floor, a plant… is in the way
       // How close you must be to use it is each kind's own (see ctx.interactions).
       return { it, near: hit.point.distanceTo(eye) <= ctx.interactions.reach(it.kind) + slack, hit };
     }

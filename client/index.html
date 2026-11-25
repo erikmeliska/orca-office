@@ -5,6 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>orca-office</title>
     <link rel="icon" href="/favicon.svg" />
+    <script>
+      // A phone (or a window too narrow for the 3D office) gets the office as a list (M6 A12); ?3d=1 keeps the 3D one.
+      if (!/[?&]3d=1\b/.test(location.search) && matchMedia('(pointer: coarse) and (max-width: 900px), (max-width: 520px)').matches) location.replace('/live.html');
+    </script>
     <link rel="stylesheet" href="/src/style.css" />
   </head>
   <body>

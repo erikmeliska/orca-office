@@ -37,11 +37,8 @@ const token = loadOrCreateToken();
 // The office page's token (client-auth.ts): made now if Vite hasn't yet, read again on each upgrade.
 loadOrCreateClientToken();
 const spikeCalls = process.env.ORCA_OFFICE_SPIKE_CALLS === '1';
-const clients = new Set<WebSocket>();
 let lastPluginHello: unknown = null;
 let lastSnapshotAt: number | null = null;
-/** Redacted copy of the newest snapshot, sent to each client as it connects. */
-let lastSnapshot: string | null = null;
 
 // M0 spike: every plugin message is appended here, redacted, to study payload shapes.
 const spikeLog = process.env.ORCA_OFFICE_SPIKE_LOG === '1'
@@ -173,9 +170,6 @@ function onPlugin(ws: WebSocket) {
     if (msg.type === 'snapshot') lastSnapshotAt = Date.now();
     if (msg.type === 'result') return void link.settle(msg as never);
     if (!config.stub) feedModel(msg);
-    const out = JSON.stringify(redactForLog(msg));
-    if (msg.type === 'snapshot') lastSnapshot = out;
-    for (const c of clients) c.send(out);
   });
 
   function verifyPlugin(given: string) {
@@ -202,8 +196,6 @@ function onPlugin(ws: WebSocket) {
 }
 
 function broadcastPlugin() {
-  const out = JSON.stringify({ type: 'bridge', plugin: link.connected });
-  for (const c of clients) c.send(out);
   const orca = JSON.stringify({ t: 'orca', online: link.connected });
   for (const s of liveSessions.keys()) if (s.readyState === s.OPEN) s.send(orca);
   pushLan();
@@ -364,13 +356,8 @@ const STUB_TICK_MS = 4_000;
 
 function onClient(ws: WebSocket, url: string | undefined) {
   if (config.stub) return onStubClient(ws, url);
-  const query = new URL(url ?? '/client', 'http://127.0.0.1').searchParams;
-  // The 2D list view (live.html) still gets the plugin's messages as they are, redacted.
-  if (query.get('list') !== '1') return onLiveClient(ws, query);
-  clients.add(ws);
-  ws.send(JSON.stringify({ type: 'hello', role: 'bridge', protocol: PROTOCOL_VERSION, plugin: link.connected }));
-  if (lastSnapshot && link.connected) ws.send(lastSnapshot);
-  ws.on('close', () => clients.delete(ws));
+  // The 3D office and the 2D list (live.html, M6 A12) speak the same protocol.
+  onLiveClient(ws, new URL(url ?? '/client', 'http://127.0.0.1').searchParams);
 }
 
 /** The 3D office on Orca's data (M2). */

@@ -131,3 +131,9 @@ a.when:hover { text-decoration: underline; }
    needs-you signals dimmed so an old one doesn't pass for a live one. */
 body.stale #scene { filter: grayscale(0.85) brightness(0.92); transition: filter 0.6s; }
 body.stale .needs-you, body.stale #waiting, body.stale .dock-btn.danger { opacity: 0.55; }
+
+/* Fun off (M6 A11, see fun.ts): no chat box, emote wheel or emotes on screen. */
+body.no-fun #chat, body.no-fun .emote-wheel, body.no-fun .emote-pop { display: none !important; }
+
+/* Keyboard focus (M6 A14): Tab goes through the top bar, the banner and the windows; you can see where it is. */
+#hud button:focus-visible, #hud a:focus-visible, .modal button:focus-visible, .modal a:focus-visible, .modal [tabindex]:focus-visible { outline: 3px solid #4f86f7; outline-offset: 2px; }

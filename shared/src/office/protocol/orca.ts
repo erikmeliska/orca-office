@@ -164,6 +164,10 @@ export interface OrcaRosterWorker {
   /** Its bubble (≤120), what it's on or asks. */
   summary?: string;
   bot?: boolean;
+  /** A terminal agent on this machine: a line can be typed into it (the 2D list's Reply). */
+  terminal?: boolean;
+  /** Since when it has been in this state (ms). */
+  since?: number;
 }
 
 /** A floor of the roster: repository floors and the Staff floor (project rooms only mirror them). */

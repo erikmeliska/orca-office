@@ -394,3 +394,29 @@ bubble) and `since` (a gate's: when the bridge first saw it; Orca gives no time)
 ![Map](img/m6-map-desktop.png)
 ![Help](img/m6-help-desktop.png)
 ![Stale](img/m6-stale-desktop.png)
+
+## Fun, the phone, motion and the keyboard (M6, roadmap A11–A14)
+
+- **Fun (A11)**, ⚙️ Settings → Fun, off by default (`client/src/fun.ts`): the chat box, emotes,
+  hanging pictures, the arcade cabinet, the gong, the hoop and the rooftop bar (darts, axes, DJ).
+  Off, their props stay where they are but do nothing (an invisible prop would still be bumped
+  into), and they're gone from the ☰ menu, ⌘K, the help and the keys (T, Enter, G, 1–6, F, Q).
+  The dog stays.
+- **The phone (A12)**: a touch screen up to 900 px wide, or any window under 520 px, opens
+  `live.html` instead of the 3D office (`?3d=1` keeps the 3D one). It is the office as a list on
+  the same `/client` socket: *Needs you* (agents and decision gates from `orca.waiting`), *Working*
+  and *Done* (`orca.roster`), each with **Reply** (a line typed into a terminal agent, as P does)
+  and **Open in Orca**. The old `live.html`, which showed the plugin's raw messages, and its
+  `?list=1` path in the bridge are gone.
+- **Reduced motion (A13)**: with the system asking for less motion there's no confetti, dancing,
+  finishing spin or DJ strobe; the loader no longer waits for the dog.
+- **Keyboard (A14)**: Tab moves the focus through the top bar, the banner and windows (with a
+  visible ring), Enter or Space presses the button in focus; the ☰ menu moved to **`**. A project
+  room's gate answers are plain text now ("Options: Yes · No"), not pills that looked like buttons
+  and did nothing; deciding stays in Orca (its "Open in Orca" button works).
+
+![The phone's list](img/m6-list-mobile.png)
+![Reply from the list](img/m6-list-reply-mobile.png)
+![The menu with the fun off](img/m6-menu-nofun-desktop.png)
+![Keyboard focus](img/m6-focus-desktop.png)
+![A project room's decision, no fake buttons](img/m6-gates-desktop.png)

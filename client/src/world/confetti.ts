@@ -1,3 +1,4 @@
+import { reducedMotion } from '../motion';
 import * as THREE from 'three';
 
 // Confetti: little paper squares shot up out of a point (or let go from the ceiling), fluttering down
@@ -81,6 +82,8 @@ export class Confetti {
 
   /** Shoots `n` bits up out of (x, y, z); `power` 1 is a party popper, 2 a cannon. */
   burst(x: number, y: number, z: number, n = 180, power = 1) {
+    // Less motion asked for (M6 A13): no confetti at all.
+    if (reducedMotion()) return;
     for (let k = 0; k < n; k++) {
       const a = Math.random() * Math.PI * 2;
       const out = (0.6 + Math.random() * 2.2) * power;

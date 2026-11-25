@@ -41,6 +41,7 @@ import { installGallery, installHanging } from './features/hanging';
 import { installHerald } from './features/herald';
 import { installHud } from './features/hud';
 import { installOverview } from './features/overview';
+import { setFun } from './fun';
 import { installNeedsYou } from './features/needsyou';
 import { installHandoffs } from './features/handoffs';
 import { installProjectBoard } from './ui/project';
@@ -92,6 +93,7 @@ parts.rooftop = installRooftop(ctx, { ambient: parts.stage.ambient, hemi: parts.
 parts.net = new Net(() => store.profile, () => parts.arrival.whereNow());
 parts.me = makeMe(ctx);
 parts.settings = loadSettings();
+setFun(parts.settings.fun);
 parts.player = new PlayerController(ctx.camera, canvas, ctx.office.colliders);
 parts.telescope = installTelescope(ctx, { clearTarget: () => parts.pointer.clearTarget(), backToGame: () => parts.focus.backToGame() });
 installKeyGuards(ctx, parts);
@@ -168,17 +170,14 @@ function boot() {
   store.emit('me');
   parts.you.showMyProfile(store.profile);
   boot();
-  // In as soon as the floor you're on is here with its dog, so the dog doesn't pop in after.
   const welcomed = new Promise<void>((resolve) => {
     const off = store.on('floor', () => {
       off();
       resolve();
     });
   });
-  loading.until([
-    { say: 'Knocking on the door', done: welcomed },
-    { say: 'Fetching the dog', done: parts.dog.firstReady },
-  ]);
+  // In as soon as the floor is here (M6 A13: the dog no longer holds the door).
+  loading.until([{ say: 'Knocking on the door', done: welcomed }]);
 }
 
 // Debug handle for quick checks from the console / headless screenshots.

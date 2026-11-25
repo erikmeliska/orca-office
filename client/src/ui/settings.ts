@@ -7,6 +7,7 @@ import type { ThemePick, WebhookKind } from '@orca-office/shared/office/protocol
 import { THEME_PICKS } from '@orca-office/shared/office/theme';
 import { mapChoices } from '@orca-office/shared/office/maps/index';
 import { dogSetting } from './settings-dog';
+import { setFun } from '../fun';
 import { h, openModal, timeAgo } from './dom';
 import { agentFields, choiceLabel, officeChoice } from './provider';
 import { openPromptEditor, rewrittenPrompts } from './prompts';
@@ -119,6 +120,11 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
 
   // The swish of the book's pages at the bookshelf, on or off.
   const pagesRow = choiceRow('Page turns at the bookshelf', [[true, '📖 On'], [false, 'Off']], () => settings.pageTurns, (pageTurns) => change({ pageTurns }));
+  // The games, chat and emotes (M6 A11).
+  const funRow = choiceRow('Fun', [[false, '🧑‍💼 Off'], [true, '🎉 On']], () => settings.fun, (fun) => {
+    change({ fun });
+    setFun(fun);
+  });
   // The alarm when a worker stops to ask you something; picking one plays it.
   const alarmRow = choiceRow<NeedsYouSound>('When a worker needs you', [['once', '🔔 Ring once'], ['remind', '🔁 Keep reminding me'], ['off', '🔕 Off']], () => settings.needsYouSound, (needsYouSound) => {
     change({ needsYouSound });
@@ -441,6 +447,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
     you: [
       setting('Your character', null, character),
       setting('Camera view', 'you', seg, note),
+      setting('Fun', 'you', funRow, h('p.setting-note', {}, 'The chat, emotes, hanging pictures, the arcade cabinet, the gong, the hoop and the rooftop bar. Off, their props stay but do nothing, and they’re gone from the menu, ⌘K and the help. The dog stays either way.')),
     ],
     sound: [
       setting('Office sounds', 'you', soundRow, h('p.setting-note', {}, 'Workers typing, footsteps, the coffee machine, birds and rain outside, the dog, the ding when a worker is done and the alarm when one needs you.')),
