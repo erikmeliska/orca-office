@@ -96,6 +96,11 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     goToStop({ key: workerId, kind: 'agent', floor, floorName: '', workerId, deskId, name, ask: null, needs: false, since: 0 });
   }
 
+  /** Over to a desk on any floor (a search hit's worktree, M7 B8). */
+  function goToDesk(floor: string, deskId: string, name: string) {
+    goToStop({ key: `desk:${deskId}`, kind: 'agent', floor, floorName: '', workerId: null, deskId, name, ask: null, needs: false, since: 0 });
+  }
+
   /** Over to a figure on any floor and open its terminal (or a chat agent's conversation) once there (M7 B3). */
   function openFigure(floor: string, workerId: string, deskId: string, name: string) {
     goToStop({ key: workerId, kind: 'agent', floor, floorName: '', workerId, deskId, name, ask: null, needs: false, since: 0 }, () => openWorkerTerminal(workerId));
@@ -219,5 +224,5 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     openChanges(net, id, () => openWorkerTerminal(id), repo);
   }
 
-  return { goToNextWaiting, goToWorker, goToFigure, openFigure, goToKey, answerWorker, answerStop, stops, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch };
+  return { goToNextWaiting, goToWorker, goToFigure, goToDesk, openFigure, goToKey, answerWorker, answerStop, stops, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch };
 }

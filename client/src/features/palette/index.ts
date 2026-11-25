@@ -18,6 +18,8 @@ import { openProjectBoard } from '../../ui/project';
 import { funOn } from '../../fun';
 import { openServices, serviceOwner, serviceUrl } from '../../ui/services';
 import { IS_MAC } from '../../ui/termkeys';
+import { isOrca } from '../../ui/orca';
+import { ago, searchSessions } from '../../ui/extras';
 import type { InteractKind, Interactable } from '../../world/types';
 
 export type PaletteParts = Pick<Parts, 'walking' | 'waiting' | 'actions' | 'hud' | 'hanging' | 'telescope'>;
@@ -163,6 +165,25 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
     return out;
   }
 
+  /**
+   * Orca's sessions whose text matches (M7 B8), once 3 characters are typed: to the desk of the
+   * worktree it ran in, or (no desk open) the worktree in Orca. Titles and snippets are the bridge's bubbles.
+   */
+  async function sessions(query: string): Promise<PaletteEntry[]> {
+    const hits = await searchSessions(net, query);
+    return hits.map((x) => ({
+      icon: '💬',
+      kind: 'Session',
+      title: x.title,
+      detail: [x.snippet, x.worktree ? `🌿 ${x.worktree}` : x.branch ? `🌿 ${x.branch}` : '', x.agent, ago(x.updatedAt)].filter(Boolean).join(' · '),
+      open: () => {
+        if (x.floor && x.deskId) return parts.waiting.goToDesk(x.floor, x.deskId, x.worktree ?? x.title);
+        if (x.canOpen) return net.send({ t: 'orca.search.open', index: x.index });
+        toast('Orca no longer has the worktree this session ran in', 'warn');
+      },
+    }));
+  }
+
   // Ctrl+K (⌘K on a Mac), from anywhere but a text box or a terminal, where the key is theirs: in a
   // shell, Ctrl+K cuts to the end of the line. In the palette's own box it puts the palette away.
   window.addEventListener('keydown', (e) => {
@@ -170,7 +191,7 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
     const inPalette = paletteOpen() && !!(e.target as HTMLElement | null)?.closest?.('.modal.palette');
     if (!inPalette && (isTyping(e) || parts.telescope.active)) return;
     e.preventDefault();
-    if (!e.repeat) togglePalette(paletteEntries);
+    if (!e.repeat) togglePalette(paletteEntries, isOrca() ? sessions : undefined);
   });
 
   return { paletteEntries };

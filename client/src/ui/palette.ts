@@ -23,9 +23,32 @@ export function paletteOpen(): boolean {
 }
 
 /** Opens the palette over `entries`, or puts it away if it's open already. */
-export function togglePalette(entries: () => PaletteEntry[]) {
+export function togglePalette(entries: () => PaletteEntry[], more?: (query: string) => Promise<PaletteEntry[]>) {
   if (current) return current.close();
   const all = entries();
+  /** What `more` found for the query typed (M7 B8: Orca's sessions), listed under the rest as they are. */
+  let extra: PaletteEntry[] = [];
+  let extraFor = '';
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  const askMore = () => {
+    if (!more) return;
+    if (timer) clearTimeout(timer);
+    const q = input.value.trim();
+    if (q.length < 3) {
+      extra = [];
+      extraFor = '';
+      return;
+    }
+    // A pause in the typing first: one search, not one a key.
+    timer = setTimeout(() => {
+      void more(q).then((found) => {
+        if (current !== modal || input.value.trim() !== q) return;
+        extra = found;
+        extraFor = q;
+        render();
+      });
+    }, 350);
+  };
   const input = h('input', {
     type: 'text',
     placeholder: 'Find a worker, issue, PR, board, teammate or action…',
@@ -70,7 +93,7 @@ export function togglePalette(entries: () => PaletteEntry[]) {
   };
 
   const render = () => {
-    found = rankItems(input.value, all);
+    found = [...rankItems(input.value, all), ...(extraFor && input.value.trim() === extraFor ? extra.map((item) => ({ item, score: 0, field: 'title' as const, hits: [] })) : [])];
     list.replaceChildren(
       ...found.map((m, i) => {
         const e = m.item;
@@ -92,7 +115,7 @@ export function togglePalette(entries: () => PaletteEntry[]) {
     select(0);
   };
 
-  input.addEventListener('input', render);
+  input.addEventListener('input', () => (render(), askMore()));
   input.addEventListener('keydown', (e) => {
     if (e.isComposing) return;
     if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {

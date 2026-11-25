@@ -20,6 +20,7 @@ import { claudeProbe, codexProbe, findCli, LimitsReader } from './live/limits.js
 import { RunsPoller } from './live/runs-poller.js';
 import { PortsPoller } from './live/ports.js';
 import { Actions } from './live/actions.js';
+import { Extras } from './live/extras.js';
 import { BotChats } from './live/bots.js';
 import { TerminalWatch } from './live/terminals.js';
 import { ForgeBoards, ghAdapter, gitRemote, glabAdapter, runCli } from './live/forge.js';
@@ -225,6 +226,7 @@ const runsPoller = new RunsPoller(cli, {
 
 const terminals = new TerminalWatch((terminalId, maxLines) => link.call('terminal.read', { terminalId, maxLines }));
 const actions = new Actions(model, { call: (m, p, t) => link.call(m, p, t), cli, send: orcaSend(), resync: () => link.send({ type: 'resync' }), now: Date.now }, terminals);
+const extras = new Extras(model, { cli, cliLong: orcaCli(undefined, 120_000), call: (m, p) => link.call(m, p) });
 const bots = new BotChats(model, { cli, sendBot: orcaBotSend(), now: Date.now });
 
 // The repo-wide boards (#38): read through `gh` / `glab` for the floors pages are on, kept 3 min in memory.
@@ -387,6 +389,11 @@ function onLiveClient(ws: WebSocket, query: URLSearchParams) {
       actions.handle(page, msg as never).catch(() => send([{ t: 'orca.result', action: 'type', ok: false, error: 'failed' }]));
       return;
     }
+    if (Extras.handles(t)) {
+      // Never logged: search queries and results are private.
+      extras.handle(page, msg as never).catch(() => send([{ t: 'orca.result', action: 'search', ok: false, error: 'failed' }]));
+      return;
+    }
     if (BotChats.handles(t)) {
       // Never logged: messages to bots and their answers are private.
       bots.handle(page, msg as never).catch(() => send([{ t: 'orca.result', action: 'bot', ok: false, error: 'failed' }]));
@@ -402,6 +409,7 @@ function onLiveClient(ws: WebSocket, query: URLSearchParams) {
     liveSessions.delete(ws);
     actions.closed(page);
     bots.closed(page);
+    extras.closed(page);
   });
 }
 

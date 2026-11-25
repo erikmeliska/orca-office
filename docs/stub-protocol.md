@@ -530,3 +530,40 @@ with the checks unknown. Figures don't walk to a review desk: the queue is a lis
 
 ![Review queue](img/m7-review-desktop.png)
 ![Review queue on a phone](img/m7-review-mobile.png)
+
+## Sessions search, automations and cleanup (M7, roadmap B8, B9, B11)
+
+All three are read on demand for one page (`bridge/src/live/extras.ts`), through the CLI with an
+argument array (no shell), and keep nothing but, per page, what the next click needs.
+
+**B8, ⌘K finds sessions.** Once 3 characters are typed and the typing pauses (350 ms), ⌘K asks
+`{ t: 'orca.search', reqId, query }` (≤200 characters) and the bridge runs
+`orca search --query=<q> --scope conversation --limit 12 --json`. Each hit (`OrcaSearchHit`) has its
+title (≤60) and the matching words (≤120) cut with `toBubble` the moment they are read, the agent, the
+branch, when, and the worktree it ran in, matched by path to a desk when Orca has one open. The session's
+path, file and resume command never leave the bridge. The hits come under the palette's own results as
+💬 *Session*: Enter goes to that desk, or (no desk) shows the worktree in Orca
+(`{ t: 'orca.search.open', index }`: the page names a hit of its last search, never a workspace).
+
+**B9, automations.** ☰ → 🕒 *Automations*: `orca automations list --json` and
+`orca automations runs --limit 50 --json`: each one's name (≤60), schedule (cron or RRULE as Orca keeps
+it), next run ("today 08:00"), whether it's paused, and its last run's outcome and error code. Never its
+prompt or an error's text. **▶ Run now** asks first ("Run it now, outside its schedule? Yes / Cancel"),
+then `{ t: 'orca.automations.run', id, confirm: true }`: only an automation of the page's last list,
+`orca automations run <id> --json`, at most 2 and then one every 30 s per page. The office never runs
+one by itself. Tested only with the fake CLI.
+
+**B11, clean up.** ☰ → 🗑️ *Clean up*: `orca workspace cleanup preview --json`: the worktrees Orca's
+cleanup rules (set in Orca) would remove now, each with its repository, branch and why, and how many
+stay, by why. Looking removes nothing. Removing takes three steps: **🧹 Clean up N…**, then *I
+understand, continue* (what it does, and that it can't be undone from the office), then typing
+**remove** and **Remove N now**. The page sends `{ t: 'orca.cleanup.run', confirm: 'remove', expect: N }`;
+the bridge refuses unless N is what it last showed this page, reads the preview again and refuses
+(`changed`, with the new preview) if it no longer says N, and only then runs
+`orca workspace cleanup run --json` (2 minutes at most). Tested only with the fake CLI; never run
+against the real Orca.
+
+![⌘K finds sessions](img/m7-search-desktop.png)
+![Automations](img/m7-automations-desktop.png)
+![Automations on a phone](img/m7-automations-mobile.png)
+![Clean up, the last step](img/m7-cleanup-desktop.png)
