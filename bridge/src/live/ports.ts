@@ -198,8 +198,24 @@ export class PortsPoller {
   private running = false;
   private known = new Map<string, { command: string; title: string | null; titleAt: number; since: number }>();
   private sent = '';
+  /** When the last read finished (0: never); the Office API says `loading` until a fresh one. */
+  readAt = 0;
 
   constructor(private deps: PortsDeps, private everyMs = PORTS_EVERY_MS) {}
+
+  /** Someone started looking (an Office API snapshot): read now, unless a read runs or one is fresh. */
+  kick(): void {
+    const now = (this.deps.now ?? Date.now)();
+    if (this.running || now - this.readAt < this.everyMs) return;
+    if (this.timer) clearTimeout(this.timer);
+    this.timer = null;
+    void this.poll();
+  }
+
+  /** Whether the last read is recent enough to stand for now (polling pauses while nobody looks). */
+  fresh(now = (this.deps.now ?? Date.now)()): boolean {
+    return this.readAt > 0 && now - this.readAt <= 3 * this.everyMs;
+  }
 
   start(): void {
     void this.poll();
@@ -244,6 +260,7 @@ export class PortsPoller {
       rows.push({ ...p, command: k.command || p.processName, title: k.title, since: k.since });
     }
     for (const key of this.known.keys()) if (!seen.has(key)) this.known.delete(key);
+    this.readAt = (this.deps.now ?? Date.now)();
     const sent = JSON.stringify(rows);
     if (sent !== this.sent) {
       this.sent = sent;

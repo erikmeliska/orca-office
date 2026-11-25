@@ -262,7 +262,7 @@ const claudeBin = findCli('claude');
 const codexBin = findCli('codex');
 const limits = new LimitsReader({
   probes: { claude: claudeBin ? claudeProbe(claudeBin) : null, codex: codexBin ? codexProbe(codexBin) : null },
-  wanted: () => liveSessions.size > 0 || api.listeners > 0,
+  wanted: () => liveSessions.size > 0 || api.watching,
   changed: (state) => {
     const out = JSON.stringify({ t: 'limits', state });
     for (const ws of liveSessions.keys()) if (ws.readyState === ws.OPEN) ws.send(out);
@@ -275,7 +275,7 @@ const limits = new LimitsReader({
 const ports = new PortsPoller({
   run: cli,
   skip: new Set([config.port, config.clientPort, ...(lan ? [lan.port] : [])]),
-  wanted: () => liveSessions.size > 0 || api.listeners > 0,
+  wanted: () => liveSessions.size > 0 || api.watching,
   changed: (rows) => (model.applyPorts(rows), changed()),
   error: (what) => logOnce(what),
 });
@@ -288,9 +288,15 @@ const api = new OfficeApi({
   port: config.port,
   token: () => apiToken,
   connected: () => link.connected,
+  // A consumer that only polls snapshots keeps servers and plan limits read, like an open page.
+  watched: () => {
+    if (config.stub) return;
+    ports.kick();
+    limits.refresh();
+  },
   snapshot: () => {
     const now = Date.now();
-    const body = snapshotBody({ state: model.apiState(), texts, connected: link.connected, lastSnapshotAt, limits: config.stub ? null : limits.state, now });
+    const body = snapshotBody({ state: model.apiState(), texts, connected: link.connected, lastSnapshotAt, limits: config.stub ? null : limits.state, serversRead: !config.stub && (ports.fresh(now) || liveSessions.size > 0 && ports.readAt > 0), now });
     return apiClock.stamp(body, now);
   },
 });

@@ -35,6 +35,8 @@ export interface SnapshotInput {
   connected: boolean;
   lastSnapshotAt: number | null;
   limits: PlanLimits | null;
+  /** Whether the dev servers have been read lately (PortsPoller.fresh). */
+  serversRead: boolean;
   now: number;
   rule?: StuckRule;
 }
@@ -111,13 +113,18 @@ export function snapshotBody(input: SnapshotInput): SnapshotBody {
       projectId: f.projectId,
       name: f.name,
       dir: f.dir,
+      shown: f.shown,
+      worktrees: f.worktrees,
+      openWorktrees: f.openWorktrees,
+      agents: f.agents,
       needsYou: mine.filter((a) => a.needsYou).length,
       working: mine.filter((a) => a.state === 'working').length,
       stuck: mine.filter((a) => a.stuck).length,
       done: mine.filter((a) => a.state === 'done').length,
     };
   });
-  floors.sort((a, b) => a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
+  // The floors the office shows first, then the rest (every Orca project), each by name.
+  floors.sort((a, b) => Number(b.shown) - Number(a.shown) || a.name.localeCompare(b.name) || a.id.localeCompare(b.id));
 
   const bots: ApiBot[] = s.bots.map((b) => {
     const best = b.chats.reduce<OrcaState | null>((x, c) => (x === null || RANK[c.state] < RANK[x] ? c.state : x), null);
@@ -161,6 +168,7 @@ export function snapshotBody(input: SnapshotInput): SnapshotBody {
   return {
     orca: { connected: input.connected, lastSnapshotAt: input.lastSnapshotAt },
     floors,
+    serversStatus: input.serversRead ? 'ok' : 'loading',
     worktrees,
     agents,
     bots,
@@ -190,6 +198,7 @@ function apiServer(p: PortRow): ApiServer {
 
 function apiUsage(l: PlanLimits): ApiUsage {
   return {
+    status: l.providers.some((p) => p.status === 'loading') ? 'loading' : 'ok',
     at: l.at,
     providers: l.providers.map((p) => ({
       id: p.id,

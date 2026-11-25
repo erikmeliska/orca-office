@@ -9,7 +9,7 @@ import { LiveModel } from '../live/model.js';
 import { parseAgentList, parseBots, parseStatusEvent, parseWorkspaces } from '../live/orca.js';
 import { parseGates, parseRunShow, parseTasks, parseWorkers } from '../live/runs.js';
 import { parseWorktreeList } from '../live/worktrees.js';
-import { OfficeApi, event, loadOrCreateApiToken } from './server.js';
+import { OfficeApi, WATCH_MS, event, loadOrCreateApiToken } from './server.js';
 import { PrivateTexts } from './private-texts.js';
 import { SnapshotClock, fingerprint, snapshotBody, type SnapshotBody } from './snapshot.js';
 
@@ -62,7 +62,7 @@ function fakeOffice(now = 1_000_000) {
 
 function body(now = 1_000_000): SnapshotBody {
   const { m, texts } = fakeOffice(now);
-  return snapshotBody({ state: m.apiState(), texts, connected: true, lastSnapshotAt: now - 1_000, limits: { providers: [{ id: 'claude', name: 'Claude', status: 'ok', plan: 'max', windows: [{ label: '5h', pct: 42, resetsAt: now + 3_600_000 }], at: now }], at: now }, now });
+  return snapshotBody({ state: m.apiState(), texts, connected: true, lastSnapshotAt: now - 1_000, serversRead: true, limits: { providers: [{ id: 'claude', name: 'Claude', status: 'ok', plan: 'max', windows: [{ label: '5h', pct: 42, resetsAt: now + 3_600_000 }], at: now }], at: now }, now });
 }
 
 describe('snapshot', () => {
@@ -72,7 +72,8 @@ describe('snapshot', () => {
     expect(snap).toMatchObject({ version: 1, at: 1_000_000, rev: 1, orca: { connected: true, lastSnapshotAt: 999_000 } });
     expect(snap.fingerprint).toMatch(/^[\w-]{22}$/);
 
-    expect(snap.floors).toEqual([{ id: expect.stringMatching(/^f-/), projectId: 'repo:demo-web', name: 'demo-web', dir: '/code/demo-web', needsYou: 1, working: 1, stuck: 1, done: 0 }]);
+    expect(snap.floors).toEqual([{ id: expect.stringMatching(/^f-/), projectId: 'repo:demo-web', name: 'demo-web', dir: '/code/demo-web', shown: true, worktrees: 2, openWorktrees: 2, agents: 2, needsYou: 1, working: 1, stuck: 1, done: 0 }]);
+    expect(snap.serversStatus).toBe('ok');
     const floorId = snap.floors[0]!.id;
 
     const login = snap.worktrees.find((w) => w.name === 'fix-login')!;
@@ -135,7 +136,7 @@ describe('snapshot', () => {
       },
     ]);
     expect(snap.rooms).toEqual([{ id: expect.stringMatching(/^p-/), source: 'run', runId: 'run-1', name: 'Ship the login fix across web and api, with a migration plan for the sessions table', coordinator: null, members: ['repo-web::/code/demo-web/fix-login'] }]);
-    expect(snap.usage).toEqual({ at: 1_000_000, providers: [{ id: 'claude', name: 'Claude', status: 'ok', plan: 'max', windows: [{ label: '5h', pct: 42, resetsAt: 4_600_000 }], at: 1_000_000 }] });
+    expect(snap.usage).toEqual({ status: 'ok', at: 1_000_000, providers: [{ id: 'claude', name: 'Claude', status: 'ok', plan: 'max', windows: [{ label: '5h', pct: 42, resetsAt: 4_600_000 }], at: 1_000_000 }] });
   });
 
   test('the office page still gets only bubbles: the full texts are the API’s alone', () => {
@@ -154,6 +155,34 @@ describe('snapshot', () => {
     expect(clock.stamp({ ...b, orca: { ...b.orca, lastSnapshotAt: 5 } }, 2).rev).toBe(1);
     expect(clock.stamp({ ...b, orca: { ...b.orca, connected: false } }, 3).rev).toBe(2);
     expect(fingerprint(b)).toBe(fingerprint(body()));
+  });
+
+  test('before the first reads: servers and usage say loading, not just empty', () => {
+    const { m, texts } = fakeOffice();
+    const b = snapshotBody({ state: m.apiState(), texts, connected: true, lastSnapshotAt: null, serversRead: false, limits: { providers: [{ id: 'claude', name: 'Claude', status: 'loading', windows: [], at: 0 }, { id: 'codex', name: 'Codex', status: 'missing', windows: [], at: 0 }], at: 0 }, now: 1 });
+    expect(b.serversStatus).toBe('loading');
+    expect(b.worktrees.every((w) => w.servers.length === 0)).toBe(true);
+    expect(b.usage?.status).toBe('loading');
+  });
+
+  test('every Orca project is a floor; shown says which the office shows, with counts to filter on', () => {
+    const { m, texts } = fakeOffice();
+    m.applyWorkspaces([
+      ...parseWorkspaces({
+        workspaces: [
+          { id: 'ws-login', kind: 'worktree', name: 'fix-login', project: 'demo-web', projectId: 'repo:demo-web', path: '/code/demo-web/fix-login', hostId: 'local', status: { state: 'active' } },
+          { id: 'ws-dark', kind: 'worktree', name: 'dark-mode', project: 'demo-web', projectId: 'repo:demo-web', path: '/code/demo-web/dark-mode', hostId: 'local', status: { state: 'inactive' } },
+          { id: 'ws-old', kind: 'worktree', name: 'main', project: 'old-app', projectId: 'repo:old-app', path: '/code/old-app', hostId: 'local', status: { state: 'inactive' } },
+        ],
+      }),
+    ]);
+    const b = snapshotBody({ state: m.apiState(), texts, connected: true, lastSnapshotAt: null, serversRead: true, limits: null, now: 1_000_000 });
+    expect(b.floors.map((f) => [f.name, f.shown, f.worktrees, f.openWorktrees, f.agents])).toEqual([
+      ['demo-web', true, 2, 1, 2],
+      ['old-app', false, 1, 0, 0],
+    ]);
+    // The office shows the same floors.
+    expect(m.building().floors.filter((f) => !f.info.room).map((f) => f.info.name)).toEqual(['demo-web']);
   });
 
   test('private texts never print', () => {
@@ -279,6 +308,38 @@ describe('authentication', () => {
       expect(loadOrCreateApiToken(path)).toBe(t);
     } finally {
       rmSync(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('a consumer that only polls snapshots', () => {
+  test('counts as looking for WATCH_MS after each snapshot, like an open page', async () => {
+    let now = 5_000_000;
+    let watched = 0;
+    const a = new OfficeApi({ port, token: () => TOKEN, connected: () => true, snapshot: () => clock.stamp(current, now), watched: () => watched++, now: () => now });
+    const s2 = createServer((req, res) => a.handle(req, res));
+    await new Promise<void>((r) => s2.listen(0, '127.0.0.1', r));
+    const p2 = (s2.address() as AddressInfo).port;
+    // The api checks Host against its own port: give it the one it listens on.
+    (a as unknown as { deps: { port: number } }).deps.port = p2;
+    try {
+      expect(a.watching).toBe(false);
+      const r = await new Promise<number>((resolve) => request({ host: '127.0.0.1', port: p2, path: '/api/v1/snapshot', headers: { host: `127.0.0.1:${p2}`, ...auth() } }, (res) => (res.resume(), resolve(res.statusCode ?? 0))).end());
+      expect(r).toBe(200);
+      expect(watched).toBe(1);
+      expect(a.watching).toBe(true);
+      now += WATCH_MS - 1;
+      expect(a.watching).toBe(true);
+      now += 1;
+      expect(a.watching).toBe(false);
+      // Health and refused requests don't count.
+      await new Promise<number>((resolve) => request({ host: '127.0.0.1', port: p2, path: '/api/v1/snapshot', headers: { host: `127.0.0.1:${p2}` } }, (res) => (res.resume(), resolve(res.statusCode ?? 0))).end());
+      expect(a.watching).toBe(false);
+      expect(watched).toBe(1);
+    } finally {
+      a.close();
+      s2.closeAllConnections();
+      await new Promise((r) => s2.close(r));
     }
   });
 });

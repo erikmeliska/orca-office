@@ -28,6 +28,8 @@ export const HEARTBEAT_MS = 15_000;
 /** `changed` events at most this often: a working agent's hooks would otherwise send one per 100 ms. */
 export const CHANGED_MIN_GAP_MS = 1_000;
 export const MAX_STREAMS = 8;
+/** A snapshot counts as someone looking this long: servers and plan limits stay polled for a consumer that only polls. */
+export const WATCH_MS = 2 * 60_000;
 
 function readToken(path: string): string | null {
   try {
@@ -68,6 +70,8 @@ export interface ApiDeps {
   /** A snapshot of now. */
   snapshot: () => ApiSnapshot;
   connected: () => boolean;
+  /** Someone looks (a snapshot or a new stream): read what is only read while someone does. */
+  watched?: () => void;
   now?: () => number;
 }
 
@@ -81,6 +85,7 @@ export class OfficeApi {
   private changedTimer: ReturnType<typeof setTimeout> | null = null;
   private lastChangedAt = 0;
   private sentRev = -1;
+  private lastSnapshotAt = -Infinity;
   private readonly now: () => number;
 
   constructor(private deps: ApiDeps) {
@@ -95,9 +100,14 @@ export class OfficeApi {
     return path === API_BASE || path.startsWith(`${API_BASE}/`);
   }
 
-  /** Event streams open now (the office polls ports and limits while one is). */
+  /** Event streams open now. */
   get listeners(): number {
     return this.streams.size;
+  }
+
+  /** Whether a consumer looks: a stream is open, or a snapshot was fetched in the last WATCH_MS (the office polls ports and limits meanwhile). */
+  get watching(): boolean {
+    return this.streams.size > 0 || this.now() - this.lastSnapshotAt < WATCH_MS;
   }
 
   /** Host, Origin and (unless `open`) the token, and the rate limits. */
@@ -126,7 +136,11 @@ export class OfficeApi {
       const body: ApiHealth = { ok: true, version: API_VERSION, orca: { connected: this.deps.connected() } };
       return this.json(res, req.method === 'HEAD', body);
     }
-    if (route === '/snapshot') return this.json(res, req.method === 'HEAD', this.deps.snapshot());
+    if (route === '/snapshot') {
+      this.lastSnapshotAt = this.now();
+      this.deps.watched?.();
+      return this.json(res, req.method === 'HEAD', this.deps.snapshot());
+    }
     this.stream(req, res);
   }
 
@@ -169,11 +183,12 @@ export class OfficeApi {
     });
     if (req.method === 'HEAD') return void res.end();
     res.socket?.setNoDelay(true);
+    this.streams.add(res);
+    this.deps.watched?.();
     const snap = this.deps.snapshot();
     this.sentRev = Math.max(this.sentRev, snap.rev);
     res.write(`retry: 3000\n\n`);
     res.write(event('snapshot', snap, snap.rev));
-    this.streams.add(res);
     const drop = () => {
       this.streams.delete(res);
       if (!this.streams.size && this.heartbeat) {

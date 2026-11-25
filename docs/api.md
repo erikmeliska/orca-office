@@ -31,7 +31,9 @@ On the bridge's port (`ORCA_OFFICE_PORT`, default 4317), `http://127.0.0.1:<port
   "rev": 12,                  // bumped whenever the content changes
   "fingerprint": "F5-liwx…",  // digest of the content: equal digests, equal content
   "orca": { "connected": true, "lastSnapshotAt": 1795615277613 },
-  "floors":    [ /* ApiFloor: id, projectId, name, dir (main checkout), needsYou, working, stuck, done */ ],
+  "floors":    [ /* ApiFloor: id, projectId, name, dir (main checkout), shown, worktrees, openWorktrees,
+                    agents, needsYou, working, stuck, done; the shown ones first */ ],
+  "serversStatus": "ok",      // 'loading' until the dev servers have been read (see below)
   "worktrees": [ /* ApiWorktree: id, orcaWorktreeId, floorId, name, branch, path, hostId, open,
                     workspaceStatus (Kanban), unread, comment, links (PR/MR/issue), servers (orca ports) */ ],
   "agents":    [ /* ApiAgent: id, worktreeId, floorId, agent, surface terminal|chat, state, needsYou,
@@ -56,8 +58,15 @@ Every field is documented in `api.ts`. Notes:
   stretch (`stuckWhy`: `quiet` | `long`).
 - **`question`** is the agent's last words in full as Orca gives them (`lastAssistantMessage`, up to
   ~200 characters), only while it needs you; `bubble` is the one-line ≤120-character cut the office shows.
-- **`servers`** and **`usage`** are read while someone looks: an office page or an open event stream.
-  A consumer that only fetches snapshots sees them only while one of those is open.
+- **Floors.** `floors` lists every project Orca knows (often 100+), not only those in use. `shown` is
+  true for the floors the 3D office shows: Orca has one of the project's workspaces open, or an agent
+  works there. `worktrees` / `openWorktrees` / `agents` count what is on the floor, so a consumer can
+  filter (`floors.filter((f) => f.shown)`) or sort its own way. Shown floors come first.
+- **`servers`** and **`usage`** are read only while someone looks: an office page, an open event
+  stream, or a `/snapshot` request in the last 2 minutes. A consumer that only polls snapshots (at
+  least every 2 min) therefore keeps them read. A snapshot after a pause starts a read at once.
+  Until that read has finished, `serversStatus` and `usage.status` are `"loading"`: empty `servers`
+  means "not known yet", not "no servers". Poll again a second later, or wait for `changed`.
 - Within v1 fields may be added; none is removed or changes meaning.
 
 ### Events

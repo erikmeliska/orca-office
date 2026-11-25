@@ -23,6 +23,7 @@ export const API_BASE = '/api/v1';
 /** An agent's state as Orca says it (done is held back ~1 s, as in the office). */
 export type ApiAgentState = 'working' | 'blocked' | 'waiting' | 'done';
 
+/** `floors` lists every Orca project, the shown ones first (see ApiFloor.shown). */
 export interface ApiSnapshot {
   version: typeof API_VERSION;
   /** When this snapshot was made. */
@@ -38,6 +39,12 @@ export interface ApiSnapshot {
     lastSnapshotAt: number | null;
   };
   floors: ApiFloor[];
+  /**
+   * Whether `worktrees[].servers` is read: 'loading' until the first read since someone started
+   * looking (the bridge reads `orca ports` only while a page, an event stream or a snapshot within
+   * the last 2 min looks), then 'ok'. While 'loading', empty `servers` means "not known yet".
+   */
+  serversStatus: ApiLoadStatus;
   worktrees: ApiWorktree[];
   agents: ApiAgent[];
   bots: ApiBot[];
@@ -56,6 +63,17 @@ export interface ApiFloor {
   name: string;
   /** The repository's own checkout (its main worktree); '' when Orca lists none. */
   dir: string;
+  /**
+   * The 3D office shows this floor: Orca has one of its workspaces open, or an agent works there.
+   * Orca knows every project ever added (often 100+); filter on this for what is in use now.
+   */
+  shown: boolean;
+  /** Its workspaces Orca lists (ApiWorktree), open or not. */
+  worktrees: number;
+  /** Of those, the ones Orca has open. */
+  openWorktrees: number;
+  /** Agents on this floor (ApiAgent). */
+  agents: number;
   needsYou: number;
   working: number;
   stuck: number;
@@ -250,7 +268,12 @@ export interface ApiUsageProvider {
   at: number;
 }
 
+/** 'loading': not read yet (fields are empty for now); 'ok': read. */
+export type ApiLoadStatus = 'loading' | 'ok';
+
 export interface ApiUsage {
+  /** 'loading' while a provider with a CLI has not been read yet; each provider has its own `status` too. */
+  status: ApiLoadStatus;
   providers: ApiUsageProvider[];
   at: number;
 }
