@@ -374,3 +374,4 @@ bubble) and `since` (a gate's: when the bridge first saw it; Orca gives no time)
 
 ![Workers panel across floors](img/m6-workers-panel-desktop.png)
 ![⌘K finds a worker on another floor](img/m6-palette-desktop.png)
+![Workers panel on a phone](img/m6-workers-panel-mobile.png)
