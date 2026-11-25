@@ -106,7 +106,11 @@ interface AgentRec {
   updatedAt: number;
   /** Its last turn ended in a failure (M7 B2), until it works again. */
   failed: boolean;
+  /** Where its CLI row says it works, to find its desk again when Orca's workspaces arrive. */
+  where: DeskHint | null;
 }
+
+type DeskHint = Pick<CliAgent, 'hostId' | 'worktreeId' | 'workspace' | 'repo'>;
 
 interface DeskRec {
   key: string;
@@ -123,7 +127,7 @@ export type ApiModelCoordinator = { kind: 'bot'; botId: string; name: string } |
 
 /** The model's records as the Office API reads them (LiveModel.apiState). */
 export interface ApiModelState {
-  floors: { key: string; id: string; name: string; projectId: string | null; dir: string }[];
+  floors: { key: string; id: string; name: string; projectId: string | null; dir: string; shown: boolean; worktrees: number; openWorktrees: number; agents: number }[];
   /** Every workspace Orca lists (open or not; bots' folders left out), and desks only remote agents name. */
   desks: { key: string; floorId: string; kind: 'worktree' | 'folder'; name: string; branch: string | null; path: string; hostId: string; open: boolean; unread: boolean; lastActivityAt: number | null }[];
   agents: {
@@ -262,9 +266,18 @@ export class LiveModel {
     this.workspaces = new Map(rows.map((w) => [w.id, w]));
     this.byPath = new Map(rows.filter((w) => w.kind === 'worktree' && w.path).map((w) => [`${w.hostId ?? LOCAL}|${w.path}`, w]));
     for (const w of rows) if (w.kind === 'folder' && /[/\\]\.orca[/\\]bots[/\\]/.test(w.path)) this.botFolders.add(w.id);
-    for (const a of this.agents.values()) {
+    for (const [k, a] of this.agents) {
       const ws = this.workspaces.get(a.deskKey);
       if (ws) a.floor = floorKeyOf(ws);
+      // A bot's chat, now that its folder is known: the Staff floor's, not a figure.
+      else if (a.where && this.isBotChat(a.where)) this.agents.delete(k);
+      else if (a.where) {
+        // Listed by the CLI before Orca's workspaces came (the bridge just started): its desk is
+        // known now. Until this, it sat on a floor by its repo's name, a second floor for the repo.
+        const d = this.deskFor(a.where);
+        a.deskKey = d.key;
+        a.floor = d.floor;
+      }
     }
     this.version++;
   }
@@ -280,7 +293,7 @@ export class LiveModel {
       const rec: AgentRec = prev ?? newAgent(c.paneKey, desk.key, desk.floor, now);
       // A newer row or a new last message is Orca saying something about it (B5).
       if (prev && (c.updatedAt > prev.updatedAt || c.bubble !== prev.bubble)) this.heard(prev, c.updatedAt > prev.updatedAt ? Math.min(now, c.updatedAt) : now);
-      Object.assign(rec, { deskKey: desk.key, floor: desk.floor, kind: c.kind, agent: c.agent, hostId: c.hostId, bubble: c.bubble, sessionId: c.sessionId, provisional: false, lastSeen: now, updatedAt: c.updatedAt });
+      Object.assign(rec, { where: { hostId: c.hostId, worktreeId: c.worktreeId, workspace: c.workspace, repo: c.repo }, deskKey: desk.key, floor: desk.floor, kind: c.kind, agent: c.agent, hostId: c.hostId, bubble: c.bubble, sessionId: c.sessionId, provisional: false, lastSeen: now, updatedAt: c.updatedAt });
       if (!prev) {
         rec.quietSince = c.updatedAt || now;
         rec.shown = c.state;
@@ -587,7 +600,11 @@ export class LiveModel {
     const floors = [...keys].map((key) => {
       const name = names.get(key)!;
       const first = [...this.workspaces.values()].find((w) => floorKeyOf(w) === key && w.kind === 'worktree' && (w.hostId ?? LOCAL) === LOCAL);
-      return { key, id: floorId(nameOfKey(key), key), name, projectId: key.startsWith('p:') ? key.slice(2) : null, dir: this.mainCheckout(key) ?? first?.path ?? '' };
+      const ws = [...this.workspaces.values()].filter((w) => floorKeyOf(w) === key && !(w.kind === 'folder' && this.botFolders.has(w.id)));
+      const agents = [...this.agents.values()].filter((a) => a.floor === key).length;
+      const open = ws.filter((w) => w.state !== 'inactive').length;
+      // As building(): a floor shows while Orca has one of its workspaces open or an agent works there.
+      return { key, id: floorId(nameOfKey(key), key), name, projectId: key.startsWith('p:') ? key.slice(2) : null, dir: this.mainCheckout(key) ?? first?.path ?? '', shown: open > 0 || agents > 0, worktrees: ws.length, openWorktrees: open, agents };
     });
     const floorIdOfKey = new Map(floors.map((f) => [f.key, f.id]));
     const agents = [...this.agents.values()].map((a) => ({
@@ -1066,13 +1083,13 @@ export class LiveModel {
     this.botChats = by;
   }
 
-  private isBotChat(c: CliAgent): boolean {
+  private isBotChat(c: DeskHint): boolean {
     if (c.hostId !== LOCAL || !c.worktreeId.startsWith('folder:')) return false;
     return this.botFolders.has(c.worktreeId) || this.bots.some((b) => b.name.toLowerCase() === c.workspace.toLowerCase());
   }
 
   /** The desk (worktree) a CLI agent sits at, and its floor. */
-  private deskFor(c: CliAgent): { key: string; floor: string } {
+  private deskFor(c: DeskHint): { key: string; floor: string } {
     if (c.hostId === LOCAL) {
       const ws = this.workspaces.get(c.worktreeId) ?? this.byPath.get(`${LOCAL}|${worktreePath(c.worktreeId) ?? ''}`);
       if (ws) return { key: ws.id, floor: floorKeyOf(ws) };
@@ -1100,11 +1117,12 @@ export class LiveModel {
     if (!key.startsWith('p:')) return null;
     const projectId = key.slice(2);
     const main = this.worktreeRows.filter((r) => r.isMain);
-    const byProject = main.find((r) => r.projectId === projectId);
+    // The plugin's rows may name the repository's id where the CLI names the project (`github:o/r`).
+    const byProject = main.find((r) => r.projectId === projectId) ?? main.find((r) => r.repoId === projectId);
     if (byProject) return byProject.path;
     const paths = new Set([...this.workspaces.values()].filter((w) => w.kind === 'worktree' && (w.hostId ?? LOCAL) === LOCAL && floorKeyOf(w) === key).map((w) => w.path));
     const repoId = this.worktreeRows.find((r) => paths.has(r.path) && r.repoId)?.repoId;
-    return (repoId && main.find((r) => !r.projectId && r.repoId === repoId)?.path) || null;
+    return (repoId && main.find((r) => r.repoId === repoId)?.path) || null;
   }
 
   /** The name each floor shows: its repository's; two repositories called the same get their project's id after it. */
@@ -1206,6 +1224,7 @@ function newAgent(paneKey: string, deskKey: string, floor: string, now: number):
     quietSince: now,
     updatedAt: 0,
     failed: false,
+    where: null,
   };
 }
 

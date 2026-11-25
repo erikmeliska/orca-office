@@ -398,3 +398,34 @@ describe('floors from the repository, not a worktree', () => {
     expect(floors.find((f) => f.info.name === 'Folders')!.info.id).toBe(floorId('Folders'));
   });
 });
+
+describe('agents listed before Orca\'s workspaces (bridge start)', () => {
+  test('find their desk when the workspaces come: one floor per repository, not a second by name', () => {
+    const m = new LiveModel();
+    m.applyAgents('local', [agent('p1', '/code/demo-web/a')], 0);
+    m.applyWorkspaces([{ ...ws('a'), id: 'repo-1::/code/demo-web/a' }]);
+    const st = m.apiState();
+    expect(st.floors.map((f) => f.name)).toEqual(['demo-web']);
+    expect(st.agents[0]!.deskKey).toBe('repo-1::/code/demo-web/a');
+    expect(m.building().floors.map((f) => f.info.name)).toEqual(['demo-web']);
+  });
+
+  test("a bot's chat listed before its folder was known stops being a figure on a Folders floor", () => {
+    const m = new LiveModel();
+    m.applyAgents('local', [agent('bot-chat', '', { kind: 'chat', worktreeId: 'folder:bots-release', workspace: 'ReleaseBot', repo: null })], 0);
+    expect(m.apiState().floors.map((f) => f.name)).toEqual(['Folders']);
+    m.applyWorkspaces([{ ...ws('bots-release', { kind: 'folder', name: 'ReleaseBot', project: null, projectId: null, path: '/Users/me/.orca/bots/releasebot' }), id: 'folder:bots-release' }, ws('a')]);
+    expect(m.apiState().agents).toHaveLength(0);
+  });
+
+  test('a floor keyed by the repository id still finds its main checkout (the CLI names the project)', () => {
+    const m = new LiveModel();
+    m.applyWorkspaces([ws('wt', { projectId: '46abaf44-0000-4000-8000-000000000000', path: '/code/demo-web/wt' })]);
+    m.applyWorktrees([
+      { id: '46abaf44-0000-4000-8000-000000000000::/code/demo-web', repoId: '46abaf44-0000-4000-8000-000000000000', projectId: 'github:example/demo-web', isMain: true, path: '/code/demo-web', hostId: 'local', name: 'main', branch: 'main', links: [], parentId: null, childIds: [] },
+      { id: '46abaf44-0000-4000-8000-000000000000::/code/demo-web/wt', repoId: '46abaf44-0000-4000-8000-000000000000', projectId: 'github:example/demo-web', isMain: false, path: '/code/demo-web/wt', hostId: 'local', name: 'wt', branch: 'wt', links: [], parentId: null, childIds: [] },
+    ]);
+    expect(m.apiState().floors[0]!.dir).toBe('/code/demo-web');
+  });
+});
+

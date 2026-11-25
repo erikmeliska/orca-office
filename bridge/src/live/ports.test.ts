@@ -95,6 +95,27 @@ describe('PortsPoller', () => {
   });
 });
 
+describe('PortsPoller.kick', () => {
+  test('a snapshot reads at once when the last read is stale, not again while it is fresh', async () => {
+    let t = 1_000_000;
+    let reads = 0;
+    let looking = false;
+    const p = new PortsPoller({ run: async () => (reads++, json(row(5173))), command: async () => 'vite', title: async () => null, wanted: () => looking, changed: () => {}, error: () => {}, now: () => t });
+    expect(p.fresh()).toBe(false);
+    looking = true;
+    p.kick();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(reads).toBe(1);
+    expect(p.fresh()).toBe(true);
+    p.kick();
+    await new Promise((r) => setTimeout(r, 10));
+    expect(reads).toBe(1);
+    t += 31_000;
+    expect(p.fresh()).toBe(false);
+    p.stop();
+  });
+});
+
 describe('the model', () => {
   const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project: 'demo-web', projectId: `p-${over.project ?? 'demo-web'}`, path: `/code/demo-web/${id}`, branch: `feat/${id}`, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
   const port = (n: number, path: string): PortRow => ({ port: n, pid: n, host: '127.0.0.1', processName: 'node', http: true, url: null, path, worktree: path.split('/').pop()!, command: 'vite', title: 'Demo', since: 5 });
