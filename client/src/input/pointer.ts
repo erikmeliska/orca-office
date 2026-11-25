@@ -13,6 +13,7 @@ import { interactionAvailable, type DeskKey } from '../interaction';
 import { EYE_HEIGHT } from '../player';
 import { store } from '../state';
 import { modalOpen, toast } from '../ui/dom';
+import { deskLinks } from '../ui/links';
 import { isOrca } from '../ui/orca';
 import type { Interactable } from '../world/types';
 
@@ -71,7 +72,8 @@ export function installPointer(ctx: Ctx, core: CoreState, parts: PointerParts) {
   function use(it: Interactable | null, key: DeskKey, note = aimedNote): boolean {
     const worker = it?.deskId ? store.workerAtDesk(it.deskId) : undefined;
     const room = !!(it?.deskId && plan().byId.get(it.deskId)?.room);
-    if (!interactionAvailable(it, key, { worker, room, note, orca: isOrca() })) return false;
+    const links = !!it?.deskId && deskLinks(it.deskId).length > 0;
+    if (!interactionAvailable(it, key, { worker, room, note, orca: isOrca(), links })) return false;
     reach();
     interact(it, key, note);
     return true;

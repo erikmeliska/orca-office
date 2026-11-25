@@ -41,6 +41,8 @@ export class BoardTexture {
   /** The note being reached for, drawn lifted off the cork (see lift). */
   private lifted: number | null = null;
   private last: [GhState<GhIssue> | GhState<GhPull>, Map<string, WorkerInfo> | undefined] | null = null;
+  /** Notes without a number: a project room's tasks and decisions aren't pull requests or issues (M6 A6). */
+  unnumbered: () => boolean = () => false;
 
   constructor(private kind: 'issues' | 'pulls' | 'queue') {
     this.canvas.width = 1200;
@@ -150,7 +152,7 @@ export class BoardTexture {
       const w = this.kind === 'pulls' && workers ? workerForPull(workers.values(), it as GhPull) : undefined;
       const footer = w ? fs * 1.3 : 0;
       g.font = `900 ${Math.round(fs * 1.35)}px Nunito, ui-rounded, system-ui, sans-serif`;
-      g.fillText(`#${it.number}`, -nw / 2 + 14, -nh / 2 + fs * 2);
+      if (!this.unnumbered()) g.fillText(`#${it.number}`, -nw / 2 + 14, -nh / 2 + fs * 2);
       g.font = `700 ${fs}px Nunito, ui-rounded, system-ui, sans-serif`;
       wrap(g, it.title, nw - 28, Math.max(2, Math.floor((nh - fs * 3 - footer) / (fs * 1.1)))).forEach((line, li) => g.fillText(line, -nw / 2 + 14, -nh / 2 + fs * 3.4 + li * fs * 1.1));
       if (w) {

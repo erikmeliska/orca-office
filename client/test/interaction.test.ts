@@ -58,4 +58,6 @@ test('on Orca the desk keys are its light control', () => {
   assert.equal(interactionAvailable(desk, 'R', orca({ worker: term })), true);
   assert.equal(interactionAvailable(desk, 'R', orca({ worker: chat })), false);
   for (const k of ['X', 'B', 'L'] as const) assert.equal(interactionAvailable(desk, k, orca({ worker: term })), false, k);
+  // L lists the desk's links (#32) when it has some, as its hint says (M6 A7).
+  assert.equal(interactionAvailable(desk, 'L', orca({ worker: term, links: true })), true);
 });

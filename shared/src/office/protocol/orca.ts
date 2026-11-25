@@ -1,6 +1,8 @@
 // The bridge's link to Orca (orca-office, not agent-office): whether the Orca plugin is connected,
 // and the office's light control over Orca (M3, design #14).
 
+import type { WorkerStatus } from './workers.js';
+
 /** What a figure is in Orca, for what the office can do with it (WorkerInfo.orca). */
 export interface OrcaWorkerInfo {
   /** A terminal agent on this machine: its live terminal opens in the office and takes typing. Chat agents and agents on other hosts have none. */
@@ -9,6 +11,9 @@ export interface OrcaWorkerInfo {
   remote: boolean;
   /** An Orca bot (Staff floor, M5): its name; clicking it opens its chats, where you can write to it. */
   bot?: string;
+  /** Its worktree's name and branch (M6 A5): what you think in, rather than a made-up name. */
+  worktree?: string;
+  branch?: string;
 }
 
 /** Agents the office can start in a new workspace; Orca's plugin worker allows the same (plugin/src/worker.ts). */
@@ -149,6 +154,25 @@ export interface OrcaWaiting {
   since: number;
 }
 
+/** One figure of the building's roster (M6 A6): for ⌘K and the Workers panel across floors. */
+export interface OrcaRosterWorker {
+  id: string;
+  name: string;
+  status: WorkerStatus;
+  deskId: string;
+  branch?: string;
+  /** Its bubble (≤120), what it's on or asks. */
+  summary?: string;
+  bot?: boolean;
+}
+
+/** A floor of the roster: repository floors and the Staff floor (project rooms only mirror them). */
+export interface OrcaRosterFloor {
+  floor: string;
+  name: string;
+  workers: OrcaRosterWorker[];
+}
+
 export type OrcaClientMsg =
   /** Show the figure's workspace in Orca and focus its terminal (`workerId`), or a desk's worktree (`deskId`). */
   | { t: 'orca.open'; workerId?: string; deskId?: string }
@@ -199,6 +223,8 @@ export type OrcaServerMsg =
   | { t: 'orca.project'; floor: string; project: OrcaProject | null }
   /** A delivery to animate on the page's floor (#34): seat to seat; null = up to the roof or down from it. */
   | { t: 'orca.handoff'; from: string | null; to: string | null; kind: 'dispatch' | 'ask' | 'reply' | 'worker_done' | 'escalation'; subject: string | null }
+  /** Every figure on every floor (M6 A6), for ⌘K and the Workers panel. Sent after `welcome` and on change. */
+  | { t: 'orca.roster'; floors: OrcaRosterFloor[] }
   /** Everything in the building waiting for you, longest first (M6 A1/A2). Sent after `welcome` and on change. */
   | { t: 'orca.waiting'; items: OrcaWaiting[] }
   /** A desk's worktree in Orca: its comment and whether it is unread. */

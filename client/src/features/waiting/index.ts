@@ -91,6 +91,11 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     return true;
   }
 
+  /** Over to a figure on any floor (⌘K, the Workers panel across floors): its desk, by the floor list if need be. */
+  function goToFigure(floor: string, workerId: string, deskId: string, name: string) {
+    goToStop({ key: workerId, kind: 'agent', floor, floorName: '', workerId, deskId, name, ask: null, needs: false, since: 0 });
+  }
+
   /** The banner's click (a stop's key): over to it, wherever it is. */
   function goToKey(key: string) {
     const s = stops().find((x) => x.key === key);
@@ -209,5 +214,5 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     openChanges(net, id, () => openWorkerTerminal(id), repo);
   }
 
-  return { goToNextWaiting, goToWorker, goToKey, answerWorker, answerStop, stops, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch };
+  return { goToNextWaiting, goToWorker, goToFigure, goToKey, answerWorker, answerStop, stops, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch };
 }

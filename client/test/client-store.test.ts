@@ -67,7 +67,7 @@ const welcome = () =>
 const FLOOR_TOPICS = ['floor', 'project', 'workers', 'issues', 'pulls', 'decor', 'floorPlan', 'services', 'dog', 'cabinet', 'cabinetFrame', 'ball', 'jail'];
 
 /** Every topic, to listen for them all. */
-const TOPICS = ['peers', 'workers', 'issues', 'pulls', 'chat', 'project', 'screens', 'upgrade', 'services', 'decor', 'floorPlan', 'usage', 'limits', 'me', 'notify', 'machine', 'floors', 'floor', 'projectsDir', 'repos', 'dog', 'sky', 'theme', 'map', 'leaveOnMerge', 'cabinet', 'cabinetFrame', 'prompts', 'ball', 'jail', 'waitingAll'] as const;
+const TOPICS = ['peers', 'workers', 'issues', 'pulls', 'chat', 'project', 'screens', 'upgrade', 'services', 'decor', 'floorPlan', 'usage', 'limits', 'me', 'notify', 'machine', 'floors', 'floor', 'projectsDir', 'repos', 'dog', 'sky', 'theme', 'map', 'leaveOnMerge', 'cabinet', 'cabinetFrame', 'prompts', 'ball', 'jail', 'waitingAll', 'roster'] as const;
 
 /** Every message the store takes in (and one it doesn't), and the topics it fires, in the order it has always fired them. */
 const RUN: [ServerMsg, string[]][] = [
@@ -199,7 +199,7 @@ test('what the browser remembers keeps its keys and shapes', () => {
 
 test("the store's keys are its state, as window.__office shows them", () => {
   // As the office had them before its store was split into slices: methods and the slices aren't among them.
-  assert.deepEqual(Object.keys(store).sort(), ['ball', 'cabinet', 'cabinetFrame', 'chat', 'clock', 'decor', 'dog', 'dogStart', 'floor', 'floorPlan', 'floors', 'issues', 'jail', 'leaveOnMerge', 'limits', 'machine', 'map', 'me', 'notify', 'peers', 'profile', 'project', 'projectsDir', 'prompts', 'pulls', 'repos', 'screens', 'services', 'sky', 'subs', 'theme', 'upgrade', 'usage', 'waitingAll', 'workers', 'you']);
+  assert.deepEqual(Object.keys(store).sort(), ['ball', 'cabinet', 'cabinetFrame', 'chat', 'clock', 'decor', 'dog', 'dogStart', 'floor', 'floorPlan', 'floors', 'issues', 'jail', 'leaveOnMerge', 'limits', 'machine', 'map', 'me', 'notify', 'peers', 'profile', 'project', 'projectsDir', 'prompts', 'pulls', 'repos', 'roster', 'screens', 'services', 'sky', 'subs', 'theme', 'upgrade', 'usage', 'waitingAll', 'workers', 'you']);
 });
 
 test('a new store starts every field where it always has', async () => {
@@ -224,6 +224,7 @@ test('a new store starts every field where it always has', async () => {
       cabinet: { player: null, scores: [] }, cabinetFrame: null, ball: {},
       jail: { prisoners: [], bones: 0 },
       waitingAll: [],
+      roster: [],
     },
   );
 });

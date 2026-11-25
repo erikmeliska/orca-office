@@ -112,6 +112,7 @@ export class LiveSession {
   private sentForge = '';
   private sentServices = '';
   private sentWaiting = '';
+  private sentRoster = '';
 
   constructor(id: string, query: URLSearchParams, b: Building, private forgeOf: ForgeOf = () => null) {
     const n = (k: string) => (query.get(k) ? Number(query.get(k)) : Number.NaN);
@@ -246,10 +247,15 @@ export class LiveSession {
 
   /** Who waits for you anywhere in the building (A1/A2), when it changed (or `always`). */
   private waitingMsg(b: Building, always: boolean): ServerMsg[] {
+    const out: ServerMsg[] = [];
     const key = JSON.stringify(b.waiting);
-    if (!always && key === this.sentWaiting) return [];
+    if (always || key !== this.sentWaiting) out.push({ t: 'orca.waiting', items: b.waiting });
     this.sentWaiting = key;
-    return [{ t: 'orca.waiting', items: b.waiting }];
+    // Every floor's figures (A6), for ⌘K and the Workers panel.
+    const roster = JSON.stringify(b.roster);
+    if (always || roster !== this.sentRoster) out.push({ t: 'orca.roster', floors: b.roster });
+    this.sentRoster = roster;
+    return out;
   }
 
   /** The forge's board of the page's floor changed (#38): the walls and the queue, if they did change. */

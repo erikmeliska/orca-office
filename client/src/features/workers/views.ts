@@ -219,7 +219,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     arrangeSeats();
     // Whoever's waiting on someone lines up for the throne, the one who's waited longest first.
     court?.line(waitingInOrder(store.workers.values()).filter(inCourt).map((w) => w.id));
-    renderWorkers((id) => parts.waiting.openWorkerTerminal(id));
+    renderWorkers((id) => parts.waiting.openWorkerTerminal(id), parts.waiting.goToFigure);
     parts.waiting.renderWaiting();
     parts.notifier.sync(store.workers);
     renderTitle();
@@ -293,6 +293,10 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     for (const c of appeared) if (p.y > -0.1 && p.y < c.top && p.x > c.minX - 0.3 && p.x < c.maxX + 0.3 && p.z > c.minZ - 0.3 && p.z < c.maxZ + 0.3) p.y = c.top;
   }
   store.on('workers', syncWorkers);
+  // The other floors' figures in the Workers panel (A6).
+  const renderPanel = () => renderWorkers((id) => parts.waiting.openWorkerTerminal(id), parts.waiting.goToFigure);
+  store.on('roster', renderPanel);
+  store.on('waitingAll', renderPanel);
   const workerPos = new THREE.Vector3();
   /** When (performance.now()) the workers' looks were last brought up to how long they've worked. */
   let agedAt = 0;
