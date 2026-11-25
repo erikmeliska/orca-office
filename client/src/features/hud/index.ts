@@ -71,7 +71,7 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
       {
         id: 'waiting',
         icon: () => (needsNow() ? '🙋' : '✅'),
-        label: 'Next worker that needs you',
+        label: 'Next one waiting for you',
         section: 'Open',
         key: 'N',
         shown: () => waitingNow().length > 0,

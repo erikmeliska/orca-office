@@ -43,9 +43,12 @@ export function installBoards(ctx: Ctx) {
     mat.map = texture;
     mat.needsUpdate = true;
   }
+  const inRoom = () => store.currentFloor()?.room === 'project';
   const issuesTex = new BoardTexture('issues');
+  issuesTex.unnumbered = inRoom;
   mountBoard(office.boardMeshes.issues, issuesTex.texture, () => issuesTex.render(store.issues), ['issues']);
   const pullsTex = new BoardTexture('pulls');
+  pullsTex.unnumbered = inRoom;
   const renderPullsBoard = () => pullsTex.render(store.pulls, store.workers);
   mountBoard(office.boardMeshes.pulls, pullsTex.texture, renderPullsBoard, ['pulls']);
   // PR notes name the desk they came from. Redraw when that changes, not on every worker update.

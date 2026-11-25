@@ -109,6 +109,9 @@
 .workers li.needs-you-row:hover { background: #ffd0dc; }
 .workers li.needs-you-row .name { font-weight: 900; }
 .workers .ask { flex: 0 0 100%; font-size: 12px; font-weight: 800; line-height: 1.3; color: #b3123d; overflow-wrap: anywhere; }
+/* The other floors' figures (M6 A6): a heading per floor, compact rows. */
+.workers li.floor-head { margin-top: 6px; padding: 4px 2px 0; border: 0; background: none; box-shadow: none; font-size: 12px; font-weight: 900; color: var(--muted); cursor: default; }
+.workers li.away .name { font-size: 13px; }
 #waiting.all-done { background: #d8f5e3; }
 #waiting.all-done:hover { background: #c3efd5; }
 #waiting .key { margin: 0 0 0 auto; background: var(--ink); color: var(--paper); box-shadow: none; }

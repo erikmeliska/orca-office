@@ -359,3 +359,18 @@ bubble) and `since` (a gate's: when the bridge first saw it; Orca gives no time)
 
 ![Needs you across the building](img/m6-needs-you-desktop.png)
 ![N took you to a decision gate on the roof](img/m6-needs-you-gate-desktop.png)
+
+## Names, the roster and ⌘K (M6, roadmap A5–A7)
+
+- A figure is named after its worktree (`fix-login`; a second agent at the desk `fix-login · 2`),
+  no longer a made-up name; `WorkerInfo.orca` carries `worktree` and `branch`. The Workers panel,
+  the terminal's header (with `🙋 <question>` while it asks) and ⌘K show the branch.
+- `{ t: 'orca.roster', floors: OrcaRosterFloor[] }` after `welcome` and on change: every floor's
+  figures (repository floors and Staff; project rooms only mirror them) with name, status, desk,
+  branch and bubble. The Workers panel lists the other floors under this one's, grouped; ⌘K finds
+  them too. Either takes you there by the floor list.
+- In a project room ⌘K lists its tasks and decisions as such, and its wall notes carry no "#1".
+- L at an Orca desk with links opens them, as its hint says (it used to do nothing).
+
+![Workers panel across floors](img/m6-workers-panel-desktop.png)
+![⌘K finds a worker on another floor](img/m6-palette-desktop.png)

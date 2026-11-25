@@ -12,18 +12,19 @@ test('a page arrives on the busiest floor and then hears only what changed there
   m.applyWorkspaces([ws('a')]);
   m.applyAgents('local', [agent('p1', 'working')], 0);
   const s = new LiveSession('me', new URLSearchParams(), m.building());
-  const [welcome, orca, waiting] = s.welcome(m.building(), 'test', true);
+  const [welcome, orca, waiting, roster] = s.welcome(m.building(), 'test', true);
   expect(welcome).toMatchObject({ t: 'welcome', floor: s.peer.floor, workers: [{ status: 'working' }] });
   expect(orca).toEqual({ t: 'orca', online: true });
   expect(waiting).toEqual({ t: 'orca.waiting', items: [] });
+  expect(roster).toMatchObject({ t: 'orca.roster', floors: [{ name: 'demo', workers: [{ name: 'a', status: 'working', branch: 'a' }] }] });
   expect(s.update(m.building())).toEqual([]);
   m.applyStatus({ paneKey: 'p1', workspaceListId: 'a', terminalId: 't', state: 'blocked', at: 5 });
   const msgs = s.update(m.building());
   // Who waits for you in the whole building (A1) comes first, then the floor's own news.
-  expect(msgs.map((x) => x.t)).toEqual(['orca.waiting', 'floors', 'worker.update', 'plan']);
+  expect(msgs.map((x) => x.t)).toEqual(['orca.waiting', 'orca.roster', 'floors', 'worker.update', 'plan']);
   expect(msgs[0]).toMatchObject({ items: [{ kind: 'agent', name: 'a', floorName: 'demo' }] });
   m.applyAgents('local', [], 10);
-  expect(s.update(m.building()).map((x) => x.t)).toEqual(['orca.waiting', 'floors', 'worker.remove', 'plan']);
+  expect(s.update(m.building()).map((x) => x.t)).toEqual(['orca.waiting', 'orca.roster', 'floors', 'worker.remove', 'plan']);
 });
 
 test('a page that came before Orca had anything is let in once a floor exists', () => {
@@ -31,7 +32,7 @@ test('a page that came before Orca had anything is let in once a floor exists', 
   const s = new LiveSession('me', new URLSearchParams(), m.building());
   expect(s.peer.floor).toBeUndefined();
   m.applyWorkspaces([ws('a')]);
-  expect(s.update(m.building()).map((x) => x.t)).toEqual(['orca.waiting', 'floors', 'floor.enter', 'orca.links', 'orca.project', 'orca.forge']);
+  expect(s.update(m.building()).map((x) => x.t)).toEqual(['orca.waiting', 'orca.roster', 'floors', 'floor.enter', 'orca.links', 'orca.project', 'orca.forge']);
 });
 
 test('floor.go to an unknown floor is ignored', () => {

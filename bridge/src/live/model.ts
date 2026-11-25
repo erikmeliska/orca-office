@@ -19,7 +19,7 @@ import { cleanLabel, type FloorPlan } from '@orca-office/shared/office/floorplan
 import { FLOOR_PALETTES } from '@orca-office/shared/office/floors';
 import { BEANBAGS, DESKS, WING_DESKS } from '@orca-office/shared/office/layout';
 import type { FloorInfo, ServiceInfo, WorkerAction, WorkerInfo, WorkerStatus } from '@orca-office/shared/office/protocol';
-import type { OrcaLink, OrcaProject, OrcaWaiting } from '@orca-office/shared/office/protocol/orca';
+import type { OrcaLink, OrcaProject, OrcaRosterFloor, OrcaWaiting } from '@orca-office/shared/office/protocol/orca';
 import { pinsText, type OrcaWorktree } from './worktrees.js';
 import type { PortRow } from './ports.js';
 import { isLive, type HandoffKind, type InboxMessage, type OrcaRun, type RunGate, type RunTask, type TaskStatus } from './runs.js';
@@ -123,6 +123,8 @@ export interface Building {
   projects: Record<string, ProjectBoard>;
   /** Everything in the building waiting for you, longest first (M6 A1/A2). */
   waiting: OrcaWaiting[];
+  /** Every figure by floor, for ⌘K and the Workers panel across floors (M6 A6). */
+  roster: OrcaRosterFloor[];
 }
 
 /** A project room's board (on the page as `orca.project`): private texts already cut to 60. */
@@ -534,7 +536,7 @@ export class LiveModel {
       projects[floor.info.id] = board;
     }
     for (const id of this.seats.keys()) if (!out.some((f) => f.info.id === id)) this.seats.delete(id);
-    return { floors: out, projects, waiting: this.waitingList(out, projects) };
+    return { floors: out, projects, waiting: this.waitingList(out, projects), roster: roster(out) };
   }
 
   /**
@@ -739,7 +741,7 @@ export class LiveModel {
       const at = seats.get(d.key);
       if (!at) continue;
       const list = (agents.get(d.key) ?? []).sort((a, b) => a.firstSeen - b.firstSeen || a.paneKey.localeCompare(b.paneKey));
-      list.slice(0, at.length).forEach((a, i) => workers.push(this.worker(a, at[i]!, d)));
+      list.slice(0, at.length).forEach((a, i) => workers.push(this.worker(a, at[i]!, d, i)));
       const extra = list.length - at.length;
       const sign = at.find((s) => !s.startsWith('beanbag-'));
       const path = d.hostId === LOCAL ? this.workspaces.get(d.key)?.path : undefined;
@@ -775,8 +777,10 @@ export class LiveModel {
     };
   }
 
-  private worker(a: AgentRec, deskId: string, d: DeskRec): WorkerInfo {
+  /** A figure: named after its worktree (A5), the second at a desk "fix-login · 2". */
+  private worker(a: AgentRec, deskId: string, d: DeskRec, nth = 0): WorkerInfo {
     const h = hash(a.paneKey);
+    const branch = d.hostId === LOCAL ? this.workspaces.get(d.key)?.branch : null;
     this.workerIds.set(`a-${h.toString(36)}`, a.paneKey);
     const status = STATUS[a.shown];
     const tag = [a.kind === 'chat' ? '💬' : '', a.hostId !== LOCAL ? `🌐 ${hostLabel(a.hostId)}` : ''].filter(Boolean).join(' ');
@@ -786,7 +790,7 @@ export class LiveModel {
       kind: 'agent',
       ...(isAgentProvider(a.agent) ? { provider: a.agent } : {}),
       deskId,
-      name: NAMES[h % NAMES.length]!,
+      name: cleanLabel(`${d.name}${nth > 0 ? ` · ${nth + 1}` : ''}`).slice(0, 40) || NAMES[h % NAMES.length]!,
       color: WORKER_COLORS[(h >>> 5) % WORKER_COLORS.length]!,
       status,
       acked: !d.unread,
@@ -798,7 +802,7 @@ export class LiveModel {
       viewers: [],
       viewerIds: [],
       task: { name: `${tag ? `${tag} ` : ''}${d.name}`, summary: a.bubble ?? SUMMARY[a.shown] },
-      orca: { terminal: a.kind === 'terminal' && a.hostId === LOCAL, remote: a.hostId !== LOCAL },
+      orca: { terminal: a.kind === 'terminal' && a.hostId === LOCAL, remote: a.hostId !== LOCAL, worktree: d.name, ...(branch ? { branch: branch.replace(/^refs\/heads\//, '') } : {}) },
       ...(working && a.action ? { action: a.action } : {}),
       ...(working && a.activity ? { activity: a.activity } : {}),
       ...(working && a.workingSince ? { workingSince: a.workingSince } : {}),
@@ -1004,6 +1008,25 @@ function serviceOf(p: PortRow, workerId: string, deskId: string | undefined, bra
 export function portsText(ports: PortRow[]): string {
   const shown = ports.slice(0, 2).map((p) => `:${p.port}`);
   return `🖥 ${shown.join(' ')}${ports.length > 2 ? ` +${ports.length - 2}` : ''}`;
+}
+
+/** Every floor's figures, for ⌘K and the Workers panel (A6): repository floors and Staff; rooms only mirror them. */
+function roster(floors: LiveFloor[]): OrcaRosterFloor[] {
+  return floors
+    .filter((f) => f.info.room !== 'project')
+    .map((f) => ({
+      floor: f.info.id,
+      name: f.info.name,
+      workers: f.workers.map((w) => ({
+        id: w.id,
+        name: w.name,
+        status: w.status,
+        deskId: w.deskId,
+        ...(w.orca?.branch ? { branch: w.orca.branch } : {}),
+        ...(w.task?.summary ? { summary: w.task.summary } : {}),
+        ...(w.orca?.bot ? { bot: true } : {}),
+      })),
+    }));
 }
 
 function deskOf(w: OrcaWorkspace): DeskRec {

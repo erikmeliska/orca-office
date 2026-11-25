@@ -14,6 +14,7 @@ import { store } from '../../state';
 import { STATUS_LABEL, toast } from '../../ui/dom';
 import { paletteOpen, togglePalette, type PaletteEntry } from '../../ui/palette';
 import { openIssue, openPull } from '../../ui/pull';
+import { openProjectBoard } from '../../ui/project';
 import { openServices, serviceOwner, serviceUrl } from '../../ui/services';
 import { IS_MAC } from '../../ui/termkeys';
 import type { InteractKind, Interactable } from '../../world/types';
@@ -70,11 +71,26 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
         icon: desk?.station ? STATION_INFO[desk.station].icon : w.kind === 'shell' ? '🐚' : '🧑‍💻',
         kind: 'Worker',
         title: w.name,
-        detail: [w.task?.name, desk?.label, STATUS_LABEL[w.status]].filter(Boolean).join(' · '),
-        keywords: [w.title, w.worktree?.branch],
+        detail: [w.task?.name !== w.name ? w.task?.name : '', desk?.label, STATUS_LABEL[w.status], w.orca?.branch && w.orca.branch !== w.name ? `🌿 ${w.orca.branch}` : ''].filter(Boolean).join(' · '),
+        keywords: [w.title, w.worktree?.branch, w.orca?.branch, store.currentFloor()?.name],
         open,
         walk: desk && spot ? () => walkThen(spot, `${w.name} at ${desk.label}`, open, desk) : undefined,
       });
+    }
+
+    // The other floors' figures (A6): Enter goes there, by the floor list.
+    for (const f of store.roster) {
+      if (f.floor === store.floor) continue;
+      for (const r of f.workers) {
+        out.push({
+          icon: r.bot ? '🤖' : r.status === 'needs_input' ? '🙋' : '🧑‍💻',
+          kind: 'Worker',
+          title: r.name,
+          detail: [`🏢 ${f.name}`, STATUS_LABEL[r.status], r.branch && r.branch !== r.name ? `🌿 ${r.branch}` : ''].filter(Boolean).join(' · '),
+          keywords: [f.name, r.branch ?? ''],
+          open: () => waiting.goToFigure(f.floor, r.id, r.deskId, r.name),
+        });
+      }
     }
 
     const free = nearestFreeDesk();
@@ -94,7 +110,15 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
 
     out.push(at('services', 'the Services board', { icon: '🌐', kind: 'Board', title: 'Services board', detail: 'Dev servers running in this floor’s worktrees', open: () => openServices() }));
 
-    for (const pr of store.pulls.items) {
+    // A project room's walls hold its open tasks and its decisions (#30), not pull requests and issues.
+    const room = store.currentFloor()?.room === 'project';
+    for (const pr of room ? store.pulls.items : []) {
+      out.push(at('pulls', 'the project board', { icon: '🗂️', kind: 'Task', title: pr.title, detail: 'On this project room’s board', open: () => openProjectBoard() }));
+    }
+    for (const g of room ? store.issues.items : []) {
+      out.push(at('issues', 'the project board', { icon: '⚖️', kind: 'Decision', title: g.title.replace(/^⚖️\s*/, ''), detail: 'Waiting for your decision', open: () => openProjectBoard() }));
+    }
+    for (const pr of room ? [] : store.pulls.items) {
       out.push(
         at('pulls', 'the PR board', {
           icon: '🔀',
@@ -105,7 +129,7 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
         }),
       );
     }
-    for (const issue of store.issues.items) {
+    for (const issue of room ? [] : store.issues.items) {
       out.push(
         at('issues', 'the Issues board', {
           icon: '📌',

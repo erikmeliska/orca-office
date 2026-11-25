@@ -62,7 +62,7 @@ const flush = () => vi.advanceTimersByTimeAsync(0);
 
 test('figures say what the office can do with them', () => {
   const workers = model.building().floors[0]!.workers;
-  expect(workers.map((w) => w.orca).sort((x, y) => Number(x!.terminal) - Number(y!.terminal))).toEqual([{ terminal: false, remote: false }, { terminal: true, remote: false }]);
+  expect(workers.map((w) => w.orca).sort((x, y) => Number(x!.terminal) - Number(y!.terminal))).toEqual([{ terminal: false, remote: false, worktree: 'b', branch: 'b' }, { terminal: true, remote: false, worktree: 'a', branch: 'a' }]);
   expect(model.building().floors[0]!.info.orcaCreate).toBe(true);
 });
 

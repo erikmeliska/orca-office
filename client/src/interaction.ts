@@ -12,6 +12,8 @@ export interface InteractionState {
   note: GhIssue | null;
   /** On Orca (M3): the desk keys are Orca's light control (features/workers/actions.ts). */
   orca?: boolean;
+  /** On Orca: the desk's worktree has links (#32), which L lists. */
+  links?: boolean;
 }
 
 /** Whether a desk key has an action at the interaction currently in reach. */
@@ -27,6 +29,8 @@ export function interactionAvailable(it: Interactable | null, key: DeskKey, stat
       if (key === 'E' || key === 'C' || key === 'O') return true;
       if (key === 'P') return !!w?.orca?.terminal;
       if (key === 'R') return !!w && !w.acked;
+      // The hint offers L for the desk's links (#32); it used to be refused here (M6 A7).
+      if (key === 'L') return !!state.links;
       return false;
     }
     if (key === 'L') return canLabel(it.deskId);

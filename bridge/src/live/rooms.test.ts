@@ -165,3 +165,17 @@ describe('who waits for you in the whole building (M6 A1, A2)', () => {
     expect(m.building().waiting[1]!.since).toBe(NOW + 5_000);
   });
 });
+
+describe('names and the roster (M6 A5, A6)', () => {
+  test('figures are named after their worktree, a second one at the desk "· 2", with the branch; the roster lists every floor but rooms', () => {
+    const m = office();
+    m.applyAgents('local', [agent('pa', '/code/web/a'), agent('pa2', '/code/web/a', { kind: 'chat' }), agent('pb', '/code/api/b', { state: 'blocked' })], NOW);
+    m.applyRuns([run()], NOW);
+    const b = m.building();
+    const web = b.floors.find((f) => f.info.name === 'web')!;
+    expect(web.workers.map((w) => w.name).sort()).toEqual(['a', 'a · 2']);
+    expect(web.workers[0]!.orca).toMatchObject({ worktree: 'a', branch: 'a' });
+    expect(b.roster.map((f) => f.name)).toEqual(['api', 'web']);
+    expect(b.roster[0]!.workers).toEqual([expect.objectContaining({ name: 'b', status: 'needs_input', branch: 'b' })]);
+  });
+});
