@@ -191,7 +191,7 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     if (isOrca() && w.orca) {
       if (w.orca.bot) return openBotChat(net, w);
       if (!w.orca.terminal) return openChatAgent(net, w);
-      return openTerminal(net, id, undefined, find, { orca: () => openInOrca(net, { workerId: id }) });
+      return openTerminal(net, id, undefined, find, { orca: () => openInOrca(net, { workerId: id }), steer: (steer) => net.send({ t: 'orca.steer', workerId: id, steer }) });
     }
     if (w.lost) return actions.fixLostWorktree(w);
     if (isAsleep(w.status)) actions.resumeWorker(w);

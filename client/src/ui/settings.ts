@@ -14,6 +14,7 @@ import { openPromptEditor, rewrittenPrompts } from './prompts';
 import { outsideSetting } from './settings-sky';
 import { choiceRow } from './settings-rows';
 import { STUCK_LONG_CHOICES, STUCK_QUIET_CHOICES } from '@orca-office/shared/office/stuck';
+import { speakSignal } from '../features/needsyou/sound';
 
 const VIEWS: [ViewMode, string, string][] = [
   ['first', '👀 First person', 'See through your own eyes. Click the office to look around with the mouse and click things to use them. Esc frees the mouse.'],
@@ -130,6 +131,12 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
   const alarmRow = choiceRow<NeedsYouSound>('When a worker needs you', [['once', '🔔 Ring once'], ['remind', '🔁 Keep reminding me'], ['off', '🔕 Off']], () => settings.needsYouSound, (needsYouSound) => {
     change({ needsYouSound });
     if (needsYouSound !== 'off') sound.needsYou();
+  });
+
+  // Saying who needs you out loud (M7 B2); picking On says an example.
+  const voiceRow = choiceRow('Say it out loud', [[false, '🔇 Off'], [true, '🗣️ On']], () => settings.voice, (voice) => {
+    change({ voice });
+    if (voice) speakSignal('blog-ai', 'permission');
   });
 
   // When a working worker looks stuck (M7 B5): it dozes off at its desk with a grey "stuck?".
@@ -457,6 +464,7 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
     sound: [
       setting('Office sounds', 'you', soundRow, h('p.setting-note', {}, 'Workers typing, footsteps, the coffee machine, birds and rain outside, the dog, the ding when a worker is done and the alarm when one needs you.')),
       setting('When a worker needs you', 'you', alarmRow, h('p.setting-note', {}, 'An alarm the moment a worker stops to ask you something or wants a permission. Keep reminding me rings it again, softly, every 30 seconds until someone opens that worker’s terminal. It’s as loud as the office sounds are.')),
+      setting('Say it out loud', 'you', voiceRow, h('p.setting-note', {}, 'Your browser’s own voice says who needs you and why: “blog-ai is waiting for permission”, “… has a question”, “… is done”, “… failed”. Only the worktree’s name, never what the agent asks. Off by default.')),
       setting('Stuck? after quiet for', 'you', stuckQuietRow, h('p.setting-note', {}, 'A worker Orca says is working, but nothing has come from it for this long (no tool call, no state, no new message), dozes off at its desk under a grey “stuck?” and is listed as “Maybe stuck”. Only a guess: open it to see.')),
       setting('Stuck? after working for', 'you', stuckLongRow, h('p.setting-note', {}, 'The same for a worker that has been working this long at a stretch.')),
       setting('Page turns at the bookshelf', 'you', pagesRow, h('p.setting-note', {}, 'A soft swish each time the book in your hands turns a page, as you open a doc or scroll through one. The 🔈 at the top of the bookshelf turns it off too.')),

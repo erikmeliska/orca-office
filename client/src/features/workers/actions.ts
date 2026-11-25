@@ -357,7 +357,7 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
     const label = store.floorPlan.labels[deskId]?.text ?? plan().byId.get(deskId)?.label ?? 'this desk';
     if (k === 'E' && w) return openWorkerTerminal(w.id);
     if (w?.orca?.bot) return;
-    if (k === 'E' && !w) return openNewTask(net, plan().byId.get(deskId)?.label ?? 'this desk');
+    if (k === 'E' && !w) return openNewTask(net, plan().byId.get(deskId)?.label ?? 'this desk', orcaDesk(deskId) ? deskId : undefined);
     if (k === 'O') return w ? openInOrca(net, { workerId: w.id }) : orcaDesk(deskId) && openInOrca(net, { deskId });
     if (k === 'R' && w && !w.acked) return net.send({ t: 'orca.read', deskId });
     if (k === 'C' && orcaDesk(deskId)) return openComment(net, deskId, label);

@@ -49,11 +49,16 @@ export const ALLOWED_CALLS = new Set([
   'terminal.focus',
   'workspace.open',
   'workspace.create',
+  // M7 B13: resume a worktree's last session (agent:launch, already granted; no new capability).
+  'agent.listSessions',
+  'agent.resume',
 ]);
 
 /** Agents the office may start in a new workspace (bridge/src/live/actions.ts offers the same). */
 export const LAUNCH_AGENTS = new Set(['claude', 'codex', 'antigravity', 'opencode', 'copilot', 'cursor', 'pi']);
 export const MAX_SEND_CHARS = 4096;
+/** Agents whose earlier session the office may resume (M7 B13). */
+export const RESUME_AGENTS = new Set(['claude', 'codex', 'opencode', 'pi', 'copilot', 'cursor']);
 /** Claude Code's subagent tools (design #12): shown as helpers around their parent. */
 export const SUBAGENT_TOOLS = new Set(['task', 'agent']);
 export const MAX_PROMPT_CHARS = 8000;
@@ -316,6 +321,10 @@ export function validParams(method: string, params: Json | undefined): boolean {
         o.prompt.trim().length > 0 &&
         o.prompt.length <= MAX_PROMPT_CHARS
       );
+    case 'agent.listSessions':
+      return only('workspaceId', 'limit') && id(o.workspaceId) && (o.limit === undefined || (Number.isInteger(o.limit) && (o.limit as number) >= 1 && (o.limit as number) <= 50));
+    case 'agent.resume':
+      return only('workspaceId', 'agent', 'sessionId') && id(o.workspaceId) && typeof o.agent === 'string' && RESUME_AGENTS.has(o.agent) && typeof o.sessionId === 'string' && /^[A-Za-z0-9][A-Za-z0-9_:.-]{0,127}$/.test(o.sessionId);
     default:
       return false;
   }

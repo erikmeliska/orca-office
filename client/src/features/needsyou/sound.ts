@@ -37,3 +37,49 @@ export function needsYou(a: AudioCore, again = false) {
     }
   }
 }
+
+/** What a worker is signalling (M7 B2), each with a sound of its own. */
+export type Signal = 'permission' | 'question' | 'done' | 'failed';
+
+/** A question: three soft notes going up, like a raised voice at the end (the permission alarm is the bell above). */
+const QUESTION: readonly (readonly [number, number])[] = [[659, 0], [784, 0.12], [988, 0.24]];
+
+/**
+ * The sound of each signal: a permission prompt rings the alarm, a question asks in three rising
+ * notes, done is the two-note ding, and a failure a low falling buzz, never taken for done.
+ */
+export function signal(a: AudioCore, kind: Signal) {
+  if (kind === 'permission') return needsYou(a);
+  a.unlock();
+  const ctx = a.ctx;
+  if (!ctx) return;
+  if (ctx.state === 'suspended') void ctx.resume();
+  a.count(`signal-${kind}`);
+  const notes: readonly (readonly [number, number])[] = kind === 'question' ? QUESTION : kind === 'done' ? [[660, 0], [880, 0.12]] : [[392, 0], [311, 0.18], [233, 0.36]];
+  for (const [f, at] of notes) {
+    const t0 = ctx.currentTime + at;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = kind === 'failed' ? 'sawtooth' : 'triangle';
+    o.frequency.value = f;
+    const amp = kind === 'failed' ? 0.12 : 0.28;
+    g.gain.setValueAtTime(0.0001, t0);
+    g.gain.exponentialRampToValueAtTime(amp, t0 + 0.02);
+    g.gain.exponentialRampToValueAtTime(0.0001, t0 + (kind === 'failed' ? 0.3 : 0.25));
+    o.connect(g).connect(a.alerts);
+    o.start(t0);
+    o.stop(t0 + 0.35);
+  }
+}
+
+/**
+ * Said out loud (M7 B2, off unless Settings → Voice is on): who and what, never what it asks
+ * ("blog-ai is waiting for permission"). The browser's own voice (Web Speech API); nothing is sent anywhere.
+ */
+export function speakSignal(name: string, kind: Signal) {
+  if (typeof speechSynthesis === 'undefined') return;
+  const what = kind === 'permission' ? 'is waiting for permission' : kind === 'question' ? 'has a question' : kind === 'done' ? 'is done' : 'failed';
+  const u = new SpeechSynthesisUtterance(`${name.replace(/[-_]+/g, ' ')} ${what}`);
+  u.rate = 1.05;
+  speechSynthesis.speak(u);
+}

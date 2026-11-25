@@ -23,7 +23,20 @@ export interface OrcaWorkerInfo {
   quietSince?: number;
   /** Its worktree's Kanban status in Orca (`workspaceStatus`, M7 B10): "in-progress", "in-review", … */
   kanban?: string;
+  /** Its last turn ended in a failure (Orca's `mainAgent.outcome`, M7 B2): a red "failed" instead of done. */
+  failed?: boolean;
 }
+
+/**
+ * Steering an agent from its desk (M7 B13), only on an explicit click: Esc to interrupt it, or one of
+ * the office's own short prompts (never your text: that's P). The bridge holds the texts.
+ */
+export const ORCA_STEERS = ['interrupt', 'summarize', 'continue'] as const;
+export type OrcaSteer = (typeof ORCA_STEERS)[number];
+export const ORCA_STEER_PROMPTS: Record<Exclude<OrcaSteer, 'interrupt'>, string> = {
+  summarize: 'Pause for a moment and summarize where you are: what is done, what is left, and anything blocking you. Then wait for me.',
+  continue: 'Continue.',
+};
 
 /** What a figure that needs you is stopped on (M7 B1). */
 export type OrcaAsks = 'permission' | 'question';
@@ -42,7 +55,7 @@ export const ORCA_AGENT_LABELS: Partial<Record<OrcaAgent, string>> = { antigravi
 /** Bounds the bridge holds the page's messages to (and the worker its calls). */
 export const ORCA_LIMITS = { send: 4096, prompt: 8000, comment: 2000, name: 60 } as const;
 
-export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal' | 'chat' | 'bot' | 'answer';
+export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal' | 'chat' | 'bot' | 'answer' | 'steer' | 'resume';
 
 /** One entry of a chat agent's conversation, read-only (`orca agent read`): a message, or a tool it used. */
 export type OrcaChatEntry = { role: 'user' | 'assistant'; text: string; shortened?: boolean; mail?: OrcaMailFrom } | { tool: string; state: string | null };
@@ -218,6 +231,10 @@ export type OrcaClientMsg =
    * (`prompt_changed`), so a click never approves something the page didn't show.
    */
   | { t: 'orca.answer'; workerId: string; choice: OrcaAnswer; since: number }
+  /** Steer a terminal agent (M7 B13): Esc, or one of ORCA_STEER_PROMPTS, typed into its terminal. */
+  | { t: 'orca.steer'; workerId: string; steer: OrcaSteer }
+  /** Resume the last session of the desk's worktree (M7 B13): Orca's `agent.resume` in a new terminal there. */
+  | { t: 'orca.resume'; deskId: string }
   /** Mark the desk's worktree read in Orca (clears its unread dot). */
   | { t: 'orca.read'; deskId: string }
   /** Set the desk's worktree comment in Orca ('' clears it). */

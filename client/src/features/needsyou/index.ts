@@ -13,6 +13,7 @@ import { $, toast } from '../../ui/dom';
 import { Fresh, Reminders } from './logic';
 import { bannerText, FreshStops, type Stop } from '../../waiting-all';
 import { Banner } from './ui';
+import { speakSignal } from './sound';
 import { Beacon } from './world';
 
 /** How close (m) the beacon's light is gone altogether, and how far off it's at its brightest. */
@@ -57,7 +58,9 @@ export function installNeedsYou(ctx: Ctx, parts: Pick<Parts, 'views' | 'waiting'
     const away = freshAway.take(parts.waiting.stops()).filter((s) => s.floor !== store.floor || s.kind === 'gate');
     if (away.length) {
       banner.flash();
-      if (settings.needsYouSound !== 'off') sound.needsYou();
+      // A permission rings the alarm, a question asks (M7 B2).
+      if (settings.needsYouSound !== 'off') sound.signal(away.some((s) => s.asks !== 'question') ? 'permission' : 'question');
+      if (settings.voice) for (const s of away) speakSignal(s.kind === 'gate' ? 'A decision' : s.name, s.asks === 'question' ? 'question' : 'permission');
       for (const s of away) parts.notifier.alertStop(s);
     }
     parts.notifier.syncStops(store.waitingAll);
@@ -67,12 +70,14 @@ export function installNeedsYou(ctx: Ctx, parts: Pick<Parts, 'views' | 'waiting'
 
   function sync() {
     // Not ones that were asking already when the page first saw them (a reload, a floor you've just arrived on).
-    if (fresh.take(store.workers).length) {
+    const asking = fresh.take(store.workers);
+    if (asking.length) {
       banner.flash();
       if (settings.needsYouSound !== 'off') {
-        sound.needsYou();
+        sound.signal(asking.some((w) => w.orca?.asks !== 'question') ? 'permission' : 'question');
         reminders.rang(performance.now());
       }
+      if (settings.voice) for (const w of asking) speakSignal(w.name, w.orca?.asks === 'question' ? 'question' : 'permission');
     }
     for (const [id, b] of beacons) {
       if (store.workers.get(id)?.status === 'needs_input') continue;
