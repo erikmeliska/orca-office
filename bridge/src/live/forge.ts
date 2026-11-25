@@ -11,7 +11,7 @@
  */
 import { execFile } from 'node:child_process';
 import { toBubble } from '@orca-office/shared';
-import { ORCA_LINK_TITLE, type OrcaForgeBoard, type OrcaForgeItem, type OrcaForgeStatus } from '@orca-office/shared/office/protocol/orca';
+import { ORCA_LINK_TITLE, type OrcaCi, type OrcaForgeBoard, type OrcaForgeItem, type OrcaForgeStatus } from '@orca-office/shared/office/protocol/orca';
 import { safeUrl } from './worktrees.js';
 
 /** How long a floor's board is good for. */
@@ -46,6 +46,9 @@ export interface ForgeItem {
   /** A pull/merge request's source branch: a worktree on it counts as working on it. */
   branch?: string;
   draft?: boolean;
+  ci?: OrcaCi;
+  additions?: number;
+  deletions?: number;
 }
 
 /** A forge CLI failed: why, by kind only. */
@@ -97,7 +100,45 @@ const branchName = (v: unknown): string | undefined => (typeof v === 'string' &&
 function item(n: number | null, title: unknown, url: unknown, extra: Partial<ForgeItem> = {}): ForgeItem | null {
   if (!n) return null;
   const u = safeUrl(url);
-  return { number: n, title: toBubble(typeof title === 'string' ? title : '', ORCA_LINK_TITLE) || `#${n}`, ...(u ? { url: u } : {}), ...(extra.branch ? { branch: extra.branch } : {}), ...(extra.draft ? { draft: true } : {}) };
+  return {
+    number: n,
+    title: toBubble(typeof title === 'string' ? title : '', ORCA_LINK_TITLE) || `#${n}`,
+    ...(u ? { url: u } : {}),
+    ...(extra.branch ? { branch: extra.branch } : {}),
+    ...(extra.draft ? { draft: true } : {}),
+    ...(extra.ci ? { ci: extra.ci } : {}),
+    ...(extra.additions !== undefined ? { additions: extra.additions } : {}),
+    ...(extra.deletions !== undefined ? { deletions: extra.deletions } : {}),
+  };
+}
+
+const count = (v: unknown): number | undefined => (typeof v === 'number' && Number.isInteger(v) && v >= 0 ? v : undefined);
+
+/**
+ * A pull request's checks in one word (M7 B4), from `gh`'s `statusCheckRollup`: check runs carry
+ * `status` and `conclusion`, commit statuses `state`. Any failure wins, then anything still running.
+ * Only the states are read: names, urls and output stay where they are.
+ */
+export function ciOf(rollup: unknown): OrcaCi {
+  const checks = rows(rollup);
+  if (!checks.length) return 'none';
+  let pending = false;
+  for (const c of checks) {
+    const s = String(c.conclusion ?? c.state ?? '').toUpperCase();
+    const running = c.status !== undefined && String(c.status).toUpperCase() !== 'COMPLETED';
+    if (['FAILURE', 'ERROR', 'CANCELLED', 'TIMED_OUT', 'ACTION_REQUIRED', 'STARTUP_FAILURE'].includes(s)) return 'failing';
+    if (running || s === 'PENDING' || s === 'EXPECTED' || s === 'QUEUED' || s === 'IN_PROGRESS' || s === '') pending = true;
+  }
+  return pending ? 'pending' : 'passing';
+}
+
+/** GitLab's head pipeline status in the same word, when `glab` gives one. */
+function pipelineCi(v: unknown): OrcaCi | undefined {
+  const s = typeof v === 'string' ? v : typeof obj(v)?.status === 'string' ? String(obj(v)!.status) : '';
+  if (!s) return undefined;
+  if (s === 'success') return 'passing';
+  if (['failed', 'canceled'].includes(s)) return 'failing';
+  return 'pending';
 }
 
 const nonNull = <T>(v: T | null): v is T => v !== null;
@@ -111,11 +152,14 @@ export function ghAdapter(run: RunCli = runCli(), bin = process.env.ORCA_OFFICE_
       const R = `${repo.host}/${repo.path}`;
       const [issues, pulls] = await Promise.all([
         run(bin, ['issue', 'list', '-R', R, '--state', 'open', '--limit', String(FORGE_LIMIT), '--json', 'number,title,url']),
-        run(bin, ['pr', 'list', '-R', R, '--state', 'open', '--limit', String(FORGE_LIMIT), '--json', 'number,title,url,headRefName,isDraft']),
+        // With its checks and size (M7 B4): still one call for the whole list.
+        run(bin, ['pr', 'list', '-R', R, '--state', 'open', '--limit', String(FORGE_LIMIT), '--json', 'number,title,url,headRefName,isDraft,additions,deletions,statusCheckRollup']),
       ]);
       return {
         issues: rows(issues).map((r) => item(num(r.number), r.title, r.url)).filter(nonNull),
-        pulls: rows(pulls).map((r) => item(num(r.number), r.title, r.url, { branch: branchName(r.headRefName), draft: r.isDraft === true })).filter(nonNull),
+        pulls: rows(pulls)
+          .map((r) => item(num(r.number), r.title, r.url, { branch: branchName(r.headRefName), draft: r.isDraft === true, ci: ciOf(r.statusCheckRollup), additions: count(r.additions), deletions: count(r.deletions) }))
+          .filter(nonNull),
       };
     },
   };
@@ -137,7 +181,7 @@ export function glabAdapter(run: RunCli = runCli(), bin = process.env.ORCA_OFFIC
         issues: rows(issues).filter(open).map((r) => item(num(r.iid), r.title, r.web_url)).filter(nonNull),
         pulls: rows(mrs)
           .filter(open)
-          .map((r) => item(num(r.iid), r.title, r.web_url, { branch: branchName(r.source_branch), draft: r.draft === true || r.work_in_progress === true }))
+          .map((r) => item(num(r.iid), r.title, r.web_url, { branch: branchName(r.source_branch), draft: r.draft === true || r.work_in_progress === true, ci: pipelineCi(r.head_pipeline ?? r.pipeline) }))
           .filter(nonNull),
       };
     },
@@ -242,6 +286,9 @@ export function boardOf(repo: ForgeRepo | null, cli: string, status: OrcaForgeSt
     title: i.title,
     ...(i.url ? { url: i.url } : {}),
     ...(i.draft ? { draft: true } : {}),
+    ...(i.ci ? { ci: i.ci } : {}),
+    ...(i.additions !== undefined ? { additions: i.additions } : {}),
+    ...(i.deletions !== undefined ? { deletions: i.deletions } : {}),
     worktree: t.linked.has(`${kind === 'issue' ? 'issue' : 'pr'}:${i.number}`) || (!!i.branch && t.branches.has(i.branch)),
   });
   const issues = (lists?.issues ?? []).map((i) => mark('issue', i));

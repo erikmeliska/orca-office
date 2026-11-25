@@ -14,12 +14,15 @@ const issues = [
   [105, 'Export the table as CSV'],
   [109, 'Avatar upload fails for PNGs over 2 MB'],
 ].map(([number, title]) => ({ number, title, url: `${base}/issues/${number}` }));
+// M7 B4: made-up checks and sizes.
+const check = (conclusion, status = 'COMPLETED') => ({ __typename: 'CheckRun', name: 'made-up', status, conclusion });
 const pulls = [
-  [128, 'Redirect to the login page when the session expires', 'fix-login', false],
-  [131, 'Dark mode palette tokens', 'dark-mode', false],
-  [133, 'Bump the chart library', 'deps/charts', true],
-  [134, 'Faster first paint on the dashboard', 'perf-first-paint', false],
-].map(([number, title, headRefName, isDraft]) => ({ number, title, url: `${base}/pull/${number}`, headRefName, isDraft }));
+  [128, 'Redirect to the login page when the session expires', 'fix-login', false, 42, 7, [check('SUCCESS')]],
+  [131, 'Dark mode palette tokens', 'dark-mode', false, 318, 96, [check('SUCCESS'), check('SUCCESS')]],
+  [133, 'Bump the chart library', 'deps/charts', true, 12, 12, [check('', 'IN_PROGRESS')]],
+  [134, 'Faster first paint on the dashboard', 'perf-first-paint', false, 88, 140, []],
+  [136, 'Retry the login test on CI timeouts', 'flaky-tests', false, 25, 3, [check('FAILURE'), check('SUCCESS')]],
+].map(([number, title, headRefName, isDraft, additions, deletions, statusCheckRollup]) => ({ number, title, url: `${base}/pull/${number}`, headRefName, isDraft, additions, deletions, statusCheckRollup }));
 if (args[0] === 'issue' && args[1] === 'list') console.log(JSON.stringify(issues));
 else if (args[0] === 'pr' && args[1] === 'list') console.log(JSON.stringify(pulls));
 else process.exit(2);

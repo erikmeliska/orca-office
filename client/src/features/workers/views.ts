@@ -24,6 +24,7 @@ import { store } from '../../state';
 import { $ } from '../../ui/dom';
 import { openExpand } from '../../ui/floorplan';
 import { renderWorkers } from '../../ui/workers-panel';
+import { reviewItems } from '../../ui/review';
 import { renderLimits } from '../../ui/limits';
 import { modelBadge, providerLabel } from '../../ui/provider';
 import { renderUsage } from '../../ui/usage';
@@ -183,7 +184,9 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
         v.helpers.set(w.helpers ?? 0);
       }
       v.model.setAction(w.action);
-      v.model.setPr(workerPr(w, store.pulls.items));
+      // On Orca: a done agent whose worktree's pull request waits on a review (M7 B4) wears it.
+      const review = w.orca ? reviewItems().find((r) => r.workerId === w.id) : undefined;
+      v.model.setPr(review ? { state: 'open', number: Number(review.ref.slice(1)) } : workerPr(w, store.pulls.items));
       v.model.setLost(!!w.lost);
       v.model.setStuck(stuckNow(w));
       v.model.setSignal(w.status === 'needs_input' ? w.orca?.asks : w.status === 'done' && w.orca?.failed ? 'failed' : undefined);
