@@ -41,7 +41,7 @@ export function installNeedsYou(ctx: Ctx, parts: Pick<Parts, 'views' | 'waiting'
       paintBanner();
     },
     // Answering from the banner (M7 B1): the bridge checks it all again (bridge/src/live/actions.ts).
-    answer: (workerId, choice) => ctx.net.send({ t: 'orca.answer', workerId, choice }),
+    answer: (workerId, choice, since) => ctx.net.send({ t: 'orca.answer', workerId, choice, since }),
     reply: (workerId, text) => (ctx.net.send({ t: 'worker.prompt', workerId, prompt: text }), toast('✓ Sent')),
     open: (workerId) => ctx.net.send({ t: 'orca.open', workerId }),
   });

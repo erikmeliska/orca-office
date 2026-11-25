@@ -10,7 +10,7 @@ export interface BannerHooks {
   /** Put away until someone else needs you. */
   hide(): void;
   /** Yes / Always / No on its permission prompt (M7 B1). */
-  answer(workerId: string, choice: OrcaAnswer): void;
+  answer(workerId: string, choice: OrcaAnswer, since: number): void;
   /** A line of text into its terminal, then Enter (M7 B1). */
   reply(workerId: string, text: string): void;
   /** Show it in Orca (a chat agent: it has no terminal to answer in). */
@@ -67,7 +67,8 @@ export class Banner {
 
   /** The row to answer from (M7 B1), rebuilt only when it is for someone else or another kind of answer. */
   private paintAct(act: BannerAct) {
-    const key = act ? `${act.workerId}|${act.kind}` : '';
+    // A new wait (another prompt) rebuilds the buttons, so they're always for the one on show.
+    const key = act ? `${act.workerId}|${act.kind}|${act.kind === 'permission' ? act.since : ''}` : '';
     if (key === this.actKey) return;
     this.actKey = key;
     this.act.classList.toggle('hidden', !act);
@@ -76,9 +77,9 @@ export class Banner {
     if (act.kind === 'permission') {
       this.act.replaceChildren(
         h('span.needs-you-q', {}, 'Allow?'),
-        btn('✓ Yes', `Allow it this once (presses its "Yes")`, () => this.hooks.answer(act.workerId, 'yes'), '.yes'),
-        btn('✓✓ Always', `Allow it and don't ask again for this (its "don't ask again")`, () => this.hooks.answer(act.workerId, 'always')),
-        btn('✕ No', 'Say no (Esc): it asks you what to do instead', () => this.hooks.answer(act.workerId, 'no'), '.no'),
+        btn('✓ Yes', `Allow it this once (presses its "Yes")`, () => this.hooks.answer(act.workerId, 'yes', act.since), '.yes'),
+        btn('✓✓ Always', `Allow it and don't ask again for this (its "don't ask again")`, () => this.hooks.answer(act.workerId, 'always', act.since)),
+        btn('✕ No', 'Say no (Esc): it asks you what to do instead', () => this.hooks.answer(act.workerId, 'no', act.since), '.no'),
       );
     } else if (act.kind === 'reply') {
       const input = h('input.needs-you-input', { type: 'text', maxlength: String(ORCA_LIMITS.prompt), placeholder: `Answer ${act.name}…`, 'aria-label': `Answer ${act.name}`, value: this.drafts.get(act.workerId) ?? '' });

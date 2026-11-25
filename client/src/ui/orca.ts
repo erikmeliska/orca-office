@@ -49,6 +49,7 @@ const ERRORS: Record<string, string> = {
   not_asking: 'It is not asking any more',
   no_prompt: 'No permission prompt on its screen — open its terminal to answer',
   no_option: 'Its prompt has no such answer — open its terminal',
+  prompt_changed: 'It is asking something new — look again before answering',
 };
 export const say = (e: string | undefined) => (e && ERRORS[e]) || `Orca said no${e ? ` (${e})` : ''}`;
 

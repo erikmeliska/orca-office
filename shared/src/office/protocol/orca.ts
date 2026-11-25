@@ -206,8 +206,10 @@ export type OrcaClientMsg =
   /**
    * Answer a permission prompt (M7 B1): the bridge reads the figure's terminal, finds the menu and
    * sends the key that picks `choice` (a digit, or the option's own shortcut). Nothing else is typed.
+   * `since` is the wait the page showed (OrcaWaiting.since): a prompt that came up after it is refused
+   * (`prompt_changed`), so a click never approves something the page didn't show.
    */
-  | { t: 'orca.answer'; workerId: string; choice: OrcaAnswer }
+  | { t: 'orca.answer'; workerId: string; choice: OrcaAnswer; since: number }
   /** Mark the desk's worktree read in Orca (clears its unread dot). */
   | { t: 'orca.read'; deskId: string }
   /** Set the desk's worktree comment in Orca ('' clears it). */

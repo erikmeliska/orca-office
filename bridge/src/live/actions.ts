@@ -116,7 +116,7 @@ export class Actions {
       case 'worker.prompt':
         return this.prompt(page, st, msg.workerId, msg.prompt);
       case 'orca.answer':
-        return this.answer(page, st, msg.workerId, msg.choice);
+        return this.answer(page, st, msg.workerId, msg.choice, msg.since);
       case 'orca.open':
         return this.open(page, msg.workerId, msg.deskId);
       case 'orca.read':
@@ -191,12 +191,14 @@ export class Actions {
    * a terminal agent on this machine that Orca shows blocked, and only once its screen shows a
    * permission menu; then the one key that picks the answer (permission.ts). Nothing else is typed.
    */
-  private async answer(page: ActionPage, st: PageState, workerId: unknown, choice: unknown) {
-    if (typeof workerId !== 'string' || !(ORCA_ANSWERS as readonly unknown[]).includes(choice)) return;
+  private async answer(page: ActionPage, st: PageState, workerId: unknown, choice: unknown, since: unknown) {
+    if (typeof workerId !== 'string' || !(ORCA_ANSWERS as readonly unknown[]).includes(choice) || typeof since !== 'number') return;
     if (!this.allow(page, 'answer')) return;
     const t = this.model.target(workerId);
     if (!t?.terminalId) return void page.send([result('answer', false, t ? (t.local ? 'no_terminal' : 'remote') : 'unknown_worker', { workerId })]);
     if (t.state !== 'blocked' && t.state !== 'waiting') return void page.send([result('answer', false, 'not_asking', { workerId })]);
+    // It started asking again after the wait the page showed: that's another prompt, not the one clicked on.
+    if (t.since !== since) return void page.send([result('answer', false, 'prompt_changed', { workerId })]);
     const r = await this.deps.call('terminal.read', { terminalId: t.terminalId, maxLines: MENU_LINES });
     const lines = r.ok ? (r.value as { lines?: unknown } | undefined)?.lines : undefined;
     if (!Array.isArray(lines)) return void page.send([result('answer', false, 'unreadable', { workerId })]);

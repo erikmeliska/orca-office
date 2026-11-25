@@ -84,12 +84,12 @@ export function waited(since: number | undefined, now: number): string {
  * permission prompt, a line of text into a terminal agent's question, or (a chat agent, which has no
  * terminal) open it in Orca. A gate, or an agent on another host, has none: N takes you there.
  */
-export type BannerAct = { kind: 'permission' | 'reply' | 'open'; workerId: string; name: string } | null;
+export type BannerAct = { kind: 'permission' | 'reply' | 'open'; workerId: string; name: string; since: number } | null;
 
 export function bannerAct(s: Stop | undefined): BannerAct {
   if (!s || s.kind !== 'agent' || !s.workerId || !s.orca) return null;
-  if (s.terminal) return { kind: s.asks === 'permission' ? 'permission' : 'reply', workerId: s.workerId, name: s.name };
-  return { kind: 'open', workerId: s.workerId, name: s.name };
+  if (s.terminal) return { kind: s.asks === 'permission' ? 'permission' : 'reply', workerId: s.workerId, name: s.name, since: s.since };
+  return { kind: 'open', workerId: s.workerId, name: s.name, since: s.since };
 }
 
 export interface BannerText {

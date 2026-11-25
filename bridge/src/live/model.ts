@@ -437,12 +437,12 @@ export class LiveModel {
   // ---- what the office's actions reach (M3) ---------------------------------------------------
 
   /** The Orca side of a figure: its terminal (local terminal agents), workspace and kind. */
-  target(workerId: string): { paneKey: string; kind: 'chat' | 'terminal'; local: boolean; terminalId: string | null; workspaceId: string | null; sessionId: string | null; state: OrcaState; agent: string | null } | null {
+  target(workerId: string): { paneKey: string; kind: 'chat' | 'terminal'; local: boolean; terminalId: string | null; workspaceId: string | null; sessionId: string | null; state: OrcaState; agent: string | null; since: number } | null {
     const pane = this.workerIds.get(workerId);
     const a = pane ? this.agents.get(pane) : undefined;
     if (!a) return null;
     const local = a.hostId === LOCAL;
-    return { paneKey: a.paneKey, kind: a.kind, local, terminalId: local && a.kind === 'terminal' ? this.terminalOf(a.paneKey) : null, workspaceId: this.workspaces.has(a.deskKey) ? a.deskKey : null, sessionId: a.sessionId, state: a.shown, agent: a.agent };
+    return { paneKey: a.paneKey, kind: a.kind, local, terminalId: local && a.kind === 'terminal' ? this.terminalOf(a.paneKey) : null, workspaceId: this.workspaces.has(a.deskKey) ? a.deskKey : null, sessionId: a.sessionId, state: a.shown, agent: a.agent, since: a.shownSince };
   }
 
   /** The bot a figure is (Staff floor or the head of a project room), by its figure id; null for anyone else. */

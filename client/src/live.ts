@@ -132,21 +132,22 @@ function replyBox(workerId: string): HTMLElement {
 }
 
 /** Yes / Always / No on a permission prompt (M7 B1): the bridge finds the key on the agent's screen. */
-function answer(workerId: string, key: string, choice: 'yes' | 'always' | 'no') {
-  send({ t: 'orca.answer', workerId, choice });
+function answer(workerId: string, key: string, choice: 'yes' | 'always' | 'no', since: number) {
+  send({ t: 'orca.answer', workerId, choice, since });
   st.note = { key, text: choice === 'no' ? 'Said no' : 'Allowed', ok: true };
   render();
 }
 
 function card(o: { key: string; title: string; where: string; text?: string | null; tone: string; since?: number; workerId: string | null; deskId: string | null; floor: string; canReply: boolean; permission?: boolean }): HTMLElement {
+  const since = o.since ?? 0;
   const note = st.note?.key === o.key ? el('p', `note ${st.note.ok ? 'ok' : 'bad'}`, st.note.text) : null;
   const w = o.workerId;
   const actions = el(
     'div',
     'actions',
-    o.permission && w ? button('✓ Yes', () => answer(w, o.key, 'yes'), 'primary') : null,
-    o.permission && w ? button('✓✓ Always', () => answer(w, o.key, 'always')) : null,
-    o.permission && w ? button('✕ No', () => answer(w, o.key, 'no')) : null,
+    o.permission && w ? button('✓ Yes', () => answer(w, o.key, 'yes', since), 'primary') : null,
+    o.permission && w ? button('✓✓ Always', () => answer(w, o.key, 'always', since)) : null,
+    o.permission && w ? button('✕ No', () => answer(w, o.key, 'no', since)) : null,
     o.canReply && !o.permission && st.replying !== o.key ? button('Reply', () => ((st.replying = o.key), (st.draft = ''), (st.note = null), render()), 'primary') : null,
     o.workerId || o.deskId ? button('Open in Orca', () => openInOrca(o, o.key)) : null,
   );

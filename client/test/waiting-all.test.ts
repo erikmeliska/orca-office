@@ -62,9 +62,9 @@ test('fresh: only what started waiting after the first look', () => {
 test('the banner answers what it can (M7 B1): permission buttons, a line, Open in Orca; a gate only N', () => {
   const now = 1000;
   const act = (more: Partial<OrcaWaiting>) => bannerText(stopsInOrder([item('w', 'f', 0, more)], [], 'f'), 'f', now)?.act;
-  expect(act({ asks: 'permission', terminal: true })).toEqual({ kind: 'permission', workerId: 'w', name: 'w' });
-  expect(act({ asks: 'question', terminal: true })).toEqual({ kind: 'reply', workerId: 'w', name: 'w' });
-  expect(act({ asks: 'question' })).toEqual({ kind: 'open', workerId: 'w', name: 'w' });
+  expect(act({ asks: 'permission', terminal: true })).toEqual({ kind: 'permission', workerId: 'w', name: 'w', since: 0 });
+  expect(act({ asks: 'question', terminal: true })).toEqual({ kind: 'reply', workerId: 'w', name: 'w', since: 0 });
+  expect(act({ asks: 'question' })).toEqual({ kind: 'open', workerId: 'w', name: 'w', since: 0 });
   expect(act({ kind: 'gate', workerId: null })).toBeNull();
   // The stub's own workers (no Orca behind them): nothing to answer with.
   expect(bannerText(stopsInOrder([], [worker('a', 'needs_input')], 'f'), 'f', now)?.act).toBeNull();

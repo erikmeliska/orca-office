@@ -266,27 +266,33 @@ test('Yes / Always / No read the screen and send only the key that picks it', as
   blocked();
   answers['terminal.read'] = { ok: true, value: { lines: MENU, truncated: false } };
   const id = idOf('pane-1');
-  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'always' });
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'always', since: model.target(id)!.since });
   await flush();
   expect(calls.at(-1)).toEqual({ method: 'terminal.read', params: { terminalId: T, maxLines: 30 } });
   expect(sends).toEqual([{ terminalId: T, text: '2', enter: false }]);
   expect(sent).toContainEqual({ t: 'orca.result', action: 'answer', ok: true, workerId: id });
-  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'no' });
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'no', since: model.target(id)!.since });
   await flush();
   expect(sends.at(-1)).toEqual({ terminalId: T, text: '\x1b', enter: false });
 });
 
 test('nothing is typed without a menu on the screen, into a working agent, a chat or for a made-up choice', async () => {
   const id = idOf('pane-1');
-  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'yes' });
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'yes', since: 1 });
   expect(sent.at(-1)).toMatchObject({ action: 'answer', ok: false, error: 'not_asking' });
   blocked();
-  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'yes' });
+  const since = model.target(id)!.since;
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'yes', since });
   expect(sent.at(-1)).toMatchObject({ action: 'answer', ok: false, error: 'no_prompt' });
-  await actions.handle(page, { t: 'orca.answer', workerId: idOf('pane-chat'), choice: 'yes' });
+  // A prompt that came up after the one the page showed is not answered.
+  answers['terminal.read'] = { ok: true, value: { lines: MENU, truncated: false } };
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'yes', since: since - 5 });
+  expect(sent.at(-1)).toMatchObject({ action: 'answer', ok: false, error: 'prompt_changed' });
+  await actions.handle(page, { t: 'orca.answer', workerId: idOf('pane-chat'), choice: 'yes', since });
   expect(sent.at(-1)).toMatchObject({ action: 'answer', ok: false, error: 'no_terminal' });
   const n = sent.length;
-  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'rm -rf' } as never);
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'rm -rf', since } as never);
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'yes' } as never);
   expect(sent.length).toBe(n);
   await flush();
   expect(sends).toEqual([]);

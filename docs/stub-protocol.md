@@ -436,6 +436,9 @@ waited longest:
   (Codex: `y`, `a`; a trailing `(esc)` is Escape), else its digit (Claude Code takes `1`/`2` at once,
   no Enter). "Always" is the Yes option that says *don't ask again* / *always* / *for this session*.
   No menu on the screen: `no_prompt`, nothing is typed; no such option: `no_option`.
+  The page also sends the wait it showed (`since`); a prompt that came up after it (Orca's state
+  changed since) is refused with `prompt_changed`, so a click never approves a prompt the page didn't
+  show.
 - A terminal agent Orca shows **`waiting`** asks a question: a one-line box, Enter sends it as a
   prompt (`worker.prompt`, text then Enter).
 - A chat agent (no terminal): **↗ Open in Orca**. A decision gate, or an agent on another host: N
