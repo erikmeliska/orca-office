@@ -160,6 +160,14 @@ export default function activate(orca: OrcaWorkerApi) {
     backoff = Math.min(backoff * 2, MAX_BACKOFF_MS);
   }
 
+  /** The office's count of who waits for you (agents asking, decision gates) on the status bar item (A4). */
+  function showWaiting(m: { waiting?: unknown; names?: unknown }) {
+    const n = typeof m.waiting === 'number' && Number.isInteger(m.waiting) && m.waiting > 0 ? Math.min(m.waiting, 999) : 0;
+    const names = Array.isArray(m.names) ? m.names.filter((x): x is string => typeof x === 'string').map((x) => x.slice(0, 40)).slice(0, 5) : [];
+    if (!n) return status('Office', 'success', `Connected to ${url}. Nobody is waiting for you.`);
+    return status(`Office 🔴 ${n}`, 'danger', `${n} waiting for you: ${names.join(', ')}${n > names.length ? ', …' : ''}`);
+  }
+
   function onVerified() {
     verified = true;
     backoff = 1_000;
@@ -195,6 +203,7 @@ export default function activate(orca: OrcaWorkerApi) {
       return;
     }
     if (msg.type === 'resync') return snapshot();
+    if (msg.type === 'status') return showWaiting(msg as { waiting?: unknown; names?: unknown });
     if (msg.type !== 'call' || typeof msg.id !== 'string' || typeof msg.method !== 'string') return;
     if (!ALLOWED_CALLS.has(msg.method) || !validParams(msg.method, msg.params)) {
       send({ type: 'result', id: msg.id, ok: false, error: 'not_allowed' });

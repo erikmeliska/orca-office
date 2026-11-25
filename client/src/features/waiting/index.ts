@@ -8,8 +8,8 @@ import { isAsleep } from '@orca-office/shared/office/status';
 import type { Ctx } from '../../core/context';
 import type { CoreState } from '../../core/ctx';
 import type { Parts } from '../../core/parts';
-import { NextUp, waitingInOrder, waitingLabel } from '../../nextup';
 import { waitingOnSomeone } from '../../notify';
+import { NextStop, pillLabel, shortFloor, stopsInOrder, type Stop } from '../../waiting-all';
 import { store } from '../../state';
 import { openChanges } from '../../ui/changes';
 import { Compass, type Bearing } from '../../ui/compass';
@@ -20,27 +20,81 @@ import { isOrca, openChatAgent, openInOrca } from '../../ui/orca';
 import { openBotChat } from '../../ui/bots';
 
 /** Registers N (and the Workers panel's count), the compass's tick ('render') and / (search). */
-export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'worlds' | 'views' | 'actions'>) {
+export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'worlds' | 'views' | 'actions' | 'travel'>) {
   const { player, camera, net } = ctx;
-  const nextUp = new NextUp();
+  const nextStop = new NextStop();
   const compass = new Compass($('compass'));
   /** What the last press of N said, which the next press replaces. */
   let nextToast: HTMLElement | null = null;
   const workerPos = new THREE.Vector3();
 
-  /** N: to the first worker waiting on someone (the ones that need you, then the ones that are done, longest first), and on each press after, the next. */
+  /** Everyone waiting for you in the building, in N's order (see waiting-all.ts). */
+  function stops(): Stop[] {
+    return stopsInOrder(store.waitingAll, store.workers.values(), store.floor, store.currentFloor()?.name ?? '');
+  }
+
+  /** N: to the first one waiting for you anywhere in the building (longest first), and on each press after, the next. */
   function goToNextWaiting() {
     if (core.trip) return;
-    const w = nextUp.next(store.workers.values(), waitingBeside());
+    const all = stops();
+    const s = nextStop.next(all, waitingBeside());
     nextToast?.remove();
-    if (!w || !goToWorker(w.id)) {
-      const other = store.floors.find((f) => f.id !== store.floor && f.waiting > 0);
-      nextToast = toast(other ? `🛗 Nobody's waiting on this floor. ${other.waiting} on the ${other.name} floor: take the elevator` : '👍 Nobody is waiting on you');
+    if (!s) {
+      nextToast = toast('👍 Nobody is waiting on you');
       return;
     }
-    const waiting = waitingInOrder(store.workers.values());
-    const of = waiting.length > 1 ? ` (${waiting.findIndex((x) => x.id === w.id) + 1} of ${waiting.length})` : '';
-    nextToast = toast(`${w.status === 'needs_input' ? `🙋 ${w.name} needs you` : `✅ ${w.name} is done`}${of}. E opens its terminal`);
+    goToStop(s);
+    const of = all.length > 1 ? ` (${all.findIndex((x) => x.key === s.key) + 1} of ${all.length})` : '';
+    const where = s.floor !== store.floor ? ` on ${shortFloor(s.floorName)}` : '';
+    const what = s.kind === 'gate' ? '⚖️ A decision waits for you' : s.needs ? `🙋 ${s.name} needs you` : `✅ ${s.name} is done`;
+    nextToast = toast(`${what}${where}${of}.${s.kind === 'gate' ? ' The board says what' : ' E opens its terminal'}`);
+  }
+
+  /** Where N (or the banner, or a notification) is taking you on another floor, done once you're there. */
+  let headingFor: { stop: Stop; until: number; then?: () => void } | null = null;
+
+  /** Over to a stop: on this floor straight to its desk, on another one by the floor list first. */
+  function goToStop(s: Stop, then?: () => void): boolean {
+    if (core.trip) return false;
+    if (s.floor && s.floor !== store.floor) {
+      headingFor = { stop: s, until: Date.now() + 12_000, then };
+      parts.travel.switchFloor(s.floor);
+      return true;
+    }
+    const ok = s.workerId ? goToWorker(s.workerId) : standAtDesk(s.deskId);
+    if (ok) then?.();
+    return ok;
+  }
+
+  /** Once you've come onto the floor you were heading for: on to the desk. */
+  function arrived() {
+    const h = headingFor;
+    if (!h) return;
+    if (Date.now() > h.until || store.floor !== h.stop.floor) {
+      if (Date.now() > h.until) headingFor = null;
+      return;
+    }
+    if (core.trip) return void setTimeout(arrived, 150);
+    headingFor = null;
+    // The figure's id is the same on its floor; a gate's desk is the seat its board names.
+    const ok = h.stop.workerId && store.workers.has(h.stop.workerId) ? goToWorker(h.stop.workerId) : standAtDesk(h.stop.deskId);
+    if (ok) h.then?.();
+  }
+  store.on('floor', () => setTimeout(arrived, 50));
+
+  /** Puts you at desk `deskId` of this floor. */
+  function standAtDesk(deskId: string | null): boolean {
+    const desk = deskId ? parts.worlds.plan().byId.get(deskId) : undefined;
+    if (core.trip || !desk) return false;
+    closeAllModals();
+    parts.actions.standAt(desk);
+    return true;
+  }
+
+  /** The banner's click (a stop's key): over to it, wherever it is. */
+  function goToKey(key: string) {
+    const s = stops().find((x) => x.key === key);
+    if (s) goToStop(s);
   }
 
   /** Puts you behind worker `id`, looking over its shoulder, with any window closed. False when there's no getting there (you're between floors, or it's gone). */
@@ -57,6 +111,13 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
   function answerWorker(id: string) {
     goToWorker(id);
     openWorkerTerminal(id);
+  }
+
+  /** From a notification about something on another floor (or a gate): over there, and the terminal open for an agent. */
+  function answerStop(key: string) {
+    const s = stops().find((x) => x.key === key) ?? store.waitingAll.map((x) => ({ ...x, needs: true })).find((x) => x.key === key);
+    if (!s) return;
+    goToStop(s, () => s.workerId && openWorkerTerminal(s.workerId));
   }
 
   /** The waiting worker you're standing at, if any: N skips it while anyone else is waiting. */
@@ -76,13 +137,14 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
   }
 
   function renderWaiting() {
-    const waiting = waitingInOrder(store.workers.values());
+    const all = stops();
     const el = $('waiting');
-    el.classList.toggle('hidden', !waiting.length);
-    el.classList.toggle('all-done', waiting.every((w) => w.status === 'done'));
-    el.classList.toggle('needs-you-now', waiting.some((w) => w.status === 'needs_input'));
-    if (waiting.length) el.replaceChildren(h('span', {}, waitingLabel(waiting)), h('span.key', {}, 'N'));
+    el.classList.toggle('hidden', !all.length);
+    el.classList.toggle('all-done', all.every((s) => !s.needs));
+    el.classList.toggle('needs-you-now', all.some((s) => s.needs));
+    if (all.length) el.replaceChildren(h('span', {}, pillLabel(all, store.floor)), h('span.key', {}, 'N'));
   }
+  store.on('waitingAll', renderWaiting);
   $('waiting').addEventListener('click', () => goToNextWaiting());
   ctx.keys.bind({
     code: 'KeyN',
@@ -147,5 +209,5 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     openChanges(net, id, () => openWorkerTerminal(id), repo);
   }
 
-  return { goToNextWaiting, goToWorker, answerWorker, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch };
+  return { goToNextWaiting, goToWorker, goToKey, answerWorker, answerStop, stops, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch };
 }

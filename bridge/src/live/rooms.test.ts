@@ -146,3 +146,22 @@ describe('deliveries (#34)', () => {
     expect(d[1]).toMatchObject({ from: null });
   });
 });
+
+describe('who waits for you in the whole building (M6 A1, A2)', () => {
+  test('agents asking on every floor and the open decision gates, longest first; a room’s mirrored figures only once', () => {
+    const m = office();
+    m.applyRuns([run({ gates: [{ id: 'g1', taskId: 't1', question: 'Made-up question?', options: ['Yes', 'No'] }] })], NOW + 5_000);
+    m.tick(NOW + 6_000);
+    const b = m.building();
+    expect(b.waiting.map((w) => [w.kind, w.floorName, w.name, w.ask])).toEqual([
+      ['agent', 'api', 'b', 'Waiting for you'],
+      ['gate', 'Made-up objective', 'Decision', 'Made-up question?'],
+    ]);
+    const gate = b.waiting[1]!;
+    expect(gate).toMatchObject({ key: 'gate:g1', workerId: null, since: NOW + 5_000 });
+    expect(gate.deskId).toBeTruthy();
+    // The time a gate was first seen stays put.
+    m.applyRuns([run({ updatedAt: NOW, gates: [{ id: 'g1', taskId: 't1', question: 'Made-up question?', options: [] }] })], NOW + 60_000);
+    expect(m.building().waiting[1]!.since).toBe(NOW + 5_000);
+  });
+});

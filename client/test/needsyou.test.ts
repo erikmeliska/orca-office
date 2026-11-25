@@ -1,6 +1,7 @@
 import { test } from 'vitest';
 import assert from 'node:assert/strict';
-import { bannerText, Fresh, Reminders, REMIND_EVERY, waited, waitKey } from '../src/features/needsyou/logic.js';
+import { Fresh, Reminders, REMIND_EVERY } from '../src/features/needsyou/logic.js';
+import { bannerText as stopsBanner, stopsInOrder, waited } from '../src/waiting-all.js';
 import type { WorkerInfo, WorkerStatus } from '@orca-office/shared/office/protocol';
 
 function worker(id: string, status: WorkerStatus, more: Partial<WorkerInfo> = {}): WorkerInfo {
@@ -31,6 +32,9 @@ test('workers on a floor you come back to are new to the page again, so arriving
   assert.deepEqual(fresh.take(floor(worker('a', 'needs_input'))), []);
 });
 
+/** The banner over this floor's workers alone (the stub bridge sends no building-wide list). */
+const bannerText = (asking: WorkerInfo[], now: number) => stopsBanner(stopsInOrder([], asking, 'f'), 'f', now);
+
 test('the banner names whoever has waited longest, what it asks and for how long, and counts the rest', () => {
   const now = 10 * 60_000;
   const a = worker('Byte', 'needs_input', { activity: 'Wants permission: Bash: npm test', waitingSince: now - 4 * 60_000 });
@@ -39,11 +43,11 @@ test('the banner names whoever has waited longest, what it asks and for how long
   assert.equal(bannerText([a, b], now)?.more, '+1 more');
   // In its first minute there's no time to give, and with nothing known of what it asks, just its name.
   assert.equal(bannerText([b], now)?.detail, 'Which one?');
-  assert.equal(bannerText([worker('Nib', 'needs_input')], now)?.detail, '');
+  assert.equal(bannerText([worker('Nib', 'needs_input', { createdAt: now })], now)?.detail, '');
   // No activity: what its task says it's on.
-  assert.equal(bannerText([worker('Nib', 'needs_input', { task: { name: 'Docs', summary: 'Writing the docs' } })], now)?.detail, 'Writing the docs');
+  assert.equal(bannerText([worker('Nib', 'needs_input', { createdAt: now, task: { name: 'Docs', summary: 'Writing the docs' } })], now)?.detail, 'Writing the docs');
   // A long question is cut short, and its line breaks go.
-  const long = bannerText([worker('Nib', 'needs_input', { activity: `Shall I\n${'x'.repeat(200)}` })], now)!;
+  const long = bannerText([worker('Nib', 'needs_input', { createdAt: now, activity: `Shall I\n${'x'.repeat(200)}` })], now)!;
   assert.equal(long.detail.length, 90);
   assert.match(long.detail, /^Shall I x+…$/);
   assert.equal(bannerText([], now), null);
@@ -55,11 +59,6 @@ test('how long a worker has waited', () => {
   assert.equal(waited(0, 60_000), '1 min');
   assert.equal(waited(0, 59 * 60_000 + 59_000), '59 min');
   assert.equal(waited(0, 65 * 60_000), '1 h 05 min');
-});
-
-test('each wait of a worker has a key of its own, so a banner put away comes back when it asks again', () => {
-  assert.notEqual(waitKey(worker('a', 'needs_input', { waitingSince: 100 })), waitKey(worker('a', 'needs_input', { waitingSince: 200 })));
-  assert.equal(waitKey(worker('a', 'needs_input', { waitingSince: 100 })), waitKey(worker('a', 'needs_input', { waitingSince: 100, activity: 'other' })));
 });
 
 test('the reminder rings every half minute while someone asks with nobody at its terminal', () => {

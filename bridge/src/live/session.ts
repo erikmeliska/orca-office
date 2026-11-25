@@ -111,6 +111,7 @@ export class LiveSession {
   private sentProject = '';
   private sentForge = '';
   private sentServices = '';
+  private sentWaiting = '';
 
   constructor(id: string, query: URLSearchParams, b: Building, private forgeOf: ForgeOf = () => null) {
     const n = (k: string) => (query.get(k) ? Number(query.get(k)) : Number.NaN);
@@ -155,6 +156,7 @@ export class LiveSession {
         ...view,
       },
       { t: 'orca', online },
+      ...this.waitingMsg(b, true),
       ...this.linksMsg(b),
       ...this.projectMsg(b),
       ...this.forgeMsg(b, false),
@@ -190,7 +192,7 @@ export class LiveSession {
 
   /** What changed on this page's floor (and the elevator's counts) since it was last told. */
   update(b: Building): ServerMsg[] {
-    const out: ServerMsg[] = [];
+    const out: ServerMsg[] = [...this.waitingMsg(b, false)];
     const floors = JSON.stringify(b.floors.map((f) => f.info));
     if (floors !== this.sentFloors) {
       this.sentFloors = floors;
@@ -240,6 +242,14 @@ export class LiveSession {
     if (forgeChanged) out.push(...this.forgeMsg(b, false));
     if (JSON.stringify(b.projects[this.peer.floor] ?? null) !== this.sentProject) out.push(...this.projectMsg(b));
     return out;
+  }
+
+  /** Who waits for you anywhere in the building (A1/A2), when it changed (or `always`). */
+  private waitingMsg(b: Building, always: boolean): ServerMsg[] {
+    const key = JSON.stringify(b.waiting);
+    if (!always && key === this.sentWaiting) return [];
+    this.sentWaiting = key;
+    return [{ t: 'orca.waiting', items: b.waiting }];
   }
 
   /** The forge's board of the page's floor changed (#38): the walls and the queue, if they did change. */

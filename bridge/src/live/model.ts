@@ -19,7 +19,7 @@ import { cleanLabel, type FloorPlan } from '@orca-office/shared/office/floorplan
 import { FLOOR_PALETTES } from '@orca-office/shared/office/floors';
 import { BEANBAGS, DESKS, WING_DESKS } from '@orca-office/shared/office/layout';
 import type { FloorInfo, ServiceInfo, WorkerAction, WorkerInfo, WorkerStatus } from '@orca-office/shared/office/protocol';
-import type { OrcaLink, OrcaProject } from '@orca-office/shared/office/protocol/orca';
+import type { OrcaLink, OrcaProject, OrcaWaiting } from '@orca-office/shared/office/protocol/orca';
 import { pinsText, type OrcaWorktree } from './worktrees.js';
 import type { PortRow } from './ports.js';
 import { isLive, type HandoffKind, type InboxMessage, type OrcaRun, type RunGate, type RunTask, type TaskStatus } from './runs.js';
@@ -121,6 +121,8 @@ export interface Building {
   floors: LiveFloor[];
   /** The board of each project room, by its floor id (#29, #30). */
   projects: Record<string, ProjectBoard>;
+  /** Everything in the building waiting for you, longest first (M6 A1/A2). */
+  waiting: OrcaWaiting[];
 }
 
 /** A project room's board (on the page as `orca.project`): private texts already cut to 60. */
@@ -185,6 +187,8 @@ export class LiveModel {
   /** Orchestration Runs (`orca orchestration …`), and who coordinates each, learned from its mail. */
   private runs: OrcaRun[] = [];
   private runsKey = '';
+  /** When each pending decision gate was first seen (Orca gives no time): gate id → ms. */
+  private gateSince = new Map<string, number>();
   private coordinators = new Map<string, string>();
   /** Mail and dispatches seen so far (null until the first read: what was there before isn't news). */
   private seenMail: Set<string> | null = null;
@@ -335,6 +339,9 @@ export class LiveModel {
       }
     }
     this.seenDispatch = new Set(dispatches.map((d) => d.w.dispatchId));
+    const gates = new Set(runs.flatMap((r) => r.gates.map((g) => g.id)));
+    for (const id of gates) if (!this.gateSince.has(id)) this.gateSince.set(id, now);
+    for (const id of this.gateSince.keys()) if (!gates.has(id)) this.gateSince.delete(id);
     const key = JSON.stringify(runs);
     if (key === this.runsKey) return;
     this.runsKey = key;
@@ -527,7 +534,27 @@ export class LiveModel {
       projects[floor.info.id] = board;
     }
     for (const id of this.seats.keys()) if (!out.some((f) => f.info.id === id)) this.seats.delete(id);
-    return { floors: out, projects };
+    return { floors: out, projects, waiting: this.waitingList(out, projects) };
+  }
+
+  /**
+   * Everyone in the building waiting for you (A1) and the open decision gates (A2), longest first.
+   * A project room's figures are mirrors of desks downstairs, so only its gates count there.
+   */
+  private waitingList(floors: LiveFloor[], projects: Building['projects']): OrcaWaiting[] {
+    const out: OrcaWaiting[] = [];
+    for (const f of floors) {
+      if (f.info.room !== 'project') {
+        for (const w of f.workers) {
+          if (w.status !== 'needs_input') continue;
+          out.push({ key: w.id, kind: 'agent', floor: f.info.id, floorName: f.info.name, workerId: w.id, deskId: w.deskId, name: w.task?.name ?? w.name, ask: w.task?.summary ?? null, since: w.waitingSince ?? w.createdAt });
+        }
+      }
+      for (const g of projects[f.info.id]?.gates ?? []) {
+        out.push({ key: `gate:${g.id}`, kind: 'gate', floor: f.info.id, floorName: f.info.name, workerId: null, deskId: g.seat, name: 'Decision', ask: g.question, since: this.gateSince.get(g.id) ?? this.now });
+      }
+    }
+    return out.sort((a, b) => a.since - b.since || a.key.localeCompare(b.key));
   }
 
   /** The project rooms there are now: one per live Run, then lineages across repos no Run covers. */

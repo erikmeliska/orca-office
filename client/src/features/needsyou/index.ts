@@ -10,7 +10,8 @@ import type { Parts } from '../../core/parts';
 import { needingYou } from '../../nextup';
 import { store } from '../../state';
 import { $ } from '../../ui/dom';
-import { bannerText, Fresh, Reminders, waitKey } from './logic';
+import { Fresh, Reminders } from './logic';
+import { bannerText, FreshStops, type Stop } from '../../waiting-all';
 import { Banner } from './ui';
 import { Beacon } from './world';
 
@@ -21,27 +22,44 @@ const FAR = 6.5;
 const FEET = 0.07;
 
 /** Follows the workers for the banner, the flash and the alarm, and registers the beacons' tick ('others', after the workers' own). */
-export function installNeedsYou(ctx: Ctx, parts: Pick<Parts, 'views' | 'waiting'>) {
+export function installNeedsYou(ctx: Ctx, parts: Pick<Parts, 'views' | 'waiting' | 'notifier'>) {
   const { scene, camera, sound, settings, player, reduceMotion } = ctx;
   const fresh = new Fresh();
+  const freshAway = new FreshStops();
   const reminders = new Reminders();
-  /** The waits the banner was put away on (see waitKey): it comes back for anyone else, or when one of these asks again. */
+  /** The waits the banner was put away on (`key@since`): it comes back for anyone else, or when one of these asks again. */
   const hidden = new Set<string>();
   const beacons = new Map<string, Beacon>();
+  const waitOf = (s: Stop) => `${s.key}@${s.since}`;
+  /** Everyone in the building stopped on you, longest first (A1, A2). */
+  const asking = () => parts.waiting.stops().filter((s) => s.needs);
 
   const banner = new Banner($('hud'), {
-    go: (id) => parts.waiting.goToWorker(id),
+    go: (key) => parts.waiting.goToKey(key),
     hide: () => {
-      for (const w of needingYou(store.workers.values())) hidden.add(waitKey(w));
+      for (const s of asking()) hidden.add(waitOf(s));
       paintBanner();
     },
   });
 
   function paintBanner() {
-    const asking = needingYou(store.workers.values());
-    for (const key of hidden) if (!asking.some((w) => waitKey(w) === key)) hidden.delete(key);
-    banner.show(bannerText(asking.filter((w) => !hidden.has(waitKey(w))), Date.now()));
+    const all = asking();
+    for (const key of hidden) if (!all.some((s) => waitOf(s) === key)) hidden.delete(key);
+    banner.show(bannerText(all.filter((s) => !hidden.has(waitOf(s))), store.floor, Date.now()));
   }
+
+  /** Someone started waiting for you on another floor, or a decision came up (A1–A3): the flash, the alarm and a notification. */
+  function syncAway() {
+    const away = freshAway.take(parts.waiting.stops()).filter((s) => s.floor !== store.floor || s.kind === 'gate');
+    if (away.length) {
+      banner.flash();
+      if (settings.needsYouSound !== 'off') sound.needsYou();
+      for (const s of away) parts.notifier.alertStop(s);
+    }
+    parts.notifier.syncStops(store.waitingAll);
+    paintBanner();
+  }
+  store.on('waitingAll', syncAway);
 
   function sync() {
     // Not ones that were asking already when the page first saw them (a reload, a floor you've just arrived on).
@@ -73,9 +91,9 @@ export function installNeedsYou(ctx: Ctx, parts: Pick<Parts, 'views' | 'waiting'
 
   // How long it has waited ticks on, and the reminder comes round, whether or not a frame is drawn.
   setInterval(() => {
-    const asking = needingYou(store.workers.values());
-    if (asking.length) paintBanner();
-    if (reminders.due(asking, performance.now()) && settings.needsYouSound === 'remind') sound.needsYou(true);
+    const here = needingYou(store.workers.values());
+    if (here.length || store.waitingAll.length) paintBanner();
+    if (reminders.due(here, performance.now()) && settings.needsYouSound === 'remind') sound.needsYou(true);
   }, 1000);
 
   const at = new THREE.Vector3();

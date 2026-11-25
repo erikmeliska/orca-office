@@ -8,7 +8,7 @@ import type { Ctx } from '../../core/context';
 import type { CoreState } from '../../core/ctx';
 import { builtFloors } from '../../core/floors';
 import type { Parts } from '../../core/parts';
-import { waitingInOrder, waitingLabel } from '../../nextup';
+import { pillLabel } from '../../waiting-all';
 import { saveSettings, store } from '../../state';
 import { openCharacter } from '../../ui/character';
 import { $ } from '../../ui/dom';
@@ -40,7 +40,9 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
   });
 
   // ---- The HUD: a few buttons on the top bar, everything else in the ☰ menu ----------------------------
-  const waitingNow = () => waitingInOrder(store.workers.values());
+  // Everyone waiting for you in the building (M6 A1), this floor's done ones after them.
+  const waitingNow = () => waiting.stops();
+  const needsNow = () => waitingNow().some((s) => s.needs);
   const hud = mountHud(
     [
       { id: 'services', icon: '🌐', label: 'Services', section: 'Open', count: () => store.services.items.length, title: () => 'Dev servers running in this floor’s worktrees', run: () => openServices() },
@@ -68,16 +70,16 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
       // Up on the top bar while workers wait on someone (N does the same), next to the Workers button.
       {
         id: 'waiting',
-        icon: () => (waitingNow().some((w) => w.status === 'needs_input') ? '🙋' : '✅'),
+        icon: () => (needsNow() ? '🙋' : '✅'),
         label: 'Next worker that needs you',
         section: 'Open',
         key: 'N',
         shown: () => waitingNow().length > 0,
         status: () => waitingNow().length > 0,
-        chip: () => waitingLabel(waitingNow()).replace(/^(🙋|✅) /, ''),
-        on: () => waitingNow().every((w) => w.status === 'done'),
-        tone: () => (waitingNow().some((w) => w.status === 'needs_input') ? 'danger' : undefined),
-        title: () => 'Go to the next worker waiting on someone: the ones that need you first (N)',
+        chip: () => pillLabel(waitingNow(), store.floor).replace(/^(🙋|✅) /, ''),
+        on: () => !needsNow(),
+        tone: () => (needsNow() ? 'danger' : undefined),
+        title: () => 'Go to the next one waiting for you, on any floor: the ones that need you first, longest first (N)',
         run: waiting.goToNextWaiting,
       },
     ],
