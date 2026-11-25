@@ -63,6 +63,8 @@ export interface StatusEvent {
   at: number;
   /** Its turn ended in a failure (`mainAgent.outcome: 'failure'`, host API 1.8; M7 B2). */
   failed?: boolean;
+  /** The provider's own session id, when Orca gives one (the Office API passes it on). */
+  sessionId?: string;
 }
 
 /** An `agent.tool.after` hook from the plugin: tool name and, worked out in the worker, what it looks like. */
@@ -173,7 +175,8 @@ export function parseStatusEvent(payload: unknown, at: number): StatusEvent | nu
   const st = state(o?.state);
   if (!o || !paneKey || !st) return null;
   const failed = obj(o.mainAgent)?.outcome === 'failure';
-  return { paneKey, workspaceListId: str(o.workspaceListId), terminalId: str(o.terminalId), state: st, at, ...(failed ? { failed } : {}) };
+  const sessionId = str(o.sessionId);
+  return { paneKey, workspaceListId: str(o.workspaceListId), terminalId: str(o.terminalId), state: st, at, ...(failed ? { failed } : {}), ...(sessionId && /^[\w.:-]{1,128}$/.test(sessionId) ? { sessionId } : {}) };
 }
 
 export function parseToolHook(payload: unknown, at: number): ToolHook | null {

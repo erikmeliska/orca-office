@@ -87,6 +87,8 @@ interface AgentRec {
   bubble: string | null;
   /** Orca's session id, for reading a chat's conversation. */
   sessionId: string | null;
+  /** The provider's own session id, from Orca's status events (the Office API gives it). */
+  providerSessionId: string | null;
   firstSeen: number;
   /** Seen only in a status event so far; dropped after PROVISIONAL_MS unless the CLI lists it. */
   provisional: boolean;
@@ -115,6 +117,42 @@ interface DeskRec {
   open: boolean;
   unread: boolean;
   lastActivityAt: number;
+}
+
+export type ApiModelCoordinator = { kind: 'bot'; botId: string; name: string } | { kind: 'agent'; agentId: string; name: string } | { kind: 'worktree'; worktree: string; name: string };
+
+/** The model's records as the Office API reads them (LiveModel.apiState). */
+export interface ApiModelState {
+  floors: { key: string; id: string; name: string; projectId: string | null; dir: string }[];
+  /** Every workspace Orca lists (open or not; bots' folders left out), and desks only remote agents name. */
+  desks: { key: string; floorId: string; kind: 'worktree' | 'folder'; name: string; branch: string | null; path: string; hostId: string; open: boolean; unread: boolean; lastActivityAt: number | null }[];
+  agents: {
+    id: string;
+    paneKey: string;
+    deskKey: string;
+    floorId: string;
+    kind: 'chat' | 'terminal';
+    agent: string | null;
+    hostId: string;
+    state: OrcaState;
+    since: number;
+    quietSince: number;
+    workingSince: number | null;
+    bubble: string | null;
+    orcaSessionId: string | null;
+    sessionId: string | null;
+    terminalId: string | null;
+    action: { tool: string; kind: string | null; at: number } | null;
+    helpers: number;
+    failed: boolean;
+  }[];
+  worktrees: readonly OrcaWorktree[];
+  kanbanByPath: ReadonlyMap<string, string>;
+  linksByPath: ReadonlyMap<string, OrcaLink[]>;
+  portsByPath: ReadonlyMap<string, PortRow[]>;
+  bots: (OrcaBot & { chats: CliAgent[] })[];
+  runs: { run: OrcaRun; live: boolean; coordinator: ApiModelCoordinator | null }[];
+  rooms: { id: string; source: 'run' | 'lineage'; runId: string | null; name: string; coordinator: ApiModelCoordinator | null; members: string[] }[];
 }
 
 /** What one floor shows. */
@@ -271,12 +309,13 @@ export class LiveModel {
       const ws = ev.workspaceListId ? this.workspaces.get(ev.workspaceListId) : undefined;
       if (!ws || this.botFolders.has(ws.id)) return false;
       rec = newAgent(ev.paneKey, ws.id, floorKeyOf(ws), ev.at);
-      Object.assign(rec, { kind: ev.terminalId ? 'terminal' : 'chat', hostId: ws.hostId ?? LOCAL, provisional: true, shown: ev.state, shownSince: ev.at, workingSince: ev.state === 'working' ? ev.at : null });
+      Object.assign(rec, { kind: ev.terminalId ? 'terminal' : 'chat', hostId: ws.hostId ?? LOCAL, providerSessionId: ev.sessionId ?? null, provisional: true, shown: ev.state, shownSince: ev.at, workingSince: ev.state === 'working' ? ev.at : null });
       this.agents.set(ev.paneKey, rec);
       this.version++;
       return true;
     }
     this.heard(rec, ev.at);
+    if (ev.sessionId) rec.providerSessionId = ev.sessionId;
     const failed = ev.state === 'done' ? !!ev.failed : ev.state === 'working' ? false : rec.failed;
     if (failed !== rec.failed) {
       rec.failed = failed;
@@ -532,6 +571,73 @@ export class LiveModel {
       }
     }
     if (changed) this.version++;
+  }
+
+  // ---- the Office API (docs/api.md) ----------------------------------------------------------
+
+  /**
+   * What the Office API reads (bridge/src/api/snapshot.ts): the model's own records, read-only, with
+   * each floor's id, name and directory worked out as the office does. No private text is in here.
+   */
+  apiState(): ApiModelState {
+    const keys = new Set<string>();
+    for (const w of this.workspaces.values()) if (!(w.kind === 'folder' && this.botFolders.has(w.id))) keys.add(floorKeyOf(w));
+    for (const a of this.agents.values()) keys.add(a.floor);
+    const names = this.floorNames([...keys]);
+    const floors = [...keys].map((key) => {
+      const name = names.get(key)!;
+      const first = [...this.workspaces.values()].find((w) => floorKeyOf(w) === key && w.kind === 'worktree' && (w.hostId ?? LOCAL) === LOCAL);
+      return { key, id: floorId(nameOfKey(key), key), name, projectId: key.startsWith('p:') ? key.slice(2) : null, dir: this.mainCheckout(key) ?? first?.path ?? '' };
+    });
+    const floorIdOfKey = new Map(floors.map((f) => [f.key, f.id]));
+    const agents = [...this.agents.values()].map((a) => ({
+      id: `a-${hash(a.paneKey).toString(36)}`,
+      paneKey: a.paneKey,
+      deskKey: a.deskKey,
+      floorId: floorIdOfKey.get(a.floor) ?? floorId(nameOfKey(a.floor), a.floor),
+      kind: a.kind,
+      agent: a.agent,
+      hostId: a.hostId,
+      state: a.shown,
+      since: a.shownSince,
+      quietSince: a.quietSince,
+      workingSince: a.workingSince,
+      bubble: a.bubble,
+      orcaSessionId: a.sessionId,
+      sessionId: a.providerSessionId,
+      terminalId: a.hostId === LOCAL && a.kind === 'terminal' ? this.terminalOf(a.paneKey) : null,
+      action: a.activity ? { tool: a.activity, kind: a.action, at: a.actionAt } : null,
+      helpers: a.helpers.size,
+      failed: a.failed,
+    }));
+    const desks = [...this.workspaces.values()]
+      .filter((w) => !(w.kind === 'folder' && this.botFolders.has(w.id)))
+      .map((w) => ({ key: w.id, floorId: floorIdOfKey.get(floorKeyOf(w))!, kind: w.kind, name: w.name, branch: w.branch?.replace(/^refs\/heads\//, '') ?? null, path: w.path, hostId: w.hostId ?? LOCAL, open: w.state !== 'inactive', unread: w.unread, lastActivityAt: w.lastActivityAt }));
+    // A desk only a remote agent names (Orca's workspace list doesn't have it).
+    for (const a of this.agents.values()) {
+      if (this.workspaces.has(a.deskKey) || desks.some((d) => d.key === a.deskKey)) continue;
+      const d = remoteDesk(a);
+      desks.push({ key: d.key, floorId: floorIdOfKey.get(a.floor)!, kind: 'worktree', name: d.name, branch: null, path: '', hostId: a.hostId, open: true, unread: false, lastActivityAt: null });
+    }
+    const coordinator = (h: RoomSpec['head']): ApiModelCoordinator | null => {
+      if (!h) return null;
+      if ('bot' in h) return { kind: 'bot', botId: h.bot.id, name: h.bot.name };
+      if ('agent' in h) return { kind: 'agent', agentId: `a-${hash(h.agent.paneKey).toString(36)}`, name: this.workspaces.get(h.agent.deskKey)?.name ?? 'coordinator' };
+      return { kind: 'worktree', worktree: h.path, name: h.name };
+    };
+    const rooms = this.roomSpecs().map((r) => ({ id: roomFloorId(r.key), source: r.source, runId: r.runId, name: r.objective ?? (r.source === 'run' ? 'Project' : 'Worktree family'), coordinator: coordinator(r.head), members: r.seats.map((s) => s.path).filter((p): p is string => !!p) }));
+    return {
+      floors,
+      desks,
+      agents,
+      worktrees: this.worktreeRows,
+      kanbanByPath: this.kanbanByPath,
+      linksByPath: this.linksByPath,
+      portsByPath: this.portsByPath,
+      bots: this.bots.map((b) => ({ ...b, chats: this.botChats.get(b.name.toLowerCase()) ?? [] })),
+      runs: this.runs.map((r) => ({ run: r, live: isLive(r, this.now || Date.now(), RECENT_MS), coordinator: coordinator(this.coordinatorOf(r)) })),
+      rooms,
+    };
   }
 
   // ---- output ---------------------------------------------------------------------------------
@@ -1087,6 +1193,7 @@ function newAgent(paneKey: string, deskKey: string, floor: string, now: number):
     pendingDone: null,
     bubble: null,
     sessionId: null,
+    providerSessionId: null,
     firstSeen: now,
     provisional: false,
     lastSeen: now,
