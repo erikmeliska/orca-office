@@ -101,7 +101,7 @@ describe('lanView: floors, desks, figures, states and badges; no private text', 
     const m = new LiveModel();
     m.applyWorkspaces([ws('a', 'web', '/code/web/a'), ws('b', 'api', '/code/api/b'), ws('c', 'web', '/code/web/c')]);
     m.applyAgents('local', [agent('p1', '/code/web/a', { bubble: 'SECRET-BUBBLE', state: 'blocked' }), agent('p2', '/code/api/b', { bubble: 'SECRET-BUBBLE' })], NOW);
-    m.applyWorktrees([{ id: 'repo-web::/code/web/a', repoId: 'repo-web', path: '/code/web/a', hostId: 'local', name: 'a', branch: 'a', links: [{ provider: 'github', kind: 'pr', ref: '#1', title: 'SECRET-LINK' }], parentId: null, childIds: [] }]);
+    m.applyWorktrees([{ id: 'repo-web::/code/web/a', repoId: 'repo-web', projectId: null, isMain: false, path: '/code/web/a', hostId: 'local', name: 'a', branch: 'a', links: [{ provider: 'github', kind: 'pr', ref: '#1', title: 'SECRET-LINK' }], parentId: null, childIds: [] }]);
     m.applyRuns([run], NOW);
     m.applyBots([{ id: 'b1', name: 'ReleaseBot', agent: 'claude', paused: false, specialty: 'SECRET-TASK specialty' }]);
     const b = m.building();

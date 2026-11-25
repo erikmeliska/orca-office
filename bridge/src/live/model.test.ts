@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'vitest';
 import { ACTION_MS, DONE_DEBOUNCE_MS, HELPER_MAX_MS, LiveModel, MAX_SEATS, PROVISIONAL_MS, STAFF_FLOOR, allocate, floorId } from './model.js';
 import { parseAgentList, parseBots, parseStatusEvent, parseToolHook, parseWorkspaces, type CliAgent, type OrcaWorkspace } from './orca.js';
+import { parseWorktreeList, type OrcaWorktree } from './worktrees.js';
 
 // Everything here is made up: fake repos, paths and messages.
 
@@ -9,7 +10,7 @@ const ws = (id: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({
   kind: 'worktree',
   name: id,
   project: 'demo-web',
-  projectId: 'proj-web',
+  projectId: `proj-${over.project ?? 'demo-web'}`,
   path: `/code/demo-web/${id}`,
   branch: id,
   hostId: 'local',
@@ -309,5 +310,91 @@ describe('parsing Orca', () => {
     expect(floorId('demo-web')).toBe(floorId('demo-web'));
     expect(floorId('demo-web')).toMatch(/^f-demo-web-[a-z0-9]+$/);
     expect(floorId('Demo Web')).not.toBe(floorId('demo-web'));
+  });
+
+  test('floor ids are stable slugs', () => {
+    expect(floorId('demo-web')).toBe(floorId('demo-web'));
+    expect(floorId('demo-web')).toMatch(/^f-demo-web-[a-z0-9]+$/);
+    expect(floorId('Demo Web')).not.toBe(floorId('demo-web'));
+  });
+});
+
+describe('floors from the repository, not a worktree', () => {
+  const row = (path: string, over: Partial<OrcaWorktree> = {}): OrcaWorktree => ({ id: `repo-1::${path}`, repoId: 'repo-1', projectId: 'proj-demo-web', isMain: false, path, hostId: 'local', name: path.split('/').pop()!, branch: null, links: [], parentId: null, childIds: [], ...over });
+
+  test('a repository with several worktrees is one floor whose directory is its own checkout', () => {
+    const m = new LiveModel();
+    // The checkout itself isn't open in Orca; two worktrees are, one with a working agent.
+    m.applyWorkspaces([ws('a', { path: '/wt/demo-web/a' }), ws('b', { path: '/wt/demo-web/b' }), ws('main', { path: '/code/demo-web', state: 'inactive' })]);
+    m.applyAgents('local', [agent('p1', '/wt/demo-web/b')], 0);
+    m.applyWorktrees([row('/wt/demo-web/b'), row('/code/demo-web', { isMain: true, branch: 'main' }), row('/wt/demo-web/a')]);
+    const floors = m.building().floors;
+    expect(floors.map((f) => f.info.name)).toEqual(['demo-web']);
+    const f = floors[0]!;
+    expect(f.info.dir).toBe('/code/demo-web');
+    expect(m.forgeTarget(f.info.id)?.dir).toBe('/code/demo-web');
+    expect(m.floorProject(f.info.id)).toEqual({ projectId: 'proj-demo-web' });
+  });
+
+  test('parsed from orca worktree list: the main checkout by isMainWorktree, the project by projectId', () => {
+    const rows = parseWorktreeList({ result: { worktrees: [
+      { id: 'r::/wt/x', repoId: 'r', projectId: 'github:o/x', isMainWorktree: false, path: '/wt/x', displayName: 'x' },
+      { id: 'r::/code/x', repoId: 'r', projectId: 'github:o/x', isMainWorktree: true, path: '/code/x', displayName: 'main' },
+    ] } });
+    expect(rows.map((r) => [r.path, r.projectId, r.isMain])).toEqual([['/wt/x', 'github:o/x', false], ['/code/x', 'github:o/x', true]]);
+  });
+
+  test('an Orca whose rows have no project id: the checkout of the same repository', () => {
+    const m = new LiveModel();
+    m.applyWorkspaces([ws('a', { path: '/wt/demo-web/a' })]);
+    m.applyWorktrees([row('/wt/demo-web/a', { projectId: null }), row('/code/demo-web', { projectId: null, isMain: true })]);
+    expect(m.building().floors[0]!.info.dir).toBe('/code/demo-web');
+  });
+
+  test('no checkout Orca lists: the first local desk, as before', () => {
+    const m = new LiveModel();
+    m.applyWorkspaces([ws('a', { path: '/wt/demo-web/a' })]);
+    m.applyWorktrees([row('/wt/demo-web/a')]);
+    expect(m.building().floors[0]!.info.dir).toBe('/wt/demo-web/a');
+  });
+
+  test('two repositories with the same name are two floors, told apart by their project', () => {
+    const m = new LiveModel();
+    m.applyWorkspaces([
+      ws('a', { projectId: 'github:alice/app', project: 'app', path: '/wt/app/a' }),
+      ws('b', { projectId: 'github:bob/app', project: 'app', path: '/wt/app2/b' }),
+    ]);
+    m.applyWorktrees([
+      row('/code/alice-app', { id: 'r1::/code/alice-app', repoId: 'r1', projectId: 'github:alice/app', isMain: true }),
+      row('/code/bob-app', { id: 'r2::/code/bob-app', repoId: 'r2', projectId: 'github:bob/app', isMain: true }),
+    ]);
+    m.applyAgents('local', [agent('p1', '/wt/app/a', { repo: 'app' }), agent('p2', '/wt/app2/b', { repo: 'app' })], 0);
+    const floors = m.building().floors;
+    expect(floors.map((f) => [f.info.name, f.info.dir, f.workers.length])).toEqual([
+      ['app · alice/app', '/code/alice-app', 1],
+      ['app · bob/app', '/code/bob-app', 1],
+    ]);
+    expect(new Set(floors.map((f) => f.info.id)).size).toBe(2);
+    expect(floors.map((f) => m.floorProject(f.info.id)?.projectId)).toEqual(['github:alice/app', 'github:bob/app']);
+  });
+
+  test('renaming a repository keeps its floor id', () => {
+    const m = new LiveModel();
+    m.applyWorkspaces([ws('a')]);
+    const before = m.building().floors[0]!.info;
+    m.applyWorkspaces([ws('a', { project: 'demo-site', projectId: 'proj-demo-web' })]);
+    const after = m.building().floors[0]!.info;
+    expect(after.name).toBe('demo-site');
+    expect(after.id).toBe(before.id);
+  });
+
+  test("a remote agent's repo goes to the one project of that name; folders and unknown repos stay floors by name", () => {
+    const m = new LiveModel();
+    m.applyWorkspaces([ws('a'), { ...ws('notes'), kind: 'folder', project: null, projectId: null, path: '/home/u/notes' }]);
+    m.applyAgents('runtime:pair', [agent('r1', '/srv/demo-web/x', { hostId: 'runtime:pair', repo: 'demo-web' }), agent('r2', '/srv/other/y', { hostId: 'runtime:pair', repo: 'other' })], 0);
+    const floors = m.building().floors;
+    expect(floors.map((f) => [f.info.name, f.workers.length])).toEqual([['demo-web', 1], ['Folders', 0], ['other', 1]]);
+    expect(floors.find((f) => f.info.name === 'other')!.info.id).toBe(floorId('other'));
+    expect(floors.find((f) => f.info.name === 'Folders')!.info.id).toBe(floorId('Folders'));
   });
 });

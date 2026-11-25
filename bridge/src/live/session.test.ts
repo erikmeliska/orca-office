@@ -51,7 +51,7 @@ test('the desks’ links (#32) come with the floor, again when they change, and 
   expect(first.find((x) => x.t === 'orca.links')).toMatchObject({ t: 'orca.links', desks: {} });
   expect(first.find((x) => x.t === 'orca.project')).toEqual({ t: 'orca.project', floor: s.peer.floor, project: null });
   expect(first.at(-1)).toEqual({ t: 'orca.forge', floor: s.peer.floor, board: null });
-  m.applyWorktrees([{ id: 'r::/code/demo/a', repoId: 'r', path: '/code/demo/a', hostId: 'local', name: 'a', branch: null, links: [{ provider: 'github', kind: 'pr', ref: '#12', url: 'https://github.com/o/r/pull/12', title: 'Made-up PR' }, { provider: 'github', kind: 'issue', ref: '#3' }], parentId: null, childIds: [] }]);
+  m.applyWorktrees([{ id: 'r::/code/demo/a', repoId: 'r', projectId: null, isMain: false, path: '/code/demo/a', hostId: 'local', name: 'a', branch: null, links: [{ provider: 'github', kind: 'pr', ref: '#12', url: 'https://github.com/o/r/pull/12', title: 'Made-up PR' }, { provider: 'github', kind: 'issue', ref: '#3' }], parentId: null, childIds: [] }]);
   const msgs = s.update(m.building());
   expect(msgs.map((x) => x.t)).toEqual(['plan', 'gh.pulls', 'gh.issues', 'orca.links']);
   const links = msgs.find((x) => x.t === 'orca.links') as { desks: Record<string, unknown[]> };

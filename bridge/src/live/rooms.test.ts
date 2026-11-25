@@ -8,7 +8,7 @@ import type { OrcaWorktree } from './worktrees.js';
 const NOW = Date.parse('2026-11-24T12:00:00Z');
 const ws = (id: string, project: string, path: string, over: Partial<OrcaWorkspace> = {}): OrcaWorkspace => ({ id, kind: 'worktree', name: id, project, projectId: `p-${project}`, path, branch: id, hostId: 'local', state: 'active', unread: false, lastActivityAt: 1, ...over });
 const agent = (paneKey: string, path: string, over: Partial<CliAgent> = {}): CliAgent => ({ paneKey, sessionId: `s-${paneKey}`, kind: 'terminal', agent: 'claude', state: 'working', worktreeId: `repo::${path}`, workspace: 'w', repo: null, hostId: 'local', bubble: null, updatedAt: 1, ...over });
-const wt = (id: string, repoId: string, path: string, over: Partial<OrcaWorktree> = {}): OrcaWorktree => ({ id, repoId, path, hostId: 'local', name: path.split('/').pop()!, branch: null, links: [], parentId: null, childIds: [], ...over });
+const wt = (id: string, repoId: string, path: string, over: Partial<OrcaWorktree> = {}): OrcaWorktree => ({ id, repoId, projectId: null, isMain: false, path, hostId: 'local', name: path.split('/').pop()!, branch: null, links: [], parentId: null, childIds: [], ...over });
 const run = (over: Partial<OrcaRun> = {}): OrcaRun => ({
   id: 'run_a',
   objective: 'Made-up objective',
@@ -99,12 +99,22 @@ describe('project rooms (#29, #30)', () => {
     m.applyWorktrees([wt('repo-web::/code/web/a', 'repo-web', '/code/web/a', { childIds: ['repo-api::/code/api/b'] }), wt('repo-api::/code/api/b', 'repo-api', '/code/api/b', { parentId: 'repo-web::/code/web/a' })]);
     let b = m.building();
     const room = b.floors.find((f) => f.info.room === 'project')!;
-    expect(b.projects[room.info.id]).toMatchObject({ source: 'lineage', objective: 'a', members: ['b'] });
+    expect(b.projects[room.info.id]).toMatchObject({ source: 'lineage', objective: 'web · a', members: ['b'] });
     expect(Object.values(room.plan.labels).map((l) => l.text)).toContain('👑 a');
     // A Run over the same worktrees replaces it.
     m.applyRuns([run()], NOW);
     b = m.building();
     expect(b.floors.filter((f) => f.info.room === 'project').map((f) => b.projects[f.info.id]!.source)).toEqual(['run']);
+  });
+
+  test('a lineage from the repository\'s own checkout with two children is named after the repository and its branch', () => {
+    const m = office();
+    const main = wt('repo-web::/code/web', 'repo-web', '/code/web', { isMain: true, name: 'main', branch: 'main', projectId: 'p-web', childIds: ['repo-web::/code/web/a', 'repo-web::/code/web/c'] });
+    m.applyWorktrees([main, wt('repo-web::/code/web/a', 'repo-web', '/code/web/a', { parentId: main.id }), wt('repo-web::/code/web/c', 'repo-web', '/code/web/c', { parentId: main.id })]);
+    const b = m.building();
+    const room = b.floors.find((f) => f.info.room === 'project')!;
+    expect(room.info.name).toBe('web · main');
+    expect(b.projects[room.info.id]).toMatchObject({ source: 'lineage', objective: 'web · main', members: ['a', 'c'] });
   });
 
   test('a lineage in one repo with one child is no room', () => {
