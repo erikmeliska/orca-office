@@ -46,10 +46,13 @@ const ERRORS: Record<string, string> = {
   invalid: 'Orca refused the message',
   not_sent: 'Orca did not take the message',
   failed: 'Something went wrong',
+  not_asking: 'It is not asking any more',
+  no_prompt: 'No permission prompt on its screen — open its terminal to answer',
+  no_option: 'Its prompt has no such answer — open its terminal',
 };
 export const say = (e: string | undefined) => (e && ERRORS[e]) || `Orca said no${e ? ` (${e})` : ''}`;
 
-const DONE: Partial<Record<OrcaActionKind, string>> = { open: '↗ Opened in Orca', read: '✓ Marked read', comment: '✓ Comment saved' };
+const DONE: Partial<Record<OrcaActionKind, string>> = { open: '↗ Opened in Orca', read: '✓ Marked read', comment: '✓ Comment saved', answer: '✓ Answered' };
 
 /** Waiting for a desk's comment (orca.desk), and new tasks being started. */
 const deskWaiters = new Map<string, (comment: string) => void>();

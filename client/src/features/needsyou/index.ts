@@ -9,7 +9,7 @@ import type { Ctx } from '../../core/context';
 import type { Parts } from '../../core/parts';
 import { needingYou } from '../../nextup';
 import { store } from '../../state';
-import { $ } from '../../ui/dom';
+import { $, toast } from '../../ui/dom';
 import { Fresh, Reminders } from './logic';
 import { bannerText, FreshStops, type Stop } from '../../waiting-all';
 import { Banner } from './ui';
@@ -40,6 +40,10 @@ export function installNeedsYou(ctx: Ctx, parts: Pick<Parts, 'views' | 'waiting'
       for (const s of asking()) hidden.add(waitOf(s));
       paintBanner();
     },
+    // Answering from the banner (M7 B1): the bridge checks it all again (bridge/src/live/actions.ts).
+    answer: (workerId, choice) => ctx.net.send({ t: 'orca.answer', workerId, choice }),
+    reply: (workerId, text) => (ctx.net.send({ t: 'worker.prompt', workerId, prompt: text }), toast('✓ Sent')),
+    open: (workerId) => ctx.net.send({ t: 'orca.open', workerId }),
   });
 
   function paintBanner() {

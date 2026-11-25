@@ -14,7 +14,21 @@ export interface OrcaWorkerInfo {
   /** Its worktree's name and branch (M6 A5): what you think in, rather than a made-up name. */
   worktree?: string;
   branch?: string;
+  /**
+   * While it needs you (M7 B1): Orca's `blocked` is a permission prompt (the banner offers
+   * Yes / Always / No), `waiting` a question (a line of text answers it).
+   */
+  asks?: OrcaAsks;
+  /** When Orca last said anything about it: a state, a tool hook, a new last message (M7 B5, stuck?). */
+  quietSince?: number;
 }
+
+/** What a figure that needs you is stopped on (M7 B1). */
+export type OrcaAsks = 'permission' | 'question';
+
+/** The answers to a permission prompt the office can give (M7 B1); the bridge finds the key on the screen. */
+export const ORCA_ANSWERS = ['yes', 'always', 'no'] as const;
+export type OrcaAnswer = (typeof ORCA_ANSWERS)[number];
 
 /** Agents the office can start in a new workspace; Orca's plugin worker allows the same (plugin/src/worker.ts). */
 export const ORCA_AGENTS = ['claude', 'codex', 'antigravity', 'opencode', 'copilot', 'cursor', 'pi'] as const;
@@ -26,7 +40,7 @@ export const ORCA_AGENT_LABELS: Partial<Record<OrcaAgent, string>> = { antigravi
 /** Bounds the bridge holds the page's messages to (and the worker its calls). */
 export const ORCA_LIMITS = { send: 4096, prompt: 8000, comment: 2000, name: 60 } as const;
 
-export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal' | 'chat' | 'bot';
+export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal' | 'chat' | 'bot' | 'answer';
 
 /** One entry of a chat agent's conversation, read-only (`orca agent read`): a message, or a tool it used. */
 export type OrcaChatEntry = { role: 'user' | 'assistant'; text: string; shortened?: boolean; mail?: OrcaMailFrom } | { tool: string; state: string | null };
@@ -152,6 +166,10 @@ export interface OrcaWaiting {
   ask: string | null;
   /** Since when it has waited (ms). */
   since: number;
+  /** A permission prompt or a question (M7 B1); absent for a gate. */
+  asks?: OrcaAsks;
+  /** A terminal agent on this machine: the banner can answer it without opening the terminal (M7 B1). */
+  terminal?: boolean;
 }
 
 /** One figure of the building's roster (M6 A6): for ⌘K and the Workers panel across floors. */
@@ -168,6 +186,11 @@ export interface OrcaRosterWorker {
   terminal?: boolean;
   /** Since when it has been in this state (ms). */
   since?: number;
+  asks?: OrcaAsks;
+  /** When Orca last said anything about it (M7 B5). */
+  quietSince?: number;
+  /** While working: since when (M7 B5, working for hours). */
+  workingSince?: number;
 }
 
 /** A floor of the roster: repository floors and the Staff floor (project rooms only mirror them). */
@@ -180,6 +203,11 @@ export interface OrcaRosterFloor {
 export type OrcaClientMsg =
   /** Show the figure's workspace in Orca and focus its terminal (`workerId`), or a desk's worktree (`deskId`). */
   | { t: 'orca.open'; workerId?: string; deskId?: string }
+  /**
+   * Answer a permission prompt (M7 B1): the bridge reads the figure's terminal, finds the menu and
+   * sends the key that picks `choice` (a digit, or the option's own shortcut). Nothing else is typed.
+   */
+  | { t: 'orca.answer'; workerId: string; choice: OrcaAnswer }
   /** Mark the desk's worktree read in Orca (clears its unread dot). */
   | { t: 'orca.read'; deskId: string }
   /** Set the desk's worktree comment in Orca ('' clears it). */

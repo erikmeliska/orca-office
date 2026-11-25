@@ -2,6 +2,7 @@
 // you were last on and the spot you were standing in. Every read and write shrugs off blocked storage.
 
 import { randomLook, sanitizeLook, type Look } from '@orca-office/shared/office/avatar';
+import { STUCK_DEFAULTS, STUCK_LONG_CHOICES, STUCK_QUIET_CHOICES, type StuckRule } from '@orca-office/shared/office/stuck';
 
 export interface Profile {
   name: string;
@@ -65,6 +66,8 @@ export interface Settings {
   pins: string[];
   /** The games, chat and emotes (M6 A11): off unless you turn them on. */
   fun: boolean;
+  /** When a working worker looks stuck (M7 B5): minutes without a word from Orca, hours working at a stretch. */
+  stuck: StuckRule;
 }
 
 const SETTINGS_KEY = 'agent-office.settings';
@@ -127,7 +130,7 @@ export function rememberSpot(s: Spot) {
 }
 
 export function loadSettings(): Settings {
-  const s: Settings = { view: 'first', volume: 0.7, muted: false, music: 0.5, musicMuted: false, pageTurns: true, notify: true, needsYouSound: 'once', hud: { ...HUD_DEFAULTS }, pins: [], fun: false };
+  const s: Settings = { view: 'first', volume: 0.7, muted: false, music: 0.5, musicMuted: false, pageTurns: true, notify: true, needsYouSound: 'once', hud: { ...HUD_DEFAULTS }, pins: [], fun: false, stuck: { ...STUCK_DEFAULTS } };
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null');
     if (saved?.view === 'first' || saved?.view === 'third') s.view = saved.view;
@@ -140,6 +143,8 @@ export function loadSettings(): Settings {
     if (NEEDS_YOU_SOUNDS.includes(saved?.needsYouSound)) s.needsYouSound = saved.needsYouSound;
     for (const k of Object.keys(s.hud) as HudPanel[]) if (typeof saved?.hud?.[k] === 'boolean') s.hud[k] = saved.hud[k];
     if (typeof saved?.fun === 'boolean') s.fun = saved.fun;
+    if ((STUCK_QUIET_CHOICES as readonly unknown[]).includes(saved?.stuck?.quietMin)) s.stuck.quietMin = saved.stuck.quietMin;
+    if ((STUCK_LONG_CHOICES as readonly unknown[]).includes(saved?.stuck?.longHours)) s.stuck.longHours = saved.stuck.longHours;
     if (Array.isArray(saved?.pins)) s.pins = saved.pins.filter((p: unknown): p is string => typeof p === 'string').slice(0, 30);
   } catch {
     // storage blocked

@@ -112,6 +112,10 @@
 /* The other floors' figures (M6 A6): a heading per floor, compact rows. */
 .workers li.floor-head { margin-top: 6px; padding: 4px 2px 0; border: 0; background: none; box-shadow: none; font-size: 12px; font-weight: 900; color: var(--muted); cursor: default; }
 .workers li.away .name { font-size: 13px; }
+/* Maybe stuck (M7 B5): grey, apart from the ones that really need you. */
+.workers li.stuck-row { border: 2px dashed #adb5bd; background: #f1f3f5; }
+.workers li.stuck-row:hover { background: #e9ecef; }
+.workers .pill.stuck { background: #adb5bd; color: #2b2d42; }
 #waiting.all-done { background: #d8f5e3; }
 #waiting.all-done:hover { background: #c3efd5; }
 #waiting .key { margin: 0 0 0 auto; background: var(--ink); color: var(--paper); box-shadow: none; }

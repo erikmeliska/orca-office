@@ -39,7 +39,7 @@ test('the banner names whoever has waited longest, what it asks and for how long
   const now = 10 * 60_000;
   const a = worker('Byte', 'needs_input', { activity: 'Wants permission: Bash: npm test', waitingSince: now - 4 * 60_000 });
   const b = worker('Pixel', 'needs_input', { activity: 'Which one?', waitingSince: now - 30_000 });
-  assert.deepEqual(bannerText([a], now), { id: 'Byte', title: 'Byte needs you', detail: 'Wants permission: Bash: npm test · 4 min', more: '', key: 'Byte|Byte needs you|Wants permission: Bash: npm test · 4 min|' });
+  assert.deepEqual(bannerText([a], now), { id: 'Byte', act: null, title: 'Byte needs you', detail: 'Wants permission: Bash: npm test · 4 min', more: '', key: 'Byte|Byte needs you|Wants permission: Bash: npm test · 4 min|' });
   assert.equal(bannerText([a, b], now)?.more, '+1 more');
   // In its first minute there's no time to give, and with nothing known of what it asks, just its name.
   assert.equal(bannerText([b], now)?.detail, 'Which one?');

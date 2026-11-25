@@ -62,7 +62,7 @@ const flush = () => vi.advanceTimersByTimeAsync(0);
 
 test('figures say what the office can do with them', () => {
   const workers = model.building().floors[0]!.workers;
-  expect(workers.map((w) => w.orca).sort((x, y) => Number(x!.terminal) - Number(y!.terminal))).toEqual([{ terminal: false, remote: false, worktree: 'b', branch: 'b' }, { terminal: true, remote: false, worktree: 'a', branch: 'a' }]);
+  expect(workers.map((w) => w.orca).sort((x, y) => Number(x!.terminal) - Number(y!.terminal))).toEqual([{ terminal: false, remote: false, worktree: 'b', branch: 'b', quietSince: 1 }, { terminal: true, remote: false, worktree: 'a', branch: 'a', quietSince: 1 }]);
   expect(model.building().floors[0]!.info.orcaCreate).toBe(true);
 });
 
@@ -241,4 +241,53 @@ test('a conversation keeps messages and tool names only, cut to size', () => {
   const c = parseConversation({ result: { state: 'done', entries: [{ kind: 'message', role: 'system', text: 'x' }, { kind: 'message', role: 'assistant', text: 'y'.repeat(25_000) }, { kind: 'tool', name: 'Read', state: 'completed', input: { path: '/secret' } }, { kind: 'other' }] } });
   expect(c?.entries).toEqual([{ role: 'assistant', text: 'y'.repeat(20_000), shortened: true }, { tool: 'Read', state: 'completed' }]);
   expect(parseConversation({ result: {} })).toBeNull();
+});
+
+// ---- M7 B1: answering a permission prompt from the banner -------------------------------------
+
+const MENU = ['Do you want to proceed?', '❯ 1. Yes', "  2. Yes, and don't ask again for npm test in /x", '  3. No, and tell Claude what to do differently (esc)'];
+
+function blocked() {
+  model.applyAgents('local', [agent('pane-1', 'a', { state: 'blocked' }), agent('pane-chat', 'b', { kind: 'chat' })], now);
+  model.building();
+}
+
+test('a blocked agent says it asks permission, and the waiting list says it can be answered here', () => {
+  blocked();
+  const b = model.building();
+  const w = b.floors[0]!.workers.find((x) => x.id === idOf('pane-1'))!;
+  expect(w.orca?.asks).toBe('permission');
+  expect(b.waiting[0]).toMatchObject({ asks: 'permission', terminal: true });
+  model.applyAgents('local', [agent('pane-1', 'a', { state: 'waiting' })], now);
+  expect(model.building().waiting[0]).toMatchObject({ asks: 'question' });
+});
+
+test('Yes / Always / No read the screen and send only the key that picks it', async () => {
+  blocked();
+  answers['terminal.read'] = { ok: true, value: { lines: MENU, truncated: false } };
+  const id = idOf('pane-1');
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'always' });
+  await flush();
+  expect(calls.at(-1)).toEqual({ method: 'terminal.read', params: { terminalId: T, maxLines: 30 } });
+  expect(sends).toEqual([{ terminalId: T, text: '2', enter: false }]);
+  expect(sent).toContainEqual({ t: 'orca.result', action: 'answer', ok: true, workerId: id });
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'no' });
+  await flush();
+  expect(sends.at(-1)).toEqual({ terminalId: T, text: '\x1b', enter: false });
+});
+
+test('nothing is typed without a menu on the screen, into a working agent, a chat or for a made-up choice', async () => {
+  const id = idOf('pane-1');
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'yes' });
+  expect(sent.at(-1)).toMatchObject({ action: 'answer', ok: false, error: 'not_asking' });
+  blocked();
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'yes' });
+  expect(sent.at(-1)).toMatchObject({ action: 'answer', ok: false, error: 'no_prompt' });
+  await actions.handle(page, { t: 'orca.answer', workerId: idOf('pane-chat'), choice: 'yes' });
+  expect(sent.at(-1)).toMatchObject({ action: 'answer', ok: false, error: 'no_terminal' });
+  const n = sent.length;
+  await actions.handle(page, { t: 'orca.answer', workerId: id, choice: 'rm -rf' } as never);
+  expect(sent.length).toBe(n);
+  await flush();
+  expect(sends).toEqual([]);
 });

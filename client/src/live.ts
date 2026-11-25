@@ -5,7 +5,9 @@
 
 import './live.css';
 import type { OrcaRosterFloor, OrcaRosterWorker, OrcaWaiting } from '@orca-office/shared/office/protocol/orca';
+import { stuckText } from '@orca-office/shared/office/stuck';
 import { forgetBridgeToken, openBridge } from './bridge-auth.js';
+import { loadSettings } from './state/persist.js';
 
 const BRIDGE = `ws://127.0.0.1:${__ORCA_OFFICE_BRIDGE_PORT__}/client`;
 
@@ -129,12 +131,23 @@ function replyBox(workerId: string): HTMLElement {
   return el('div', 'reply', input, el('div', 'reply-actions', button('Send', go, 'primary'), button('Cancel', () => ((st.replying = null), render()))));
 }
 
-function card(o: { key: string; title: string; where: string; text?: string | null; tone: string; since?: number; workerId: string | null; deskId: string | null; floor: string; canReply: boolean }): HTMLElement {
+/** Yes / Always / No on a permission prompt (M7 B1): the bridge finds the key on the agent's screen. */
+function answer(workerId: string, key: string, choice: 'yes' | 'always' | 'no') {
+  send({ t: 'orca.answer', workerId, choice });
+  st.note = { key, text: choice === 'no' ? 'Said no' : 'Allowed', ok: true };
+  render();
+}
+
+function card(o: { key: string; title: string; where: string; text?: string | null; tone: string; since?: number; workerId: string | null; deskId: string | null; floor: string; canReply: boolean; permission?: boolean }): HTMLElement {
   const note = st.note?.key === o.key ? el('p', `note ${st.note.ok ? 'ok' : 'bad'}`, st.note.text) : null;
+  const w = o.workerId;
   const actions = el(
     'div',
     'actions',
-    o.canReply && st.replying !== o.key ? button('Reply', () => ((st.replying = o.key), (st.draft = ''), (st.note = null), render()), 'primary') : null,
+    o.permission && w ? button('✓ Yes', () => answer(w, o.key, 'yes'), 'primary') : null,
+    o.permission && w ? button('✓✓ Always', () => answer(w, o.key, 'always')) : null,
+    o.permission && w ? button('✕ No', () => answer(w, o.key, 'no')) : null,
+    o.canReply && !o.permission && st.replying !== o.key ? button('Reply', () => ((st.replying = o.key), (st.draft = ''), (st.note = null), render()), 'primary') : null,
     o.workerId || o.deskId ? button('Open in Orca', () => openInOrca(o, o.key)) : null,
   );
   return el(
@@ -171,12 +184,21 @@ function render() {
       deskId: w.deskId,
       floor: w.floor,
       canReply: !!p?.terminal,
+      permission: w.asks === 'permission' && !!w.terminal,
     });
   });
+  // Maybe stuck (M7 B5): working, but nothing heard from it for a long while; apart from the real ones.
+  const rule = loadSettings().stuck;
+  const now = Date.now();
+  const stuck = [...people.values()]
+    .map((w) => ({ w, why: stuckText(w, now, rule) }))
+    .filter((x) => x.why)
+    .map(({ w, why }) => card({ key: `stuck:${w.id}`, title: `😴 ${w.name}`, where: [`🏢 ${w.floorName}`, why].join(' · '), text: w.summary, tone: 'stuck', workerId: w.id, deskId: w.deskId, floor: w.floor, canReply: !!w.terminal }));
+  const stuckIds = new Set(stuck.length ? [...people.values()].filter((w) => stuckText(w, now, rule)).map((w) => w.id) : []);
   const listed = new Set(st.waiting.map((w) => w.workerId));
   const rows = (status: string, tone: string) =>
     [...people.values()]
-      .filter((w) => w.status === status && !listed.has(w.id))
+      .filter((w) => w.status === status && !listed.has(w.id) && !stuckIds.has(w.id))
       .map((w) => card({ key: w.id, title: `${w.bot ? '🤖 ' : ''}${w.name}`, where: [`🏢 ${w.floorName}`, w.branch && w.branch !== w.name ? `🌿 ${w.branch}` : ''].filter(Boolean).join(' · '), text: w.summary, tone, since: w.since, workerId: w.id, deskId: w.deskId, floor: w.floor, canReply: !!w.terminal }));
   const status = !st.up ? 'Reconnecting…' : !st.orca ? 'Orca offline' : '';
   const banner = status ? el('p', 'banner', `${status}${st.staleSince ? ` · last update ${ago(st.staleSince)}${ago(st.staleSince) === 'just now' ? '' : ' ago'}` : ''}`) : '';
@@ -188,7 +210,7 @@ function render() {
       el('span', `pill ${needs.length ? 'needs' : 'calm'}`, needs.length ? `🙋 ${needs.length} need${needs.length === 1 ? 's' : ''} you` : '👍 Nobody waiting'),
     ),
     banner,
-    el('main', '', section('Needs you', 'needs', needs, 'Nobody is waiting for you.'), section('Working', 'working', rows('working', 'working'), 'Nobody is working right now.'), section('Done', 'done', rows('done', 'done'), 'Nothing finished yet.')),
+    el('main', '', section('Needs you', 'needs', needs, 'Nobody is waiting for you.'), stuck.length ? section('Maybe stuck', 'stuck', stuck, '') : '', section('Working', 'working', rows('working', 'working'), 'Nobody is working right now.'), section('Done', 'done', rows('done', 'done'), 'Nothing finished yet.')),
     el('footer', '', el('a', '', 'Open the 3D office')),
   );
   const a = app.querySelector('footer a') as HTMLAnchorElement;
