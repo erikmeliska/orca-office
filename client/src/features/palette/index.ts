@@ -14,7 +14,7 @@ import { store } from '../../state';
 import { STATUS_LABEL, toast } from '../../ui/dom';
 import { paletteOpen, togglePalette, type PaletteEntry } from '../../ui/palette';
 import { openIssue, openPull } from '../../ui/pull';
-import { openServices, serviceUrl } from '../../ui/services';
+import { openServices, serviceOwner, serviceUrl } from '../../ui/services';
 import { IS_MAC } from '../../ui/termkeys';
 import type { InteractKind, Interactable } from '../../world/types';
 
@@ -92,7 +92,7 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
     out.push({ icon: '🖼️', kind: 'Action', title: 'Hang a picture', detail: 'On a wall of this floor', keywords: ['decorate', 'frame', 'art'], open: hanging.startHanging });
     out.push({ icon: '🔎', kind: 'Action', title: 'Search the chat and every terminal', keywords: ['find'], open: showSearch });
 
-    out.push(at('services', 'the Services board', { icon: '🌐', kind: 'Board', title: 'Services board', detail: 'Web servers the workers are running', open: () => openServices() }));
+    out.push(at('services', 'the Services board', { icon: '🌐', kind: 'Board', title: 'Services board', detail: 'Dev servers running in this floor’s worktrees', open: () => openServices() }));
 
     for (const pr of store.pulls.items) {
       out.push(
@@ -122,10 +122,10 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
         icon: '🌐',
         kind: 'Service',
         title: svc.title || svc.command,
-        detail: [`:${svc.port}`, svc.title && svc.command, store.workers.get(svc.workerId)?.name].filter(Boolean).join(' · '),
-        keywords: [String(svc.port)],
+        detail: [`:${svc.port}`, svc.title && svc.command, serviceOwner(svc).where].filter(Boolean).join(' · '),
+        keywords: [String(svc.port), svc.worktree ?? '', svc.branch ?? ''],
         // As its Open ↗ button does. A new tab needs the key press itself, so walking there shows the board instead.
-        open: () => window.open(serviceUrl(svc.port), '_blank', 'noopener'),
+        open: () => window.open(serviceUrl(svc), '_blank', 'noopener'),
         walk: board ? () => walkThen(board, 'the Services board', () => openServices()) : undefined,
       });
     }

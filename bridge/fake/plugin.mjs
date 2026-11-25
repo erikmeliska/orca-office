@@ -6,7 +6,8 @@ import { readFileSync } from 'node:fs';
 import { homedir } from 'node:os';
 import { join } from 'node:path';
 import WebSocket from 'ws';
-import { WORKSPACES, screen } from './data.mjs';
+import { createServer } from 'node:http';
+import { PORTS, WORKSPACES, screen } from './data.mjs';
 import { load, reset, save } from './state.mjs';
 
 const port = Number(process.env.ORCA_OFFICE_PORT ?? 4317);
@@ -17,6 +18,12 @@ const CYCLE = [
   ['p-bo:leaf', 'term_bo', 'repo-demo-web::/code/demo-web/dark-mode', [['Bash', 'test', true], ['Bash', 'test', true], ['Edit', 'edit']]],
   ['p-fa:leaf', 'term_fa', 'repo-demo-api::/code/demo-api/search-speed', [['Read', 'read'], ['WebFetch', 'web'], ['Edit', 'edit']]],
 ];
+// The made-up dev servers' front pages (B7), so the services board has titles to read.
+for (const p of PORTS.filter((x) => x.kind === 'workspace')) {
+  createServer((_req, res) => res.writeHead(200, { 'content-type': 'text/html' }).end(`<!doctype html><title>${p.title}</title><p>Made-up dev server.</p>`))
+    .on('error', () => {})
+    .listen(p.port, '127.0.0.1');
+}
 function connect() {
   const ws = new WebSocket(`ws://127.0.0.1:${port}/plugin`);
   const nonce = randomBytes(16).toString('hex');

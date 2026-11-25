@@ -43,7 +43,7 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
   const waitingNow = () => waitingInOrder(store.workers.values());
   const hud = mountHud(
     [
-      { id: 'services', icon: '🌐', label: 'Services', section: 'Open', count: () => store.services.items.length, title: () => 'Web servers the workers are running', run: () => openServices() },
+      { id: 'services', icon: '🌐', label: 'Services', section: 'Open', count: () => store.services.items.length, title: () => 'Dev servers running in this floor’s worktrees', run: () => openServices() },
       { id: 'search', icon: '🔎', label: 'Search', section: 'Open', key: '/', title: () => 'Search the chat and every terminal', run: waiting.showSearch },
       // The office has its bookshelf for them; a map of its own may not.
       { id: 'docs', icon: '📚', label: 'Docs', section: 'Open', shown: () => !inOffice(), title: () => 'Read the project’s docs', run: parts.bookshelf.showBookshelf },
