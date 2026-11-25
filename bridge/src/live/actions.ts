@@ -17,12 +17,13 @@
  * Nothing here deletes, closes or merges. Rate limits per page (rate.ts). What is typed, prompts,
  * comments and terminal text are never logged or kept: errors carry short codes only.
  */
-import { ORCA_AGENTS, ORCA_LIMITS, type OrcaActionKind } from '@orca-office/shared/office/protocol/orca';
+import { ORCA_AGENTS, ORCA_ANSWERS, ORCA_LIMITS, type OrcaActionKind, type OrcaAnswer } from '@orca-office/shared/office/protocol/orca';
 import type { ClientMsg, ServerMsg } from '@orca-office/shared/office/protocol';
 import type { CallResult } from '../plugin-link.js';
 import type { PageLimits } from '../rate.js';
 import type { LiveModel } from './model.js';
 import { parseConversation } from './orca.js';
+import { answerKey, MENU_LINES } from './permission.js';
 import type { TerminalWatch } from './terminals.js';
 
 /** How long a new task's figure has to sit down before the page is told it's slow. */
@@ -72,7 +73,7 @@ interface PendingCreate {
   since: number;
 }
 
-const ACTIONS = new Set(['orca.chat.open', 'orca.chat.close', 'worker.attach', 'worker.detach', 'term.input', 'term.resize', 'worker.prompt', 'orca.open', 'orca.read', 'orca.comment', 'orca.desk', 'orca.create']);
+const ACTIONS = new Set(['orca.answer', 'orca.chat.open', 'orca.chat.close', 'worker.attach', 'worker.detach', 'term.input', 'term.resize', 'worker.prompt', 'orca.open', 'orca.read', 'orca.comment', 'orca.desk', 'orca.create']);
 
 export class Actions {
   private pages = new Map<ActionPage, PageState>();
@@ -114,6 +115,8 @@ export class Actions {
         return this.type(page, st, msg.workerId, msg.data, false);
       case 'worker.prompt':
         return this.prompt(page, st, msg.workerId, msg.prompt);
+      case 'orca.answer':
+        return this.answer(page, st, msg.workerId, msg.choice, msg.since);
       case 'orca.open':
         return this.open(page, msg.workerId, msg.deskId);
       case 'orca.read':
@@ -181,6 +184,28 @@ export class Actions {
     if (!t?.terminalId) return void page.send([result('type', false, t ? (t.local ? 'no_terminal' : 'remote') : 'unknown_worker', { workerId })]);
     if (!this.allowTyping(page, st, prompt.length)) return;
     this.enqueue(page, st, workerId, t.terminalId, prompt, true);
+  }
+
+  /**
+   * Yes / Always / No on a permission prompt (M7 B1), from the banner or the Command Center: only to
+   * a terminal agent on this machine that Orca shows blocked, and only once its screen shows a
+   * permission menu; then the one key that picks the answer (permission.ts). Nothing else is typed.
+   */
+  private async answer(page: ActionPage, st: PageState, workerId: unknown, choice: unknown, since: unknown) {
+    if (typeof workerId !== 'string' || !(ORCA_ANSWERS as readonly unknown[]).includes(choice) || typeof since !== 'number') return;
+    if (!this.allow(page, 'answer')) return;
+    const t = this.model.target(workerId);
+    if (!t?.terminalId) return void page.send([result('answer', false, t ? (t.local ? 'no_terminal' : 'remote') : 'unknown_worker', { workerId })]);
+    if (t.state !== 'blocked' && t.state !== 'waiting') return void page.send([result('answer', false, 'not_asking', { workerId })]);
+    // It started asking again after the wait the page showed: that's another prompt, not the one clicked on.
+    if (t.since !== since) return void page.send([result('answer', false, 'prompt_changed', { workerId })]);
+    const r = await this.deps.call('terminal.read', { terminalId: t.terminalId, maxLines: MENU_LINES });
+    const lines = r.ok ? (r.value as { lines?: unknown } | undefined)?.lines : undefined;
+    if (!Array.isArray(lines)) return void page.send([result('answer', false, 'unreadable', { workerId })]);
+    const k = answerKey(lines.filter((l): l is string => typeof l === 'string'), choice as OrcaAnswer);
+    if ('error' in k) return void page.send([result('answer', false, k.error, { workerId })]);
+    this.enqueue(page, st, workerId, t.terminalId, k.key, false);
+    page.send([result('answer', true, undefined, { workerId })]);
   }
 
   private allowTyping(page: ActionPage, st: PageState, n: number): boolean {

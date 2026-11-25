@@ -40,6 +40,8 @@ export const STAFF_FLOOR = 'staff';
 /** A subagent nobody saw end is let go after this long. */
 export const HELPER_MAX_MS = 30 * 60_000;
 const LOCAL = 'local';
+/** Quiet this long, an event is news to the pages (a figure may be showing "stuck?", B5). */
+const QUIET_NEWS_MS = 60_000;
 
 const WORKER_COLORS = ['#ef476f', '#118ab2', '#ffd166', '#06d6a0', '#8338ec', '#f78c6b', '#4f86f7', '#073b4c', '#e76f51', '#2a9d8f', '#9b5de5', '#f15bb5'];
 const NAMES = ['Ada', 'Bo', 'Cy', 'Di', 'Ed', 'Fa', 'Gu', 'Ha', 'Ivo', 'Jo', 'Kai', 'Lu', 'Mo', 'Nia', 'Oto', 'Pia', 'Rae', 'Sol', 'Tea', 'Uma', 'Vik', 'Wes', 'Xan', 'Yul', 'Zoe'];
@@ -96,6 +98,10 @@ interface AgentRec {
   workingSince: number | null;
   /** Claude Code subagents (Task/Agent tool) running now, by call id, since when (design #12). */
   helpers: Map<string, number>;
+  /** When Orca last said anything about it: a state, a hook, a newer row in `orca agent list` (M7 B5). */
+  quietSince: number;
+  /** Its row's `updatedAt` as last listed. */
+  updatedAt: number;
 }
 
 interface DeskRec {
@@ -230,8 +236,11 @@ export class LiveModel {
       const desk = this.deskFor(c);
       const prev = this.agents.get(c.paneKey);
       const rec: AgentRec = prev ?? newAgent(c.paneKey, desk.key, desk.floor, now);
-      Object.assign(rec, { deskKey: desk.key, floor: desk.floor, kind: c.kind, agent: c.agent, hostId: c.hostId, bubble: c.bubble, sessionId: c.sessionId, provisional: false, lastSeen: now });
+      // A newer row or a new last message is Orca saying something about it (B5).
+      if (prev && (c.updatedAt > prev.updatedAt || c.bubble !== prev.bubble)) this.heard(prev, c.updatedAt > prev.updatedAt ? Math.min(now, c.updatedAt) : now);
+      Object.assign(rec, { deskKey: desk.key, floor: desk.floor, kind: c.kind, agent: c.agent, hostId: c.hostId, bubble: c.bubble, sessionId: c.sessionId, provisional: false, lastSeen: now, updatedAt: c.updatedAt });
       if (!prev) {
+        rec.quietSince = c.updatedAt || now;
         rec.shown = c.state;
         rec.shownSince = c.updatedAt || now;
         if (c.state === 'working') rec.workingSince = rec.shownSince;
@@ -263,6 +272,7 @@ export class LiveModel {
       this.version++;
       return true;
     }
+    this.heard(rec, ev.at);
     if (this.setState(rec, ev.state, ev.at)) this.version++;
     return false;
   }
@@ -270,6 +280,7 @@ export class LiveModel {
   /** An `agent.tool.before` hook for a subagent tool: a small helper sits by its parent until the call ends. */
   applySubagentStart(h: ToolHook): void {
     const rec = this.agentForHook(h);
+    if (rec) this.heard(rec, h.at);
     if (!rec || !h.callId || rec.helpers.has(h.callId)) return;
     rec.helpers.set(h.callId, h.at);
     this.version++;
@@ -278,6 +289,7 @@ export class LiveModel {
   /** An `agent.tool.after` hook: what the agent at that terminal acts out. */
   applyHook(h: ToolHook): void {
     const rec = this.agentForHook(h);
+    if (rec) this.heard(rec, h.at);
     if (rec && h.callId && rec.helpers.delete(h.callId)) this.version++;
     if (!rec || rec.shown !== 'working') return;
     let action = (h.action as WorkerAction | null) ?? toolAction(h.tool) ?? null;
@@ -425,12 +437,12 @@ export class LiveModel {
   // ---- what the office's actions reach (M3) ---------------------------------------------------
 
   /** The Orca side of a figure: its terminal (local terminal agents), workspace and kind. */
-  target(workerId: string): { paneKey: string; kind: 'chat' | 'terminal'; local: boolean; terminalId: string | null; workspaceId: string | null; sessionId: string | null } | null {
+  target(workerId: string): { paneKey: string; kind: 'chat' | 'terminal'; local: boolean; terminalId: string | null; workspaceId: string | null; sessionId: string | null; state: OrcaState; agent: string | null; since: number } | null {
     const pane = this.workerIds.get(workerId);
     const a = pane ? this.agents.get(pane) : undefined;
     if (!a) return null;
     const local = a.hostId === LOCAL;
-    return { paneKey: a.paneKey, kind: a.kind, local, terminalId: local && a.kind === 'terminal' ? this.terminalOf(a.paneKey) : null, workspaceId: this.workspaces.has(a.deskKey) ? a.deskKey : null, sessionId: a.sessionId };
+    return { paneKey: a.paneKey, kind: a.kind, local, terminalId: local && a.kind === 'terminal' ? this.terminalOf(a.paneKey) : null, workspaceId: this.workspaces.has(a.deskKey) ? a.deskKey : null, sessionId: a.sessionId, state: a.shown, agent: a.agent, since: a.shownSince };
   }
 
   /** The bot a figure is (Staff floor or the head of a project room), by its figure id; null for anyone else. */
@@ -556,7 +568,19 @@ export class LiveModel {
       if (f.info.room !== 'project') {
         for (const w of f.workers) {
           if (w.status !== 'needs_input') continue;
-          out.push({ key: w.id, kind: 'agent', floor: f.info.id, floorName: f.info.name, workerId: w.id, deskId: w.deskId, name: w.task?.name ?? w.name, ask: w.task?.summary ?? null, since: w.waitingSince ?? w.createdAt });
+          out.push({
+            key: w.id,
+            kind: 'agent',
+            floor: f.info.id,
+            floorName: f.info.name,
+            workerId: w.id,
+            deskId: w.deskId,
+            name: w.task?.name ?? w.name,
+            ask: w.task?.summary ?? null,
+            since: w.waitingSince ?? w.createdAt,
+            ...(w.orca?.asks ? { asks: w.orca.asks } : {}),
+            ...(w.orca?.terminal ? { terminal: true } : {}),
+          });
         }
       }
       for (const g of projects[f.info.id]?.gates ?? []) {
@@ -822,7 +846,14 @@ export class LiveModel {
       viewers: [],
       viewerIds: [],
       task: { name: `${tag ? `${tag} ` : ''}${d.name}`, summary: a.bubble ?? SUMMARY[a.shown] },
-      orca: { terminal: a.kind === 'terminal' && a.hostId === LOCAL, remote: a.hostId !== LOCAL, worktree: d.name, ...(branch ? { branch: branch.replace(/^refs\/heads\//, '') } : {}) },
+      orca: {
+        terminal: a.kind === 'terminal' && a.hostId === LOCAL,
+        remote: a.hostId !== LOCAL,
+        worktree: d.name,
+        ...(branch ? { branch: branch.replace(/^refs\/heads\//, '') } : {}),
+        ...(status === 'needs_input' ? { asks: a.shown === 'blocked' ? 'permission' : 'question' } : {}),
+        ...(working ? { quietSince: a.quietSince } : {}),
+      },
       ...(working && a.action ? { action: a.action } : {}),
       ...(working && a.activity ? { activity: a.activity } : {}),
       ...(working && a.workingSince ? { workingSince: a.workingSince } : {}),
@@ -969,6 +1000,16 @@ export class LiveModel {
     return here.length === 1 ? here[0] : undefined;
   }
 
+  /**
+   * Orca said something about it (B5): it isn't quiet any more. A page only needs to hear it when it
+   * had been quiet for a while (it may be showing "stuck?"), so a stream of hooks costs nothing extra.
+   */
+  private heard(rec: AgentRec, at: number) {
+    if (at <= rec.quietSince) return;
+    if (at - rec.quietSince > QUIET_NEWS_MS) this.version++;
+    rec.quietSince = at;
+  }
+
   /** A state from Orca: de-duplicated, done held back for the debounce. Returns whether it changed what shows. */
   private setState(rec: AgentRec, st: OrcaState, now: number): boolean {
     if (st === 'done') {
@@ -1031,6 +1072,8 @@ function newAgent(paneKey: string, deskKey: string, floor: string, now: number):
     fails: 0,
     workingSince: null,
     helpers: new Map(),
+    quietSince: now,
+    updatedAt: 0,
   };
 }
 
@@ -1110,6 +1153,9 @@ function roster(floors: LiveFloor[]): OrcaRosterFloor[] {
         ...(w.orca?.bot ? { bot: true } : {}),
         ...(w.orca?.terminal ? { terminal: true } : {}),
         ...(w.waitingSince ?? w.workingSince ? { since: w.waitingSince ?? w.workingSince } : {}),
+        ...(w.orca?.asks ? { asks: w.orca.asks } : {}),
+        ...(w.orca?.quietSince !== undefined ? { quietSince: w.orca.quietSince } : {}),
+        ...(w.workingSince ? { workingSince: w.workingSince } : {}),
       })),
     }));
 }

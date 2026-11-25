@@ -8,7 +8,7 @@ import type { WorkerRig } from './rig';
 import { ease, popIn } from './curves';
 import { undress } from './props';
 import { ACT_MIN, DESPAIR_MIN, TWIRL_TIME, WAIT_CYCLE, WAIT_HOPS, blendStance, type Act, type Stance } from './worker-stance';
-import { STATUS_BULB, bubbleFor } from './worker-badges';
+import { STATUS_BULB, STUCK_BULB, bubbleFor } from './worker-badges';
 import { globe, papers } from './worker-props';
 import { DANCE, groove, type Dancing, type Stage } from './worker-dance';
 import { DEAD, STARVED, bones, crossedEyes, slump } from './worker-jail';
@@ -39,6 +39,8 @@ export class Worker {
   private pr: WorkerPr | undefined;
   /** Its worktree was deleted outside the office (WorkerInfo.lost): its bubble says so until it's fixed. */
   private lost = false;
+  /** Looks stuck (M7 B5): dozes off at its desk, its light grey, "stuck?" over its head. */
+  private stuck = false;
   private nameTag: THREE.Sprite | null = null;
   private eyes: THREE.Mesh[] = [];
   private blinkAt = Math.random() * 4;
@@ -265,7 +267,7 @@ export class Worker {
   }
 
   private paintBulb() {
-    const c = STATUS_BULB[this.status] ?? '#adb5bd';
+    const c = this.stuck && this.status === 'working' ? STUCK_BULB : (STATUS_BULB[this.status] ?? '#adb5bd');
     this.bulb.color.set(c);
     this.bulb.emissive.set(c).multiplyScalar(0.7);
   }
@@ -315,6 +317,19 @@ export class Worker {
     this.drawBubble();
   }
 
+  /** Working, but nothing has come from it for a long while (M7 B5): it dozes off, grey, under "stuck?". */
+  setStuck(stuck: boolean) {
+    if (stuck === this.stuck) return;
+    this.stuck = stuck;
+    if (!this.dancing) this.paintBulb();
+    this.drawBubble();
+  }
+
+  /** Dozing: asleep, or (working) looking stuck. */
+  private dozing(): boolean {
+    return isAsleep(this.status) || (this.stuck && this.status === 'working');
+  }
+
   /** Sent home: its light goes out, its face falls, and its things pop into a box in its arms. `farewell` goes over its head. */
   leave(farewell: string) {
     if (this.leaving) return;
@@ -355,8 +370,8 @@ export class Worker {
 
   private drawBubble() {
     if (this.leaving) return;
-    const { status, bouncing: bounce, task, pr, lost } = this;
-    const { key, draw } = bubbleFor(status, bounce, task, pr, lost);
+    const { status, bouncing: bounce, task, pr, lost, stuck } = this;
+    const { key, draw } = bubbleFor(status, bounce, task, pr, lost, stuck);
     if (key === this.bubbleKey) return;
     this.bubbleKey = key;
     if (this.bubble) {
@@ -465,7 +480,7 @@ export class Worker {
     return (
       hopping || (this.bouncing && this.status === 'done') ? 'up'
       : this.status === 'needs_input' ? 'waiting'
-      : this.status === 'working' ? (this.action ?? 'type')
+      : this.status === 'working' ? (this.stuck ? 'rest' : (this.action ?? 'type'))
       : 'rest'
     );
   }
@@ -531,7 +546,7 @@ export class Worker {
       this.turnY += (s.turn - this.turnY) * Math.min(1, dt * 6);
     }
     this.body.rotation.y = this.turnY + twirl;
-    this.body.rotation.z = isAsleep(this.status) ? Math.sin(t * 1.5) * 0.08 : s.roll;
+    this.body.rotation.z = this.dozing() ? Math.sin(t * 1.5) * 0.08 : s.roll;
     this.props(dt, t);
     this.blink(dt, s.lid);
     this.bulbMesh.scale.setScalar(this.status === 'needs_input' ? 1 + Math.abs(Math.sin(t * 8)) * 0.5 : 1);

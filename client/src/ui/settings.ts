@@ -13,6 +13,7 @@ import { agentFields, choiceLabel, officeChoice } from './provider';
 import { openPromptEditor, rewrittenPrompts } from './prompts';
 import { outsideSetting } from './settings-sky';
 import { choiceRow } from './settings-rows';
+import { STUCK_LONG_CHOICES, STUCK_QUIET_CHOICES } from '@orca-office/shared/office/stuck';
 
 const VIEWS: [ViewMode, string, string][] = [
   ['first', '👀 First person', 'See through your own eyes. Click the office to look around with the mouse and click things to use them. Esc frees the mouse.'],
@@ -130,6 +131,10 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
     change({ needsYouSound });
     if (needsYouSound !== 'off') sound.needsYou();
   });
+
+  // When a working worker looks stuck (M7 B5): it dozes off at its desk with a grey "stuck?".
+  const stuckQuietRow = choiceRow<number>('Stuck after quiet for', STUCK_QUIET_CHOICES.map((m) => [m, `${m} min`] as const), () => settings.stuck.quietMin, (quietMin) => change({ stuck: { ...settings.stuck, quietMin } }));
+  const stuckLongRow = choiceRow<number>('Stuck after working for', STUCK_LONG_CHOICES.map((n) => [n, `${n} h`] as const), () => settings.stuck.longHours, (longHours) => change({ stuck: { ...settings.stuck, longHours } }));
 
   // The building's holiday theme, for everyone.
   const themeRow = h('div.seg', { role: 'radiogroup', 'aria-label': 'Holiday theme' });
@@ -452,6 +457,8 @@ export function openSettings(net: Net, settings: Settings, onChange: (s: Setting
     sound: [
       setting('Office sounds', 'you', soundRow, h('p.setting-note', {}, 'Workers typing, footsteps, the coffee machine, birds and rain outside, the dog, the ding when a worker is done and the alarm when one needs you.')),
       setting('When a worker needs you', 'you', alarmRow, h('p.setting-note', {}, 'An alarm the moment a worker stops to ask you something or wants a permission. Keep reminding me rings it again, softly, every 30 seconds until someone opens that worker’s terminal. It’s as loud as the office sounds are.')),
+      setting('Stuck? after quiet for', 'you', stuckQuietRow, h('p.setting-note', {}, 'A worker Orca says is working, but nothing has come from it for this long (no tool call, no state, no new message), dozes off at its desk under a grey “stuck?” and is listed as “Maybe stuck”. Only a guess: open it to see.')),
+      setting('Stuck? after working for', 'you', stuckLongRow, h('p.setting-note', {}, 'The same for a worker that has been working this long at a stretch.')),
       setting('Page turns at the bookshelf', 'you', pagesRow, h('p.setting-note', {}, 'A soft swish each time the book in your hands turns a page, as you open a doc or scroll through one. The 🔈 at the top of the bookshelf turns it off too.')),
       setting('Music', 'you', musicRow, h('p.setting-note', {}, 'The DJ on the roof; this is how loud it is for you alone.')),
     ],

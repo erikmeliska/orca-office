@@ -9,6 +9,8 @@ export const WORKSPACES = [
   wt('demo-web', 'readme'),
   wt('demo-api', 'main'),
   wt('demo-api', 'search-speed'),
+  wt('demo-api', 'nightly-import'),
+  wt('demo-api', 'rate-limits'),
   { id: 'folder:bot-release', kind: 'folder', name: 'ReleaseBot', project: null, path: '/home/demo/.orca/bots/releasebot', branch: null, hostId: null, status: { state: 'inactive', unread: false, terminalCount: 0, lastActivityAt: null } },
   { id: 'folder:bot-support', kind: 'folder', name: 'SupportBot', project: null, path: '/home/demo/.orca/bots/supportbot', branch: null, hostId: null, status: { state: 'inactive', unread: false, terminalCount: 0, lastActivityAt: null } },
 ];
@@ -20,6 +22,10 @@ export const AGENTS = [
   ag('p-cy', 'demo-web', 'settings-migration', 'terminal', 'blocked', 'May I drop the old settings column? It still has 12 rows.'),
   ag('p-di', 'demo-web', 'readme', 'chat', 'done', 'Wrote the new install steps'),
   ag('p-fa', 'demo-api', 'search-speed', 'terminal', 'working', 'Reading the query planner output'),
+  // M7 B5: working, but nothing heard for 3 h (no hook, no state): it looks stuck.
+  { ...ag('p-gil', 'demo-api', 'nightly-import', 'terminal', 'working', 'Importing the made-up archive, batch 7 of 40'), updatedAt: NOW - 3 * 3600_000 },
+  // M7 B1: a question (Orca's "waiting"), answered with a line from the banner.
+  ag('p-hal', 'demo-api', 'rate-limits', 'terminal', 'waiting', 'Which limit should the free plan get: 60 or 120 requests a minute?'),
   { ...ag('p-bot', '', '', 'chat', 'working', 'Tagging v1.4.0 and drafting the release notes'), worktreeId: 'folder:bot-release', workspace: 'ReleaseBot', repo: null },
 ];
 export const REMOTE = [{ ...ag('p-env', 'demo-api', 'nightly', 'terminal', 'working', 'Rebuilding the search index on the server'), hostId: 'runtime:demo', workspace: 'nightly' }];
@@ -43,8 +49,9 @@ export const BOT_CHATS = {
 export const TERMINALS = AGENTS.filter((a) => a.kind === 'terminal').map((a) => ({ handle: `term_${a.paneKey.slice(2)}`, tabId: a.paneKey, leafId: 'leaf', executionHostId: 'local' }));
 for (const a of AGENTS) if (a.kind === 'terminal') a.paneKey = `${a.paneKey}:leaf`;
 
-/** What a made-up terminal shows. */
+/** What a made-up terminal shows: Cy (settings-migration) is stopped on a permission prompt (M7 B1). */
 export function screen(name) {
+  if (name === 'cy') return permissionScreen();
   return [
     `~/code/demo-web/${name} (${name})`,
     '',
@@ -65,6 +72,27 @@ export function screen(name) {
   ];
 }
 
+/** A made-up Claude Code permission prompt, as `terminal.read` gives it (M7 B1). */
+function permissionScreen() {
+  return [
+    '~/code/demo-web/settings-migration (settings-migration)',
+    '',
+    '● Bash(psql -c "alter table settings drop column legacy")',
+    '',
+    '╭──────────────────────────────────────────────────────────────────╮',
+    '│ Bash command                                                     │',
+    '│                                                                  │',
+    '│   psql -c "alter table settings drop column legacy"              │',
+    '│   Drop the old settings column                                   │',
+    '│                                                                  │',
+    '│ Do you want to proceed?                                          │',
+    '│ ❯ 1. Yes                                                         │',
+    "│   2. Yes, and don't ask again for psql commands in /code/demo-web │",
+    '│   3. No, and tell Claude what to do differently (esc)            │',
+    '╰──────────────────────────────────────────────────────────────────╯',
+  ];
+}
+
 // What `orca worktree list --json` links to the made-up worktrees (#32): made-up forges and numbers.
 const gh = (type, number, title) => ({ provider: 'github', type, number, url: `https://github.com/example/demo-web/${type === 'pr' ? 'pull' : 'issues'}/${number}`, title, origins: [] });
 const row = (repo, name, over = {}) => ({ id: `repo-${repo}::/code/${repo}/${name}`, repoId: `repo-${repo}`, projectId: `repo-${repo}`, isMainWorktree: name === 'main', path: `/code/${repo}/${name}`, hostId: 'local', displayName: name, branch: `refs/heads/${name}`, linkedPR: null, linkedIssue: null, linkedGitLabMR: null, linkedGitLabIssue: null, linkedLinearIssue: null, linkedLinearIssueOrganizationUrlKey: null, linkedWorkItem: null, linkedItems: [], parentWorktreeId: null, childWorktreeIds: [], lineage: null, ...over });
@@ -75,6 +103,8 @@ export const WORKTREES = [
   row('demo-web', 'settings-migration', { linkedWorkItem: { key: 'OPS-42', url: 'https://example.atlassian.net/browse/OPS-42', title: 'Move settings to the new table' } }),
   row('demo-web', 'readme', { linkedItems: [{ provider: 'github', type: 'issue', number: 88, title: 'Install steps are out of date' }] }),
   row('demo-api', 'main'),
+  row('demo-api', 'nightly-import'),
+  row('demo-api', 'rate-limits'),
   row('demo-api', 'search-speed', { linkedGitLabMR: 17, linkedItems: [{ provider: 'gitlab', type: 'issue', number: 9, url: 'https://gitlab.com/example/demo-api/-/issues/9', title: 'Search takes 4 s on big accounts' }] }),
 ];
 

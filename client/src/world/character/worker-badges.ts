@@ -15,6 +15,10 @@ export const STATUS_BULB: Record<string, string> = {
   offline: '#6c757d',
 };
 
+/** The light of a worker that looks stuck (M7 B5): out, grey. */
+export const STUCK_BULB = '#adb5bd';
+const STUCK_CHIP: [string, string, string] = ['😴 STUCK?', STUCK_BULB, '#2b2d42'];
+
 /** A worker that needs you: its bubble is the red of its light, in white capitals, and its card is outlined in it (unless a pull request's color is). */
 const NEEDS_YOU = { text: '🙋 NEEDS YOU', bg: STATUS_BULB.needs_input, color: '#ffffff', size: 46, card: '#ffc2d1' };
 
@@ -40,7 +44,14 @@ const PR_ICON: Record<WorkerPr['state'], string> = { open: '🔀', merged: '🎉
  * The bubble (or the task card) over a worker's head, and a key that changes whenever it would look
  * different: `draw` makes it, or null for none.
  */
-export function bubbleFor(status: WorkerStatus, bounce: boolean, task: WorkerTask | undefined, pr: WorkerPr | undefined, lost: boolean): { key: string; draw(): THREE.Sprite | null } {
+export function bubbleFor(status: WorkerStatus, bounce: boolean, task: WorkerTask | undefined, pr: WorkerPr | undefined, lost: boolean, stuck = false): { key: string; draw(): THREE.Sprite | null } {
+  // Working, but nothing heard from it for a long while (M7 B5): a grey "stuck?" in place of working.
+  if (stuck && status === 'working' && !lost) {
+    return {
+      key: `stuck|${task ? `${task.name}|${task.summary}` : ''}`,
+      draw: () => (task ? cardSprite({ chip: { text: STUCK_CHIP[0], bg: STUCK_CHIP[1], color: STUCK_CHIP[2] }, title: task.name, body: task.summary, bg: '#e9ecef', border: STUCK_BULB }) : textSprite('😴 stuck?', { bg: '#e9ecef', size: 38, border: STUCK_BULB })),
+    };
+  }
   const hot = status === 'needs_input' || (status === 'done' && bounce);
   const asking = status === 'needs_input' && !lost;
   const bg = hot ? (status === 'done' ? '#caffbf' : NEEDS_YOU.card) : status === 'working' ? '#ffec99' : '#fffaf3';

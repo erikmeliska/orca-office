@@ -5,7 +5,7 @@
 // No three.js and no page here, so the tests run it as it is.
 
 import type { WorkerInfo } from '@orca-office/shared/office/protocol';
-import type { OrcaWaiting } from '@orca-office/shared/office/protocol/orca';
+import type { OrcaAsks, OrcaWaiting } from '@orca-office/shared/office/protocol/orca';
 import { alertDetail } from '@orca-office/shared/office/status';
 import { waitingOnSomeone } from './notify';
 
@@ -23,6 +23,12 @@ export interface Stop {
   /** Stopped until you answer (an agent asking, a gate), rather than done and not looked at. */
   needs: boolean;
   since: number;
+  /** A permission prompt or a question (M7 B1). */
+  asks?: OrcaAsks;
+  /** A terminal agent on this machine: answerable from the banner. */
+  terminal?: boolean;
+  /** An Orca agent (the live bridge), which the banner can act on; not the stub's. */
+  orca?: boolean;
 }
 
 const sinceOf = (w: WorkerInfo) => w.waitingSince ?? w.createdAt;
@@ -39,12 +45,12 @@ export function stopsInOrder(all: readonly OrcaWaiting[], local: Iterable<Worker
   const byId = new Map(workers.map((w) => [w.id, w]));
   const needs: Stop[] = all.map((x) => {
     const w = x.floor === floor && x.workerId ? byId.get(x.workerId) : undefined;
-    return { ...x, ask: (w && alertDetail(w)) ?? x.ask, needs: true };
+    return { ...x, ask: (w && alertDetail(w)) ?? x.ask, needs: true, orca: true };
   });
   // This floor's own, when the bridge doesn't list them (yet, or the stub).
   for (const w of workers) {
     if (w.status !== 'needs_input' || needs.some((s) => s.key === w.id)) continue;
-    needs.push({ key: w.id, kind: 'agent', floor, floorName, workerId: w.id, deskId: w.deskId, name: w.name, ask: alertDetail(w) ?? null, needs: true, since: sinceOf(w) });
+    needs.push({ key: w.id, kind: 'agent', floor, floorName, workerId: w.id, deskId: w.deskId, name: w.name, ask: alertDetail(w) ?? null, needs: true, since: sinceOf(w), ...(w.orca?.asks ? { asks: w.orca.asks } : {}), ...(w.orca?.terminal ? { terminal: true } : {}), ...(w.orca ? { orca: true } : {}) });
   }
   needs.sort((a, b) => a.since - b.since || a.key.localeCompare(b.key));
   const done = workers
@@ -73,9 +79,24 @@ export function waited(since: number | undefined, now: number): string {
   return min < 60 ? `${min} min` : `${Math.floor(min / 60)} h ${String(min % 60).padStart(2, '0')} min`;
 }
 
+/**
+ * What the banner lets you do about it without walking over (M7 B1): Yes / Always / No on a
+ * permission prompt, a line of text into a terminal agent's question, or (a chat agent, which has no
+ * terminal) open it in Orca. A gate, or an agent on another host, has none: N takes you there.
+ */
+export type BannerAct = { kind: 'permission' | 'reply' | 'open'; workerId: string; name: string; since: number } | null;
+
+export function bannerAct(s: Stop | undefined): BannerAct {
+  if (!s || s.kind !== 'agent' || !s.workerId || !s.orca) return null;
+  if (s.terminal) return { kind: s.asks === 'permission' ? 'permission' : 'reply', workerId: s.workerId, name: s.name, since: s.since };
+  return { kind: 'open', workerId: s.workerId, name: s.name, since: s.since };
+}
+
 export interface BannerText {
   /** The stop it takes you to: whoever has waited longest. */
   id: string;
+  /** What it offers to answer it from the banner. */
+  act: BannerAct;
   title: string;
   /** What it's asking, where, and for how long. */
   detail: string;
@@ -94,7 +115,8 @@ export function bannerText(asking: readonly Stop[], floor: string | null, now: n
   const detail = [ask && (ask.length > 90 ? `${ask.slice(0, 89)}…` : ask), where, waited(s.since, now)].filter(Boolean).join(' · ');
   const more = asking.length > 1 ? `+${asking.length - 1} more` : '';
   const title = s.kind === 'gate' ? '⚖️ A decision waits for you' : `${s.name} needs you`;
-  return { id: s.key, title, detail, more, key: `${s.key}|${title}|${detail}|${more}` };
+  const act = bannerAct(s);
+  return { id: s.key, act, title, detail, more, key: `${s.key}|${act ? `${act.kind}|` : ''}${title}|${detail}|${more}` };
 }
 
 /**

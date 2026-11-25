@@ -6,14 +6,32 @@ import { store } from '../state';
 import { DESK_BY_ID } from '@orca-office/shared/office/layout';
 import { $, h, STATUS_LABEL, timeAgo } from './dom';
 import { usageLabel, usageTitle } from './usage';
+import { STUCK_DEFAULTS, stuckText, type StuckRule } from '@orca-office/shared/office/stuck';
 import { providerLabel, providerUsageState, providerWaitingLabel, resolvedProvider, modelBadge } from './provider';
 
 /** Going to a figure on another floor (M6 A6): its floor, id, desk and name. */
 export type GoToFigure = (floor: string, workerId: string, deskId: string, name: string) => void;
 
-export function renderWorkers(onOpen: (id: string) => void, onGo?: GoToFigure) {
+export function renderWorkers(onOpen: (id: string) => void, onGo?: GoToFigure, rule: StuckRule = STUCK_DEFAULTS) {
   const ul = $('workers');
   ul.replaceChildren();
+  const now = Date.now();
+  // Maybe stuck (M7 B5), anywhere in the building: apart from the ones that really need you, and only a guess.
+  const stuck = stuckInBuilding(rule, now);
+  if (stuck.length) {
+    ul.append(h('li.floor-head.stuck-head', {}, `😴 Maybe stuck · ${stuck.length}`));
+    for (const s of stuck) {
+      const here = s.floor === store.floor;
+      ul.append(
+        h(
+          'li.stuck-row',
+          { onclick: () => (here ? onOpen(s.id) : onGo?.(s.floor, s.id, s.deskId, s.name)), title: here ? `Open ${s.name}'s terminal` : `Go to ${s.name} on ${s.floorName}` },
+          h('span.name', {}, s.name, h('span.sub', {}, [s.text, !here && `🏢 ${s.floorName}`].filter(Boolean).join(' · '))),
+          h('span.pill.stuck', {}, 'STUCK?'),
+        ),
+      );
+    }
+  }
   const workers = needyFirst(store.workers.values());
   for (const w of workers) {
     const asking = w.status === 'needs_input' && !w.lost;
@@ -62,4 +80,21 @@ export function renderWorkers(onOpen: (id: string) => void, onGo?: GoToFigure) {
   const hired = workers.filter((w) => !DESK_BY_ID.get(w.deskId)?.station).length;
   $('worker-count').textContent = hired ? String(hired) : '';
   $('workers-panel').classList.toggle('needs-you-panel', workers.some((w) => w.status === 'needs_input') || store.waitingAll.length > 0);
+}
+
+/** Everyone in the building that looks stuck (M7 B5): from the roster (every floor), this floor's own if there's none. */
+export function stuckInBuilding(rule: StuckRule, now: number): { id: string; name: string; floor: string; floorName: string; deskId: string; text: string }[] {
+  const out: { id: string; name: string; floor: string; floorName: string; deskId: string; text: string; since: number }[] = [];
+  const floors = store.roster.length
+    ? store.roster
+    : store.floor
+      ? [{ floor: store.floor, name: '', workers: [...store.workers.values()].map((w) => ({ id: w.id, name: w.name, status: w.status, deskId: w.deskId, quietSince: w.orca?.quietSince, workingSince: w.workingSince })) }]
+      : [];
+  for (const f of floors) {
+    for (const w of f.workers) {
+      const text = stuckText(w, now, rule);
+      if (text) out.push({ id: w.id, name: w.name, floor: f.floor, floorName: f.name, deskId: w.deskId, text, since: Math.min(w.quietSince ?? now, w.workingSince ?? now) });
+    }
+  }
+  return out.sort((a, b) => a.since - b.since);
 }

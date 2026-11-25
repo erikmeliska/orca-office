@@ -9,6 +9,7 @@ import { FLOOR, WING, beanbagsOut, deskBuilt, vacantSeats, wingMinZ, wingRowZ } 
 import { OFFICE_PLAN } from '@orca-office/shared/office/maps/index';
 import type { WorkerInfo } from '@orca-office/shared/office/protocol';
 import { workerPr } from '@orca-office/shared/office/status';
+import { isStuck } from '@orca-office/shared/office/stuck';
 import type { Ctx } from '../../core/context';
 import type { CoreState } from '../../core/ctx';
 import { pastTheWing, seatBuilt } from '../../core/floors';
@@ -181,6 +182,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
       v.model.setAction(w.action);
       v.model.setPr(workerPr(w, store.pulls.items));
       v.model.setLost(!!w.lost);
+      v.model.setStuck(stuckNow(w));
       const engineBadge = w.kind === 'agent' ? modelBadge(w.provider, w.model, w.effort, w.usage?.model) : undefined;
       v.model.setTask((w.task && w.kind === 'agent' ? { ...w.task, name: `${providerLabel(w.provider, store.project)}${engineBadge ? ` · ${engineBadge}` : ''} · ${w.task.name}` } : w.task));
       const deskDef = plan().byId.get(w.deskId);
@@ -219,7 +221,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     arrangeSeats();
     // Whoever's waiting on someone lines up for the throne, the one who's waited longest first.
     court?.line(waitingInOrder(store.workers.values()).filter(inCourt).map((w) => w.id));
-    renderWorkers((id) => parts.waiting.openWorkerTerminal(id), parts.waiting.goToFigure);
+    renderWorkers((id) => parts.waiting.openWorkerTerminal(id), parts.waiting.goToFigure, ctx.settings.stuck);
     parts.waiting.renderWaiting();
     parts.notifier.sync(store.workers);
     renderTitle();
@@ -293,8 +295,18 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
     for (const c of appeared) if (p.y > -0.1 && p.y < c.top && p.x > c.minX - 0.3 && p.x < c.maxX + 0.3 && p.z > c.minZ - 0.3 && p.z < c.maxZ + 0.3) p.y = c.top;
   }
   store.on('workers', syncWorkers);
+  /** Working, but quiet or at it for too long by your Stuck? settings (M7 B5). */
+  const stuckNow = (w: WorkerInfo) => isStuck({ status: w.status, quietSince: w.orca?.quietSince, workingSince: w.workingSince }, Date.now(), ctx.settings.stuck);
+  // Nothing has to happen for a worker to get stuck: look again every 20 s.
+  setInterval(() => {
+    for (const [id, v] of workerViews) {
+      const w = store.workers.get(id);
+      if (w) v.model.setStuck(stuckNow(w));
+    }
+    renderPanel();
+  }, 20_000);
   // The other floors' figures in the Workers panel (A6).
-  const renderPanel = () => renderWorkers((id) => parts.waiting.openWorkerTerminal(id), parts.waiting.goToFigure);
+  const renderPanel = () => renderWorkers((id) => parts.waiting.openWorkerTerminal(id), parts.waiting.goToFigure, ctx.settings.stuck);
   store.on('roster', renderPanel);
   store.on('waitingAll', renderPanel);
   const workerPos = new THREE.Vector3();

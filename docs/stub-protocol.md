@@ -420,3 +420,45 @@ bubble) and `since` (a gate's: when the bridge first saw it; Orca gives no time)
 ![The menu with the fun off](img/m6-menu-nofun-desktop.png)
 ![Keyboard focus](img/m6-focus-desktop.png)
 ![A project room's decision, no fake buttons](img/m6-gates-desktop.png)
+
+## Answering from the banner, and "stuck?" (M7, roadmap B1, B5)
+
+**B1, answering without the terminal.** The needs-you banner (and the phone's list) answers whoever has
+waited longest:
+
+- A terminal agent Orca shows **`blocked`** is on a permission prompt (`OrcaWorkerInfo.asks` /
+  `OrcaWaiting.asks = 'permission'`): **✓ Yes · ✓✓ Always · ✕ No**. The page sends only
+  `{ t: 'orca.answer', workerId, choice: 'yes' | 'always' | 'no' }`; never a key. The bridge
+  (`bridge/src/live/permission.ts`) checks the agent is a terminal agent on this machine that Orca
+  shows blocked or waiting, reads the last 30 lines of its terminal (`terminal.read`), finds the last
+  numbered menu with a "Yes…" and a "No…" option, and sends the one key that picks the answer through
+  the usual typing path (`orca terminal send --text=`): the option's own shortcut when it has one
+  (Codex: `y`, `a`; a trailing `(esc)` is Escape), else its digit (Claude Code takes `1`/`2` at once,
+  no Enter). "Always" is the Yes option that says *don't ask again* / *always* / *for this session*.
+  No menu on the screen: `no_prompt`, nothing is typed; no such option: `no_option`.
+  The page also sends the wait it showed (`since`); a prompt that came up after it (Orca's state
+  changed since) is refused with `prompt_changed`, so a click never approves a prompt the page didn't
+  show.
+- A terminal agent Orca shows **`waiting`** asks a question: a one-line box, Enter sends it as a
+  prompt (`worker.prompt`, text then Enter).
+- A chat agent (no terminal): **↗ Open in Orca**. A decision gate, or an agent on another host: N
+  takes you there, as before.
+
+The same rate limit as other actions (20, then 2 a second per page); the screen text is used for that
+one decision and dropped. Tested on made-up screens shaped like Claude Code's and Codex's prompts
+(`permission.test.ts`) and on the fake stack (`npm run dev:fake`: `settings-migration` is on a made-up
+Claude Code prompt; Always typed `2` into it). Not tried on a real agent's prompt.
+
+**B5, "stuck?".** Orca keeps an agent that hangs "working". The bridge notes when Orca last said
+anything about each agent (`quietSince`: a status event, a tool hook, a newer `updatedAt` or a new
+last message in `orca agent list`) and sends it with working figures and in the roster
+(`OrcaRosterWorker.quietSince`, `workingSince`). The page decides (`shared/src/office/stuck.ts`):
+working and quiet for **15 min**, or working for **4 h** at a stretch, by default; ⚙️ Settings →
+*Stuck? after quiet for* / *after working for* changes both (this browser). Such a figure dozes off at
+its desk (sways, no typing, grey light, a grey **😴 STUCK?** card); the Workers panel and the phone's
+list show it under **😴 Maybe stuck**, apart from the ones that really need you. It's only a guess:
+nothing is sent to it.
+
+![Answering a permission prompt from the banner](img/m7-answer-banner-desktop.png)
+![The phone: Yes / Always / No, and Maybe stuck](img/m7-answer-stuck-mobile.png)
+![A stuck worker (nightly-import) dozing under a grey card](img/m7-stuck-desktop.png)
