@@ -260,6 +260,8 @@ export function installWorkerActions(ctx: Ctx, core: CoreState, parts: WorkerAct
   /** Behind the worker, looking over their shoulder at the laptop (or in front of a board agent's kiosk). */
   function standAt(desk: DeskDef) {
     const { seating } = parts;
+    // Down from the overview (M6 A9), into your own eyes at the desk.
+    player.overview = null;
     if (player.seat) seating.standUp();
     // The car first (the activities' own order has it last).
     ctx.activities.stopAll('desk');

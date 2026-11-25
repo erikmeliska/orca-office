@@ -69,7 +69,8 @@ export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage
     const grip = ctx.view.grip();
     me.setGrip(grip);
     me.update(dt, t, (player.moving && player.grounded) || (grip === 'ladder' && player.moving), !player.grounded && !grip && !ctx.activities.any('hidesHands'), player.effects.speed);
-    const firstPerson = player.view === 'first';
+    // In the overview (M6 A9) the camera is up over the floor: you're down there, seen from above.
+    const firstPerson = player.view === 'first' && !player.overview;
     // In first person you are the camera; in third, hide yourself when it's zoomed in right behind your head.
     // At the tee the camera's behind the ball, and you're the one holding the club.
     // So is the camera over your shoulder at the dart board or the axe lane.
@@ -174,7 +175,7 @@ export function installLoop(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'stage
   function drawScene() {
     const { player, hands, sky, camera, renderer } = ctx;
     const { effect, scene } = parts.stage;
-    const firstPerson = player.view === 'first';
+    const firstPerson = player.view === 'first' && !player.overview;
     const unhide = firstBody?.hideExtras();
     effect.render(scene, camera);
     unhide?.();

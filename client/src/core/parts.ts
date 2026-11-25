@@ -35,6 +35,7 @@ import type { installSmoke } from '../features/smoke';
 import type { installTelescope } from '../features/telescope';
 import type { installTv } from '../features/tv';
 import type { installWaiting } from '../features/waiting';
+import type { installOverview } from '../features/overview';
 import type { installWalking } from '../features/walking';
 import type { installWorkerActions } from '../features/workers/actions';
 import type { installWorkerViews } from '../features/workers/views';
@@ -101,6 +102,8 @@ export interface Parts {
   views: Made<typeof installWorkerViews>;
   actions: Made<typeof installWorkerActions>;
   waiting: Made<typeof installWaiting>;
+  /** The overview from above and the floor map (M6 A9). */
+  overview: Made<typeof installOverview>;
   needsYou: Made<typeof installNeedsYou>;
   bookshelf: Made<typeof installBookshelf>;
   bar: Made<typeof installBar>;

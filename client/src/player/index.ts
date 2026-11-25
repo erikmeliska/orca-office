@@ -21,6 +21,8 @@ const GRAVITY = 18;
 export { EYE_HEIGHT, groundAt, isTyping };
 /** Keys that get you up off a seat: walking away, or jumping up. */
 const GET_UP = ['KeyW', 'KeyA', 'KeyS', 'KeyD', 'ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', 'Space'];
+/** The keys that take you out of the overview: a step or a jump. */
+const OVERVIEW_EXIT = GET_UP;
 
 export class PlayerController extends PlayerInput {
   pos = new THREE.Vector3();
@@ -68,6 +70,13 @@ export class PlayerController extends PlayerInput {
   rig: ((dt: number) => void) | null = null;
   /** The rig is a car (see features/cars/controller.ts): out on the street or in the garage, not up a shaft indoors. */
   riding = false;
+  /**
+   * The overview (M6 A9): the camera high over the floor looking down at the desks, wherever you
+   * stand. A step, a jump or a click puts you back in your own eyes (see onOverviewEnd).
+   */
+  overview: { from: THREE.Vector3; at: THREE.Vector3 } | null = null;
+  /** The overview ended by a key of yours (a step, a jump). */
+  onOverviewEnd: (() => void) | null = null;
 
   constructor(
     private camera: THREE.PerspectiveCamera,
@@ -153,6 +162,10 @@ export class PlayerController extends PlayerInput {
   update(dt: number) {
     dt = Math.min(dt, 0.05);
     const k = this.keys;
+    if (this.overview && this.enabled && OVERVIEW_EXIT.some((c) => k.has(c))) {
+      this.overview = null;
+      this.onOverviewEnd?.();
+    }
     if (this.rig) {
       this.rig(dt);
       this.vy = 0;
@@ -286,6 +299,12 @@ export class PlayerController extends PlayerInput {
   }
 
   updateCamera(snap = false) {
+    if (this.overview) {
+      if (snap) this.camera.position.copy(this.overview.from);
+      else this.camera.position.lerp(this.overview.from, 0.12);
+      this.camera.lookAt(this.overview.at);
+      return;
+    }
     aimCamera(this.camera, this, this.bob, this.lift, snap);
     this.shake();
   }
