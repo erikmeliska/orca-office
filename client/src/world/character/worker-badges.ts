@@ -44,7 +44,22 @@ const PR_ICON: Record<WorkerPr['state'], string> = { open: '🔀', merged: '🎉
  * The bubble (or the task card) over a worker's head, and a key that changes whenever it would look
  * different: `draw` makes it, or null for none.
  */
-export function bubbleFor(status: WorkerStatus, bounce: boolean, task: WorkerTask | undefined, pr: WorkerPr | undefined, lost: boolean, stuck = false): { key: string; draw(): THREE.Sprite | null } {
+/** What a worker that needs you (or failed) is signalling (M7 B2): its own chip and colour. */
+export type BubbleSignal = 'permission' | 'question' | 'failed' | undefined;
+const SIGNAL_TEXT = { permission: '🔐 MAY I?', question: '❓ QUESTION', failed: '❌ FAILED' } as const;
+const FAILED_INK = '#d00000';
+
+export function bubbleFor(status: WorkerStatus, bounce: boolean, task: WorkerTask | undefined, pr: WorkerPr | undefined, lost: boolean, stuck = false, signal: BubbleSignal = undefined): { key: string; draw(): THREE.Sprite | null } {
+  // Asking for a permission or a question, or done but failed (M7 B2): a bubble of its own for each.
+  if (!lost && signal && ((status === 'needs_input' && signal !== 'failed') || (status === 'done' && signal === 'failed'))) {
+    const text = SIGNAL_TEXT[signal];
+    const ink = signal === 'failed' ? FAILED_INK : NEEDS_YOU.bg;
+    const card = signal === 'failed' ? '#ffd6d6' : signal === 'question' ? '#ffe8f0' : NEEDS_YOU.card;
+    return {
+      key: `signal|${signal}|${task ? `${task.name}|${task.summary}` : ''}`,
+      draw: () => (task ? cardSprite({ chip: { text, bg: ink, color: '#ffffff' }, title: task.name, body: task.summary, bg: card, border: ink }) : textSprite(text, { bg: ink, color: '#ffffff', size: NEEDS_YOU.size })),
+    };
+  }
   // Working, but nothing heard from it for a long while (M7 B5): a grey "stuck?" in place of working.
   if (stuck && status === 'working' && !lost) {
     return {

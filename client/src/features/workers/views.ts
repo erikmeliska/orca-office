@@ -10,6 +10,7 @@ import { OFFICE_PLAN } from '@orca-office/shared/office/maps/index';
 import type { WorkerInfo } from '@orca-office/shared/office/protocol';
 import { workerPr } from '@orca-office/shared/office/status';
 import { isStuck } from '@orca-office/shared/office/stuck';
+import { speakSignal } from '../needsyou/sound';
 import type { Ctx } from '../../core/context';
 import type { CoreState } from '../../core/ctx';
 import { pastTheWing, seatBuilt } from '../../core/floors';
@@ -160,7 +161,9 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
       if (v.status !== w.status || v.acked !== w.acked) {
         // It just finished or started waiting on you (not already so when this page first saw it): ding (one that needs you has an alarm of its own, see features/needsyou), and notify if you're away.
         if (waitingOnSomeone(w) && v.status !== '' && w.status !== v.status) {
-          if (w.status === 'done') sound.ding('done');
+          // Done, or failed (M7 B2): each with a sound of its own, and said out loud if you asked for it.
+          if (w.status === 'done') sound.signal(w.orca?.failed ? 'failed' : 'done');
+          if (w.status === 'done' && ctx.settings.voice) speakSignal(w.name, w.orca?.failed ? 'failed' : 'done');
           parts.notifier.alert(w);
           // Playing at the arcade: one of yours stops the game.
           if (w.status === 'needs_input' && yours(w)) parts.cabinet.needsYou(w);
@@ -183,6 +186,7 @@ export function installWorkerViews(ctx: Ctx, core: CoreState, parts: WorkerViews
       v.model.setPr(workerPr(w, store.pulls.items));
       v.model.setLost(!!w.lost);
       v.model.setStuck(stuckNow(w));
+      v.model.setSignal(w.status === 'needs_input' ? w.orca?.asks : w.status === 'done' && w.orca?.failed ? 'failed' : undefined);
       const engineBadge = w.kind === 'agent' ? modelBadge(w.provider, w.model, w.effort, w.usage?.model) : undefined;
       v.model.setTask((w.task && w.kind === 'agent' ? { ...w.task, name: `${providerLabel(w.provider, store.project)}${engineBadge ? ` · ${engineBadge}` : ''} · ${w.task.name}` } : w.task));
       const deskDef = plan().byId.get(w.deskId);

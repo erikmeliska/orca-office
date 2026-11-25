@@ -484,3 +484,30 @@ Center filters by it (Orca status chips) and the phone's list shows it (`📋 In
 ![Command Center](img/m7-command-center-desktop.png)
 ![Command Center on a phone](img/m7-command-center-mobile.png)
 ![Kanban bands on the desk signs](img/m7-kanban-signs-desktop.png)
+
+## Signals and steering (M7, roadmap B2, B13)
+
+**B2, a signal for each.** A figure that needs you says why: **🔐 MAY I?** (Orca `blocked`, a permission
+prompt) or **❓ QUESTION** (`waiting`), and one whose last turn failed (the plugin's
+`agent.status.changed` carries `mainAgent.outcome: 'failure'`; `OrcaWorkerInfo.failed` until it works
+again) shows a red **❌ FAILED** with a red light instead of done. Each has its own sound: a permission
+rings the alarm, a question three rising notes, done the two-note ding, a failure a low falling buzz.
+⚙️ Settings → *Say it out loud* (off by default) has the browser's own voice (Web Speech API) say
+"blog-ai is waiting for permission" / "… has a question" / "… is done" / "… failed": the worktree's
+name only, never what the agent asks; nothing leaves the browser. Repeated failing tests while working
+were already acted out (`failing`, #16).
+
+**B13, steering, only on a click.** `{ t: 'orca.steer', workerId, steer }` for a terminal agent on this
+machine: `interrupt` sends Esc (only while it's working), `summarize` and `continue` type the office's
+own short prompts (`ORCA_STEER_PROMPTS`) with Enter; the page never sends text here (P is for that).
+The terminal's header has 📝 Summarize and ▶ Continue (⎋ Esc interrupts, as before); a Command Center
+card has ⏸ / 📝 while it works and ▶ / 📝 once it's done. **Resume:** E at an empty desk whose
+worktree Orca has open offers *↻ Resume last session* in the New task window:
+`{ t: 'orca.resume', deskId }` → the plugin's `agent.listSessions` for that workspace, its newest
+session no terminal runs (claude, codex, opencode, pi, copilot, cursor), then `agent.resume`, which
+starts it in a new terminal there. Both calls are new on the plugin's allowlist (with exact params);
+they need `agent:launch`, which it already has, so no new capability. Session titles never leave the
+bridge.
+
+![Permission, failed and done bubbles](img/m7-signals-desktop.png)
+![Summarize and Continue in the terminal](img/m7-steer-terminal-desktop.png)

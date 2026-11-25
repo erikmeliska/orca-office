@@ -61,6 +61,8 @@ export interface StatusEvent {
   terminalId: string | null;
   state: OrcaState;
   at: number;
+  /** Its turn ended in a failure (`mainAgent.outcome: 'failure'`, host API 1.8; M7 B2). */
+  failed?: boolean;
 }
 
 /** An `agent.tool.after` hook from the plugin: tool name and, worked out in the worker, what it looks like. */
@@ -170,7 +172,8 @@ export function parseStatusEvent(payload: unknown, at: number): StatusEvent | nu
   const paneKey = str(o?.paneKey);
   const st = state(o?.state);
   if (!o || !paneKey || !st) return null;
-  return { paneKey, workspaceListId: str(o.workspaceListId), terminalId: str(o.terminalId), state: st, at };
+  const failed = obj(o.mainAgent)?.outcome === 'failure';
+  return { paneKey, workspaceListId: str(o.workspaceListId), terminalId: str(o.terminalId), state: st, at, ...(failed ? { failed } : {}) };
 }
 
 export function parseToolHook(payload: unknown, at: number): ToolHook | null {

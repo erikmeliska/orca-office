@@ -25,7 +25,7 @@ import { bark, yip } from '../features/dog/sound';
 import { airlock, cellDoor, thud } from '../features/workers/sound';
 import { gong } from '../features/gong/sound';
 import { MusicBus } from './music-bus';
-import { needsYou } from '../features/needsyou/sound';
+import { needsYou, signal, type Signal } from '../features/needsyou/sound';
 import type { Pos } from './places';
 import { Footsteps, pageTurn, paper } from './steps';
 import { toss, type TossSound } from '../features/bargames/sound';
@@ -236,6 +236,11 @@ export class OfficeSound {
   /** The alarm for a worker that needs you, or (`again`) the soft reminder while it still does. */
   needsYou(again = false) {
     needsYou(this.a, again);
+  }
+
+  /** What a worker signals (M7 B2): permission, a question, done or failed, each its own sound. */
+  signal(kind: Signal) {
+    signal(this.a, kind);
   }
 
   // ---- The rooftop bar (features/bar) -------------------------------------------------------------

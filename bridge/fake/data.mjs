@@ -7,6 +7,8 @@ export const WORKSPACES = [
   wt('demo-web', 'dark-mode'),
   wt('demo-web', 'settings-migration', { status: { state: 'active', unread: true, terminalCount: 1, lastActivityAt: NOW } }),
   wt('demo-web', 'readme'),
+  wt('demo-web', 'flaky-tests'),
+  wt('demo-web', 'old-spike'),
   wt('demo-api', 'main'),
   wt('demo-api', 'search-speed'),
   wt('demo-api', 'nightly-import'),
@@ -21,6 +23,8 @@ export const AGENTS = [
   ag('p-bo2', 'demo-web', 'dark-mode', 'chat', 'done', 'The palette tokens are in, contrast checks pass'),
   ag('p-cy', 'demo-web', 'settings-migration', 'terminal', 'blocked', 'May I drop the old settings column? It still has 12 rows.'),
   ag('p-di', 'demo-web', 'readme', 'chat', 'done', 'Wrote the new install steps'),
+  // M7 B2: a terminal agent whose last turn failed (the fake plugin says so in a status event).
+  ag('p-ivy', 'demo-web', 'flaky-tests', 'terminal', 'done', 'The login test still times out on CI'),
   ag('p-fa', 'demo-api', 'search-speed', 'terminal', 'working', 'Reading the query planner output'),
   // M7 B5: working, but nothing heard for 3 h (no hook, no state): it looks stuck.
   { ...ag('p-gil', 'demo-api', 'nightly-import', 'terminal', 'working', 'Importing the made-up archive, batch 7 of 40'), updatedAt: NOW - 3 * 3600_000 },
@@ -101,6 +105,8 @@ export const WORKTREES = [
   row('demo-web', 'fix-login', { workspaceStatus: 'in-review', linkedPR: 128, linkedIssue: 97, linkedItems: [gh('pr', 128, 'Redirect to the login page when the session expires'), gh('issue', 97, 'Expired sessions land on a blank dashboard')] }),
   row('demo-web', 'dark-mode', { workspaceStatus: 'in-progress', linkedLinearIssue: 'WEB-311', linkedLinearIssueOrganizationUrlKey: 'example', linkedItems: [gh('pr', 131, 'Dark mode palette tokens')] }),
   row('demo-web', 'settings-migration', { workspaceStatus: 'in-progress', linkedWorkItem: { key: 'OPS-42', url: 'https://example.atlassian.net/browse/OPS-42', title: 'Move settings to the new table' } }),
+  row('demo-web', 'flaky-tests', { workspaceStatus: 'in-progress' }),
+  row('demo-web', 'old-spike'),
   row('demo-web', 'readme', { linkedItems: [{ provider: 'github', type: 'issue', number: 88, title: 'Install steps are out of date' }] }),
   row('demo-api', 'main'),
   row('demo-api', 'nightly-import', { workspaceStatus: 'in-progress' }),

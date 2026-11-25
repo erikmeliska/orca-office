@@ -297,3 +297,56 @@ test('nothing is typed without a menu on the screen, into a working agent, a cha
   await flush();
   expect(sends).toEqual([]);
 });
+
+// ---- M7 B13: steering and resuming ------------------------------------------------------------
+
+test('steering: Esc only into a working agent, the office’s own prompts with Enter', async () => {
+  const id = idOf('pane-1');
+  await actions.handle(page, { t: 'orca.steer', workerId: id, steer: 'interrupt' });
+  await actions.handle(page, { t: 'orca.steer', workerId: id, steer: 'summarize' });
+  await flush();
+  expect(sends[0]).toEqual({ terminalId: T, text: '\x1b', enter: false });
+  expect(sends[1]).toMatchObject({ terminalId: T, enter: true });
+  expect(sends[1]!.text).toMatch(/^Pause for a moment and summarize/);
+  // Done: no Esc, but "continue" goes.
+  model.applyAgents('local', [agent('pane-1', 'a', { state: 'done' }), agent('pane-chat', 'b', { kind: 'chat' })], now);
+  model.tick(now + 5000);
+  model.building();
+  await actions.handle(page, { t: 'orca.steer', workerId: id, steer: 'interrupt' });
+  expect(sent.at(-1)).toMatchObject({ action: 'steer', ok: false, error: 'not_working' });
+  await actions.handle(page, { t: 'orca.steer', workerId: id, steer: 'rm -rf /' } as never);
+  await actions.handle(page, { t: 'orca.steer', workerId: idOf('pane-chat'), steer: 'continue' });
+  expect(sent.at(-1)).toMatchObject({ action: 'steer', ok: false, error: 'no_terminal' });
+  await flush();
+  expect(sends).toHaveLength(2);
+});
+
+test("resume: the worktree's newest session nobody runs, through Orca's agent.resume", async () => {
+  answers['agent.listSessions'] = { ok: true, value: { sessions: [
+    { sessionId: 'old-1', agent: 'claude', updatedAt: 10, running: false, title: 'made-up' },
+    { sessionId: 'new-2', agent: 'claude', updatedAt: 30, running: true, title: 'made-up' },
+    { sessionId: 'mid-3', agent: 'codex', updatedAt: 20, running: false, title: 'made-up' },
+  ], truncated: false } };
+  await actions.handle(page, { t: 'orca.resume', deskId: seatOf('pane-1') });
+  expect(calls.slice(-2)).toEqual([
+    { method: 'agent.listSessions', params: { workspaceId: 'a', limit: 20 } },
+    { method: 'agent.resume', params: { workspaceId: 'a', agent: 'codex', sessionId: 'mid-3' } },
+  ]);
+  expect(sent.at(-1)).toEqual({ t: 'orca.result', action: 'resume', ok: true, deskId: seatOf('pane-1') });
+  // Nothing to resume: says so, starts nothing.
+  answers['agent.listSessions'] = { ok: true, value: { sessions: [{ sessionId: 'x', agent: 'claude', updatedAt: 1, running: true }], truncated: false } };
+  const n = calls.length;
+  await actions.handle(page, { t: 'orca.resume', deskId: seatOf('pane-1') });
+  expect(calls.slice(n).map((c) => c.method)).toEqual(['agent.listSessions']);
+  expect(sent.at(-1)).toMatchObject({ action: 'resume', ok: false, error: 'nothing_to_resume' });
+});
+
+test('a turn that ended in a failure shows as failed until it works again (M7 B2)', async () => {
+  const { parseStatusEvent } = await import('./orca.js');
+  const id = idOf('pane-1');
+  model.applyStatus(parseStatusEvent({ paneKey: 'pane-1', state: 'done', mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: 1 } }, now)!);
+  model.tick(now + 5000);
+  expect(model.building().floors[0]!.workers.find((w) => w.id === id)!.orca?.failed).toBe(true);
+  model.applyStatus(parseStatusEvent({ paneKey: 'pane-1', state: 'working' }, now + 6000)!);
+  expect(model.building().floors[0]!.workers.find((w) => w.id === id)!.orca?.failed).toBeUndefined();
+});

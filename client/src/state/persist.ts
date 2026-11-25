@@ -68,6 +68,8 @@ export interface Settings {
   fun: boolean;
   /** When a working worker looks stuck (M7 B5): minutes without a word from Orca, hours working at a stretch. */
   stuck: StuckRule;
+  /** Say who needs you and why out loud (M7 B2): off unless you turn it on. */
+  voice: boolean;
 }
 
 const SETTINGS_KEY = 'agent-office.settings';
@@ -130,7 +132,7 @@ export function rememberSpot(s: Spot) {
 }
 
 export function loadSettings(): Settings {
-  const s: Settings = { view: 'first', volume: 0.7, muted: false, music: 0.5, musicMuted: false, pageTurns: true, notify: true, needsYouSound: 'once', hud: { ...HUD_DEFAULTS }, pins: [], fun: false, stuck: { ...STUCK_DEFAULTS } };
+  const s: Settings = { view: 'first', volume: 0.7, muted: false, music: 0.5, musicMuted: false, pageTurns: true, notify: true, needsYouSound: 'once', hud: { ...HUD_DEFAULTS }, pins: [], fun: false, stuck: { ...STUCK_DEFAULTS }, voice: false };
   try {
     const saved = JSON.parse(localStorage.getItem(SETTINGS_KEY) ?? 'null');
     if (saved?.view === 'first' || saved?.view === 'third') s.view = saved.view;
@@ -143,6 +145,7 @@ export function loadSettings(): Settings {
     if (NEEDS_YOU_SOUNDS.includes(saved?.needsYouSound)) s.needsYouSound = saved.needsYouSound;
     for (const k of Object.keys(s.hud) as HudPanel[]) if (typeof saved?.hud?.[k] === 'boolean') s.hud[k] = saved.hud[k];
     if (typeof saved?.fun === 'boolean') s.fun = saved.fun;
+    if (typeof saved?.voice === 'boolean') s.voice = saved.voice;
     if ((STUCK_QUIET_CHOICES as readonly unknown[]).includes(saved?.stuck?.quietMin)) s.stuck.quietMin = saved.stuck.quietMin;
     if ((STUCK_LONG_CHOICES as readonly unknown[]).includes(saved?.stuck?.longHours)) s.stuck.longHours = saved.stuck.longHours;
     if (Array.isArray(saved?.pins)) s.pins = saved.pins.filter((p: unknown): p is string => typeof p === 'string').slice(0, 30);

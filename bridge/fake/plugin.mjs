@@ -40,6 +40,8 @@ function connect() {
       send({ type: 'auth', proof: hmac('plugin', m.nonce, nonce) });
       send({ type: 'hello', role: 'plugin', protocol: 0, runtime: { fake: true } });
       snapshot();
+      // M7 B2: flaky-tests' last turn ended in a failure.
+      setTimeout(() => send({ type: 'event', name: 'agent.status.changed', at: Date.now(), payload: { paneKey: 'p-ivy:leaf', terminalId: 'term_ivy', workspaceListId: null, state: 'done', receivedAt: Date.now(), mainAgent: { state: 'done', outcome: 'failure', stateStartedAt: Date.now() } } }), 1500);
       let step = 0;
       timers.push(setInterval(snapshot, 10_000));
       timers.push(setInterval(() => {
@@ -103,6 +105,11 @@ async function answer({ method, params }) {
       }, 3000);
       return { ok: true, value: { workspaceId: `repo-${repo}::/code/${repo}/${name}` } };
     }
+    // M7 B13: a worktree's past sessions (made up) and resuming one.
+    case 'agent.listSessions':
+      return { ok: true, value: { sessions: [{ sessionId: 'made-up-session-1', agent: 'claude', title: 'made-up', workspaceId: params.workspaceId, hostId: 'local', branch: null, createdAt: null, updatedAt: Date.now() - 3600_000, messageCount: 12, totalTokens: 1000, running: false }], truncated: false } };
+    case 'agent.resume':
+      return { ok: true, value: { terminalId: 'term_resumed', started: true } };
     default:
       return { ok: true, value: {} };
   }

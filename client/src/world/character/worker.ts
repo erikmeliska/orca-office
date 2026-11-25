@@ -8,7 +8,7 @@ import type { WorkerRig } from './rig';
 import { ease, popIn } from './curves';
 import { undress } from './props';
 import { ACT_MIN, DESPAIR_MIN, TWIRL_TIME, WAIT_CYCLE, WAIT_HOPS, blendStance, type Act, type Stance } from './worker-stance';
-import { STATUS_BULB, STUCK_BULB, bubbleFor } from './worker-badges';
+import { STATUS_BULB, STUCK_BULB, bubbleFor, type BubbleSignal } from './worker-badges';
 import { globe, papers } from './worker-props';
 import { DANCE, groove, type Dancing, type Stage } from './worker-dance';
 import { DEAD, STARVED, bones, crossedEyes, slump } from './worker-jail';
@@ -41,6 +41,8 @@ export class Worker {
   private lost = false;
   /** Looks stuck (M7 B5): dozes off at its desk, its light grey, "stuck?" over its head. */
   private stuck = false;
+  /** What it signals (M7 B2): permission, a question, or failed. */
+  private signal: BubbleSignal = undefined;
   private nameTag: THREE.Sprite | null = null;
   private eyes: THREE.Mesh[] = [];
   private blinkAt = Math.random() * 4;
@@ -267,7 +269,7 @@ export class Worker {
   }
 
   private paintBulb() {
-    const c = this.stuck && this.status === 'working' ? STUCK_BULB : (STATUS_BULB[this.status] ?? '#adb5bd');
+    const c = this.stuck && this.status === 'working' ? STUCK_BULB : this.signal === 'failed' && this.status === 'done' ? '#d00000' : (STATUS_BULB[this.status] ?? '#adb5bd');
     this.bulb.color.set(c);
     this.bulb.emissive.set(c).multiplyScalar(0.7);
   }
@@ -325,6 +327,14 @@ export class Worker {
     this.drawBubble();
   }
 
+  /** Permission, a question or failed (M7 B2): a bubble of its own; a failure's light is red. */
+  setSignal(signal: BubbleSignal) {
+    if (signal === this.signal) return;
+    this.signal = signal;
+    if (!this.dancing) this.paintBulb();
+    this.drawBubble();
+  }
+
   /** Dozing: asleep, or (working) looking stuck. */
   private dozing(): boolean {
     return isAsleep(this.status) || (this.stuck && this.status === 'working');
@@ -370,8 +380,8 @@ export class Worker {
 
   private drawBubble() {
     if (this.leaving) return;
-    const { status, bouncing: bounce, task, pr, lost, stuck } = this;
-    const { key, draw } = bubbleFor(status, bounce, task, pr, lost, stuck);
+    const { status, bouncing: bounce, task, pr, lost, stuck, signal } = this;
+    const { key, draw } = bubbleFor(status, bounce, task, pr, lost, stuck, signal);
     if (key === this.bubbleKey) return;
     this.bubbleKey = key;
     if (this.bubble) {

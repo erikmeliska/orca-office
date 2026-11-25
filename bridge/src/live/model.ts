@@ -102,6 +102,8 @@ interface AgentRec {
   quietSince: number;
   /** Its row's `updatedAt` as last listed. */
   updatedAt: number;
+  /** Its last turn ended in a failure (M7 B2), until it works again. */
+  failed: boolean;
 }
 
 interface DeskRec {
@@ -275,6 +277,11 @@ export class LiveModel {
       return true;
     }
     this.heard(rec, ev.at);
+    const failed = ev.state === 'done' ? !!ev.failed : ev.state === 'working' ? false : rec.failed;
+    if (failed !== rec.failed) {
+      rec.failed = failed;
+      this.version++;
+    }
     if (this.setState(rec, ev.state, ev.at)) this.version++;
     return false;
   }
@@ -864,6 +871,7 @@ export class LiveModel {
         ...(status === 'needs_input' ? { asks: a.shown === 'blocked' ? 'permission' : 'question' } : {}),
         ...(working ? { quietSince: a.quietSince } : {}),
         ...(kanban ? { kanban } : {}),
+        ...(status === 'done' && a.failed ? { failed: true } : {}),
       },
       ...(working && a.action ? { action: a.action } : {}),
       ...(working && a.activity ? { activity: a.activity } : {}),
@@ -1085,6 +1093,7 @@ function newAgent(paneKey: string, deskKey: string, floor: string, now: number):
     helpers: new Map(),
     quietSince: now,
     updatedAt: 0,
+    failed: false,
   };
 }
 

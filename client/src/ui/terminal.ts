@@ -77,6 +77,8 @@ export interface TerminalOptions {
    * "Open in Orca", which this opens.
    */
   orca?: () => void;
+  /** Steering an Orca agent (M7 B13): Summarize / Continue buttons in the header, each a click away. */
+  steer?: (s: 'summarize' | 'continue') => void;
 }
 
 /** The keypad's keys: what each types, or a function of the terminal for the ones that depend on its mode. */
@@ -154,6 +156,13 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
     pending.textContent = pendingText ? `⌨️ ${pendingText}` : '';
   };
   const orcaBtn = opts.orca ? h('button.btn.term-orca', { type: 'button', title: 'Show this agent in Orca, its terminal focused' }, '↗ Open in Orca') : null;
+  // Steering (M7 B13): the office's own short prompts, only on a click (⎋ Esc interrupts).
+  const steerBtns = opts.steer
+    ? [
+        h('button.btn.term-steer', { type: 'button', title: 'Ask it to pause and summarize where it is: done, left, blocking (types a short prompt and Enter)', onclick: () => opts.steer?.('summarize') }, '📝 Summarize'),
+        h('button.btn.term-steer', { type: 'button', title: 'Tell it to continue (types “Continue.” and Enter)', onclick: () => opts.steer?.('continue') }, '▶ Continue'),
+      ]
+    : [];
   const hideBtn = h('button.btn.term-hide', { type: 'button', title: 'Hide this terminal; the worker keeps running at its desk', 'aria-label': 'Hide terminal' }, 'Hide');
   const closeBtn = h('button.btn.close', { title: 'Hide terminal (Esc or Ctrl+]) · the worker keeps running; ⎋ Esc or Ctrl+[ sends Esc to the terminal', 'aria-label': 'Hide terminal' }, '✕');
   const host = h('div.term-host', { 'data-drop': '📎 Drop screenshots or files here to put them in the terminal' });
@@ -177,7 +186,7 @@ export function openTerminal(net: Net, workerId: string, onChanges?: () => void,
   );
   host.append(mic.live);
   // The keypad has an Esc of its own, and a 🎤 on its prompt box.
-  const el = h('div.modal.term', { role: 'dialog', 'aria-label': `${info.name} terminal` }, h('header', {}, dot, title, pill, cost, viewers, typed, modelsBtn, keypad ? null : mic.button, keypad ? null : escBtn, onChanges ? changesBtn : null, orcaBtn, hideBtn, closeBtn), tabs.bar, host, pending, tabs.pages, keypad);
+  const el = h('div.modal.term', { role: 'dialog', 'aria-label': `${info.name} terminal` }, h('header', {}, dot, title, pill, cost, viewers, typed, modelsBtn, keypad ? null : mic.button, keypad ? null : escBtn, onChanges ? changesBtn : null, ...steerBtns, orcaBtn, hideBtn, closeBtn), tabs.bar, host, pending, tabs.pages, keypad);
 
   const term = new Terminal({
     fontFamily: 'ui-monospace, "SF Mono", Menlo, Consolas, "Liberation Mono", monospace',

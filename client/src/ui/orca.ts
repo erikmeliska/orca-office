@@ -50,10 +50,12 @@ const ERRORS: Record<string, string> = {
   no_prompt: 'No permission prompt on its screen — open its terminal to answer',
   no_option: 'Its prompt has no such answer — open its terminal',
   prompt_changed: 'It is asking something new — look again before answering',
+  not_working: 'It is not working, so there is nothing to interrupt',
+  nothing_to_resume: 'Orca has no earlier session here that can be resumed',
 };
 export const say = (e: string | undefined) => (e && ERRORS[e]) || `Orca said no${e ? ` (${e})` : ''}`;
 
-const DONE: Partial<Record<OrcaActionKind, string>> = { open: '↗ Opened in Orca', read: '✓ Marked read', comment: '✓ Comment saved', answer: '✓ Answered' };
+const DONE: Partial<Record<OrcaActionKind, string>> = { open: '↗ Opened in Orca', read: '✓ Marked read', comment: '✓ Comment saved', answer: '✓ Answered', steer: '✓ Sent', resume: '↻ Resuming in Orca…' };
 
 /** Waiting for a desk's comment (orca.desk), and new tasks being started. */
 const deskWaiters = new Map<string, (comment: string) => void>();
@@ -200,7 +202,7 @@ export function openComment(net: Net, deskId: string, deskName: string) {
 }
 
 /** A new task at an empty desk: a new worktree in a repository, an agent, its first prompt. */
-export function openNewTask(net: Net, deskName: string) {
+export function openNewTask(net: Net, deskName: string, resumeDesk?: string) {
   const floors = store.floors.filter((f) => f.orcaCreate);
   if (!floors.length) return toast(say('no_project'), 'warn');
   const repo = h('select', { 'aria-label': 'Repository' }, ...floors.map((f) => h('option', { value: f.id, selected: f.id === store.floor }, f.name))) as HTMLSelectElement;
@@ -222,7 +224,14 @@ export function openNewTask(net: Net, deskName: string) {
       prompt,
       h('p.orca-note', {}, 'Orca makes a new branch and worktree in that repository and starts the agent there.'),
     ),
-    h('footer', {}, h('span.grow', {}), go),
+    h(
+      'footer',
+      {},
+      // A worktree Orca has open here (its sign): its last session can be picked up instead (M7 B13).
+      resumeDesk ? h('button.btn', { type: 'button', title: 'Resume the newest session of this worktree that nothing runs (Orca’s own Resume)', onclick: () => (net.send({ t: 'orca.resume', deskId: resumeDesk }), modal.close()) }, '↻ Resume last session') : null,
+      h('span.grow', {}),
+      go,
+    ),
   ) as HTMLFormElement;
   form.addEventListener('submit', (e) => {
     e.preventDefault();

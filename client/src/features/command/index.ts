@@ -8,7 +8,7 @@
 import './command.css';
 import { kanbanStyle } from '@orca-office/shared/office/kanban';
 import { span } from '@orca-office/shared/office/stuck';
-import type { OrcaAnswer, OrcaRosterFloor } from '@orca-office/shared/office/protocol/orca';
+import type { OrcaAnswer, OrcaRosterFloor, OrcaSteer } from '@orca-office/shared/office/protocol/orca';
 import { COLUMNS, commandCards, kanbanStatuses, type Card } from '../../command-center';
 import type { Ctx } from '../../core/context';
 import type { Parts } from '../../core/parts';
@@ -80,6 +80,12 @@ export function installCommandCenter(ctx: Ctx, parts: Pick<Parts, 'waiting'>) {
         }
       });
       acts.push(input, btn('Send', 'Type it into its terminal and press Enter', send, '.yes'));
+    }
+    // Steering (M7 B13), a click each: interrupt or a summary while it works, continue once it's done.
+    if (c.terminal && c.workerId && isOrca()) {
+      const steer = (s: OrcaSteer) => net.send({ t: 'orca.steer', workerId: c.workerId!, steer: s });
+      if (c.column === 'working' || c.column === 'stuck') acts.push(btn('⏸', 'Interrupt it (Esc)', () => steer('interrupt')), btn('📝', 'Ask it to pause and summarize where it is', () => steer('summarize')));
+      if (c.column === 'done' || c.column === 'ended') acts.push(btn('▶', 'Tell it to continue', () => steer('continue')), btn('📝', 'Ask it to summarize where it is', () => steer('summarize')));
     }
     if (c.kind === 'agent' && c.workerId && isOrca() && !c.bot) acts.push(btn('↗ Orca', 'Open it in Orca', () => net.send({ t: 'orca.open', workerId: c.workerId! })));
     acts.push(btn('⏎', c.kind === 'gate' ? 'Go to the desk the decision is about' : c.chat ? 'Go there and read its conversation' : 'Go there with its terminal open', () => enter(c)));

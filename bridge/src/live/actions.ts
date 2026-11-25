@@ -17,7 +17,7 @@
  * Nothing here deletes, closes or merges. Rate limits per page (rate.ts). What is typed, prompts,
  * comments and terminal text are never logged or kept: errors carry short codes only.
  */
-import { ORCA_AGENTS, ORCA_ANSWERS, ORCA_LIMITS, type OrcaActionKind, type OrcaAnswer } from '@orca-office/shared/office/protocol/orca';
+import { ORCA_AGENTS, ORCA_ANSWERS, ORCA_LIMITS, ORCA_STEER_PROMPTS, ORCA_STEERS, type OrcaActionKind, type OrcaAnswer, type OrcaSteer } from '@orca-office/shared/office/protocol/orca';
 import type { ClientMsg, ServerMsg } from '@orca-office/shared/office/protocol';
 import type { CallResult } from '../plugin-link.js';
 import type { PageLimits } from '../rate.js';
@@ -25,6 +25,9 @@ import type { LiveModel } from './model.js';
 import { parseConversation } from './orca.js';
 import { answerKey, MENU_LINES } from './permission.js';
 import type { TerminalWatch } from './terminals.js';
+
+/** Agents whose sessions resume by id (the plugin allows the same, plugin/src/worker.ts RESUME_AGENTS). */
+const RESUMABLE = new Set(['claude', 'codex', 'opencode', 'pi', 'copilot', 'cursor']);
 
 /** How long a new task's figure has to sit down before the page is told it's slow. */
 export const CREATE_WAIT_MS = 120_000;
@@ -73,7 +76,7 @@ interface PendingCreate {
   since: number;
 }
 
-const ACTIONS = new Set(['orca.answer', 'orca.chat.open', 'orca.chat.close', 'worker.attach', 'worker.detach', 'term.input', 'term.resize', 'worker.prompt', 'orca.open', 'orca.read', 'orca.comment', 'orca.desk', 'orca.create']);
+const ACTIONS = new Set(['orca.answer', 'orca.steer', 'orca.resume', 'orca.chat.open', 'orca.chat.close', 'worker.attach', 'worker.detach', 'term.input', 'term.resize', 'worker.prompt', 'orca.open', 'orca.read', 'orca.comment', 'orca.desk', 'orca.create']);
 
 export class Actions {
   private pages = new Map<ActionPage, PageState>();
@@ -115,6 +118,10 @@ export class Actions {
         return this.type(page, st, msg.workerId, msg.data, false);
       case 'worker.prompt':
         return this.prompt(page, st, msg.workerId, msg.prompt);
+      case 'orca.steer':
+        return this.steer(page, st, msg.workerId, msg.steer);
+      case 'orca.resume':
+        return this.resume(page, msg.deskId);
       case 'orca.answer':
         return this.answer(page, st, msg.workerId, msg.choice, msg.since);
       case 'orca.open':
@@ -206,6 +213,45 @@ export class Actions {
     if ('error' in k) return void page.send([result('answer', false, k.error, { workerId })]);
     this.enqueue(page, st, workerId, t.terminalId, k.key, false);
     page.send([result('answer', true, undefined, { workerId })]);
+  }
+
+  /**
+   * Steering (M7 B13), on an explicit click: Esc into a working agent's terminal, or one of the
+   * office's own prompts (ORCA_STEER_PROMPTS) with Enter. Local terminal agents only.
+   */
+  private steer(page: ActionPage, st: PageState, workerId: unknown, steer: unknown) {
+    if (typeof workerId !== 'string' || !(ORCA_STEERS as readonly unknown[]).includes(steer)) return;
+    if (!this.allow(page, 'steer')) return;
+    const t = this.model.target(workerId);
+    if (!t?.terminalId) return void page.send([result('steer', false, t ? (t.local ? 'no_terminal' : 'remote') : 'unknown_worker', { workerId })]);
+    const s = steer as OrcaSteer;
+    if (s === 'interrupt') {
+      if (t.state !== 'working') return void page.send([result('steer', false, 'not_working', { workerId })]);
+      this.enqueue(page, st, workerId, t.terminalId, '\x1b', false);
+    } else this.enqueue(page, st, workerId, t.terminalId, ORCA_STEER_PROMPTS[s], true);
+    page.send([result('steer', true, undefined, { workerId })]);
+  }
+
+  /**
+   * Resume the last session of a desk's worktree (M7 B13): Orca's own session history for that
+   * workspace (`agent.listSessions`), its newest session no terminal runs, then `agent.resume`, which
+   * starts it in a new terminal there. Titles never leave the bridge.
+   */
+  private async resume(page: ActionPage, deskId: unknown) {
+    if (typeof deskId !== 'string' || !this.allow(page, 'resume')) return;
+    const ws = this.deskWorkspace(page, deskId);
+    if (!ws) return void page.send([result('resume', false, 'unknown_workspace', { deskId })]);
+    const list = await this.deps.call('agent.listSessions', { workspaceId: ws.id, limit: 20 });
+    const sessions = list.ok ? (list.value as { sessions?: unknown } | undefined)?.sessions : undefined;
+    if (!Array.isArray(sessions)) return void page.send([result('resume', false, list.error ?? 'unreadable', { deskId })]);
+    const last = sessions
+      .filter((x): x is { sessionId: string; agent: string; updatedAt: number; running?: boolean } => !!x && typeof x.sessionId === 'string' && typeof x.agent === 'string' && typeof x.updatedAt === 'number')
+      .filter((x) => !x.running && RESUMABLE.has(x.agent) && /^[A-Za-z0-9][A-Za-z0-9_:.-]{0,127}$/.test(x.sessionId))
+      .sort((a, b) => b.updatedAt - a.updatedAt)[0];
+    if (!last) return void page.send([result('resume', false, 'nothing_to_resume', { deskId })]);
+    const r = await this.deps.call('agent.resume', { workspaceId: ws.id, agent: last.agent, sessionId: last.sessionId });
+    page.send([result('resume', r.ok, r.ok ? undefined : (r.error ?? 'failed'), { deskId })]);
+    if (r.ok) this.deps.resync();
   }
 
   private allowTyping(page: ActionPage, st: PageState, n: number): boolean {
