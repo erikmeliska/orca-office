@@ -18,6 +18,7 @@ import { parseStatusEvent, parseToolHook, parseWorkspaces } from './live/orca.js
 import { LiveSession } from './live/session.js';
 import { claudeProbe, codexProbe, findCli, LimitsReader } from './live/limits.js';
 import { RunsPoller } from './live/runs-poller.js';
+import { PortsPoller } from './live/ports.js';
 import { Actions } from './live/actions.js';
 import { BotChats } from './live/bots.js';
 import { TerminalWatch } from './live/terminals.js';
@@ -265,6 +266,15 @@ const limits = new LimitsReader({
   error: (what) => logOnce(what),
 });
 
+// The dev servers in Orca's worktrees (B7): `orca ports` every ~10 s while a page is open.
+const ports = new PortsPoller({
+  run: cli,
+  skip: new Set([config.port, config.clientPort, ...(lan ? [lan.port] : [])]),
+  wanted: () => liveSessions.size > 0,
+  changed: (rows) => (model.applyPorts(rows), changed()),
+  error: (what) => logOnce(what),
+});
+
 /** One line per kind of failure, not one every 5 s. */
 const logged = new Set<string>();
 function logOnce(what: string) {
@@ -323,6 +333,7 @@ if (!config.stub) {
   poller.start();
   limits.start();
   runsPoller.start();
+  ports.start();
   // The done debounce and fading actions run on the clock.
   setInterval(() => {
     const v = model.version;

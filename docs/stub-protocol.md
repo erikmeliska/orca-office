@@ -308,3 +308,33 @@ after ~7 s.
 
 ![Bot chat, desktop](img/m5-bot-chat-desktop.png)
 ![Bot chat, new chat on a phone](img/m5-bot-new-chat-mobile.png)
+
+## Services board (M6, roadmap B7)
+
+The 🌐 Services board on each repository's floor lists the dev servers running in that repository's
+worktrees; a desk whose worktree runs one shows `🖥 :5173` on its sign. Bridge:
+`bridge/src/live/ports.ts`.
+
+- `orca ports --all --json` every ~10 s while a page is open (`execFile`, no shell). A row is kept
+  when Orca tied it to a worktree (`kind: workspace`) and it looks like something to open: HTTP, an
+  address the server printed in an Orca terminal, or a port below 49152 (agents' MCP sockets and
+  other ephemeral listeners live above). The office's own ports are left out.
+- Listeners Orca tied to no worktree (`kind: external`: Orca, Obsidian, system services, agents'
+  sockets) are left out entirely rather than shown as "Other on this Mac": they are not the
+  office's business and would leak what else runs on the Mac.
+- The command line comes from `ps -o command= -p <pid>` once per process: the program's name
+  instead of its path, paths cut to their last part, and every value that may be a secret replaced
+  by `…` (`--token=…`, `KEY=…`, the value after `--password`, anything that looks like a token);
+  80 characters at most. The page title is a GET of `http://127.0.0.1:<port>/` (1.5 s, 64 kB, once
+  a minute per server), cut to 60. Never the environment; nothing is logged or stored.
+- `FloorView.services` / `{ t: 'services', state: { items } }`: `ServiceInfo` with `port`,
+  `command`, `worktree`, `branch`, `deskId` (its desk on this floor, if Orca has it open), `url`
+  (the printed local address, else `http://localhost:<port>`), `title`, `since`. Open ↗ opens the
+  URL in a new tab; the office runs on the same Mac, so there are no tunnels (agent-office's SSH
+  tunnels, Tailscale links and deploy hints are gone).
+- `npm run dev:fake` serves three made-up servers (fake `ps` in `ORCA_OFFICE_PS`).
+
+![Services board](img/m6-services-board-desktop.png)
+![Services panel](img/m6-services-panel-desktop.png)
+![A desk with its server on the sign](img/m6-services-desk-desktop.png)
+![Services on a phone](img/m6-services-mobile.png)

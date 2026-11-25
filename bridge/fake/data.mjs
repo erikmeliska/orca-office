@@ -108,3 +108,14 @@ export function inbox(now = Date.now()) {
   }
   return out.reverse();
 }
+
+// Made-up dev servers (B7), as `orca ports --all --json` lists them; `cmdline` is for fake/ps.mjs, the
+// title is served by fake/plugin.mjs on the same port. Ports far from the usual ones, so nothing real collides.
+const port = (n, pid, repo, name, proc, cmdline, title, extra = {}) => ({ id: `127.0.0.1:${n}:${pid}`, bindHost: '127.0.0.1', connectHost: '127.0.0.1', port: n, pid, processName: proc, protocol: 'http', kind: 'workspace', owner: { worktreeId: `repo-${repo}::/code/${repo}/${name}`, repoId: `repo-${repo}`, displayName: name, path: `/code/${repo}/${name}`, confidence: 'cwd' }, cmdline, title, ...extra });
+export const PORTS = [
+  port(45173, 91001, 'demo-web', 'fix-login', 'node', '/usr/local/bin/node /code/demo-web/fix-login/node_modules/.bin/vite --port 45173 --token=made-up-secret-123456', 'Demo Web · Login', { advertisedUrl: 'http://localhost:45173/' }),
+  port(46006, 91002, 'demo-web', 'dark-mode', 'node', 'node /code/demo-web/dark-mode/node_modules/.bin/storybook dev -p 46006', 'Storybook · Dark palette'),
+  port(48080, 91003, 'demo-api', 'search-speed', 'python3', 'API_KEY=made-up python3 -m uvicorn app:main --port 48080', 'Demo API docs'),
+  // Not tied to a worktree: never listed.
+  { id: '*:45000:91009', bindHost: '*', connectHost: '127.0.0.1', port: 45000, pid: 91009, processName: 'SomeApp', protocol: 'http', kind: 'external' },
+];

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // A stand-in `orca` CLI (ORCA_BIN) that answers what the bridge polls and does with made-up data.
 import { readFileSync } from 'node:fs';
-import { AGENTS, BOTS, BOT_CHATS, GATES, REMOTE, RUN, TASKS, TERMINALS, WORKERS, WORKSPACES, WORKTREES, inbox } from './data.mjs';
+import { AGENTS, BOTS, BOT_CHATS, GATES, PORTS, REMOTE, RUN, TASKS, TERMINALS, WORKERS, WORKSPACES, WORKTREES, inbox } from './data.mjs';
 import { load, save } from './state.mjs';
 const argv = process.argv.slice(2);
 const args = argv.join(' ');
@@ -35,6 +35,7 @@ function botConversation(chat) {
 if (args.startsWith('agent list') && args.includes('--environment')) out({ agents: REMOTE, hostScope: { hostIds: ['runtime:demo'] }, truncated: false });
 else if (args.startsWith('agent list')) out({ agents: [...AGENTS, ...st.agents], hostScope: { hostIds: ['local'], omittedHostSelectors: [{ hostId: 'runtime:demo', selector: '--environment demo.example' }] }, truncated: false });
 else if (args.startsWith('terminal list')) out({ terminals: [...TERMINALS, ...st.agents.map((a) => ({ handle: a.terminal, tabId: a.paneKey.split(':')[0], leafId: a.paneKey.split(':')[1], executionHostId: 'local' }))], truncated: false });
+else if (args.startsWith('ports')) out({ platform: 'darwin', scannedAt: Date.now(), ports: PORTS.map(({ cmdline: _c, title: _t, ...p }) => p), executionHostId: 'local' });
 else if (args.startsWith('bot list')) out({ bots: BOTS });
 else if (args.startsWith('bot chats')) out({ bot: flag('--bot'), chats: botChats(flag('--bot')).map(({ entries: _e, ...c }) => ({ ...c, lastAsked: 'made-up', lastSaid: 'made-up', self: false, closed: false })) });
 else if (args.startsWith('orchestration send')) {

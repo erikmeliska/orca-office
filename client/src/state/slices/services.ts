@@ -3,7 +3,7 @@ import type { Slice } from '../store';
 
 declare module '../store' {
   interface Store {
-    /** The dev servers the floor's workers started, and the office's own port. */
+    /** The dev servers running in the floor's worktrees (orca ports). */
     services: ServicesState;
   }
   interface Topics {
@@ -13,7 +13,7 @@ declare module '../store' {
 
 export const services: Slice = {
   init(s) {
-    s.services = { items: [], port: 4600 };
+    s.services = { items: [] };
   },
   on: {
     services(s, m) {

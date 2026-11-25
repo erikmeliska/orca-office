@@ -55,16 +55,24 @@ export interface MachineState {
   set?: { limit: number; by: string; at: number };
 }
 
-/** A web server a worker started (a dev server, a preview), found by the ports it listens on. */
+/** A dev server running in one of the floor's worktrees, as `orca ports` found it (roadmap B7). */
 export interface ServiceInfo {
   port: number;
-  /** The address the office reaches it on, on its own machine. */
+  /** The address it listens on, on this machine. */
   host: string;
   pid: number;
-  /** Its command line, shortened, e.g. "vite --port 5173". */
+  /** Its command line, shortened and without anything that looks like a secret, e.g. "vite --port 5173". */
   command: string;
-  /** The worker whose terminal started it. */
+  /** The first figure at its desk ('' when nobody sits there). */
   workerId: string;
+  /** The desk (seat) of its worktree, when the worktree has one on this floor. */
+  deskId?: string;
+  /** Orca's name for its worktree. */
+  worktree?: string;
+  /** The worktree's branch. */
+  branch?: string;
+  /** What to open: the address the server printed, else http://localhost:<port>. */
+  url?: string;
   /** Its working directory relative to its floor's checkout ('' is the project root). */
   cwd?: string;
   /** The <title> of its front page. */
@@ -74,14 +82,6 @@ export interface ServiceInfo {
 
 export interface ServicesState {
   items: ServiceInfo[];
-  /** The office's port on its machine. Service tunnels end there and the office relays them. */
-  port: number;
-  /** How to run the script that deployed the office, as in TeamState. */
-  deploy?: string;
-  /** Where teammates tunnel to (offices deployed with deploy/aws.sh, deploy/railway.sh, deploy/fly.sh, deploy/dokploy.sh or deploy/coolify.sh), as in TeamState */
-  ssh?: string;
-  /** The office's name on its Tailscale network: each server is also on https://<it>:<port> there. */
-  tailnet?: string;
 }
 
 export interface VersionInfo {

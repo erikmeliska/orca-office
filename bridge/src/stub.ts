@@ -110,7 +110,7 @@ export function floorView(floorId: string | null): FloorView {
     pulls: { items: [], fetchedAt: T0, loading: false },
     decor: [],
     plan: { ...EMPTY_PLAN, labels: {} },
-    services: { items: [], port: 0 },
+    services: { items: [] },
     // The floor's dog, sitting in the open between the desks and the lounge.
     dog: f ? { name: 'Rex', coat: 0, breed: 'corgi', path: [[3, 0]], speed: 1.3, elapsed: 0, act: 'sit' } : null,
     cabinet: { player: null, scores: [], frame: null },

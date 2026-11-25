@@ -207,7 +207,7 @@ export class ServicesBoardTexture {
   render(items: ServiceInfo[], workers: Map<string, WorkerInfo>) {
     const rows = items.map((s) => {
       const w = workers.get(s.workerId);
-      return { port: s.port, title: s.title || s.command, who: [w?.name ?? 'A worker', w?.worktree?.branch].filter(Boolean).join(' · '), color: w?.color ?? '#8d99ae' };
+      return { port: s.port, title: s.title || s.command, who: [s.worktree ?? w?.worktree?.branch ?? '', s.branch && s.branch !== s.worktree ? s.branch : '', s.title ? s.command : ''].filter(Boolean).join(' · '), color: w?.color ?? '#8d99ae' };
     });
     // Worker updates stream in constantly; only redraw when what's shown changes.
     const key = JSON.stringify(rows);
@@ -225,10 +225,10 @@ export class ServicesBoardTexture {
       g.textAlign = 'center';
       g.fillStyle = '#e9ecef';
       g.font = '900 52px Nunito, ui-rounded, system-ui, sans-serif';
-      g.fillText('No web servers running', W / 2, H / 2 - 20);
+      g.fillText('No dev servers running', W / 2, H / 2 - 20);
       g.fillStyle = 'rgba(233,236,239,.6)';
       g.font = '700 32px Nunito, ui-rounded, system-ui, sans-serif';
-      g.fillText('When a worker starts one, it shows up here', W / 2, H / 2 + 36);
+      g.fillText('Start one in a worktree and it shows up here', W / 2, H / 2 + 36);
       g.textAlign = 'left';
       this.texture.needsUpdate = true;
       return;

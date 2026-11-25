@@ -18,9 +18,10 @@ import { isAgentProvider } from '@orca-office/shared/office/providers';
 import { cleanLabel, type FloorPlan } from '@orca-office/shared/office/floorplan';
 import { FLOOR_PALETTES } from '@orca-office/shared/office/floors';
 import { BEANBAGS, DESKS, WING_DESKS } from '@orca-office/shared/office/layout';
-import type { FloorInfo, WorkerAction, WorkerInfo, WorkerStatus } from '@orca-office/shared/office/protocol';
+import type { FloorInfo, ServiceInfo, WorkerAction, WorkerInfo, WorkerStatus } from '@orca-office/shared/office/protocol';
 import type { OrcaLink, OrcaProject } from '@orca-office/shared/office/protocol/orca';
 import { pinsText, type OrcaWorktree } from './worktrees.js';
+import type { PortRow } from './ports.js';
 import { isLive, type HandoffKind, type InboxMessage, type OrcaRun, type RunGate, type RunTask, type TaskStatus } from './runs.js';
 import { RECENT_MS } from './runs-poller.js';
 import type { ForgeTarget } from './forge.js';
@@ -112,6 +113,8 @@ export interface LiveFloor {
   plan: FloorPlan;
   /** What Orca links to each desk, by the seat with its sign (#32). */
   links: Record<string, OrcaLink[]>;
+  /** The dev servers running in the floor's worktrees (`orca ports`, B7). */
+  services: ServiceInfo[];
 }
 
 export interface Building {
@@ -174,6 +177,8 @@ export class LiveModel {
   /** What Orca links to each worktree on this machine, by path (`orca worktree list`, #32). */
   private linksByPath = new Map<string, OrcaLink[]>();
   private linksKey = '';
+  /** The dev servers by worktree path (`orca ports`, B7). */
+  private portsByPath = new Map<string, PortRow[]>();
   /** Every worktree on this machine as `orca worktree list` gave it (lineage, #29 fallback). */
   private worktreeRows: OrcaWorktree[] = [];
   private lineageKey = '';
@@ -291,6 +296,14 @@ export class LiveModel {
     if (key === this.linksKey) return;
     this.linksKey = key;
     this.linksByPath = next;
+    this.version++;
+  }
+
+  /** `orca ports --all --json`, already filtered and with safe commands (ports.ts). */
+  applyPorts(rows: PortRow[]): void {
+    const next = new Map<string, PortRow[]>();
+    for (const r of rows) next.set(r.path, [...(next.get(r.path) ?? []), r]);
+    this.portsByPath = next;
     this.version++;
   }
 
@@ -658,6 +671,7 @@ export class LiveModel {
         workers,
         plan: { wing: 0, labels },
         links: {},
+        services: [],
       },
       board: {
         source: r.source,
@@ -691,6 +705,8 @@ export class LiveModel {
     const workers: WorkerInfo[] = [];
     const labels: FloorPlan['labels'] = {};
     const links: LiveFloor['links'] = {};
+    const services: ServiceInfo[] = [];
+    const listed = new Set<string>();
     let wing = 0;
     for (const d of ordered) {
       const at = seats.get(d.key);
@@ -703,9 +719,23 @@ export class LiveModel {
       const mine = path ? this.linksByPath.get(path) : undefined;
       // Every seat of the desk has its links, so the hint finds them wherever you stand.
       if (mine?.length) for (const s of at) links[s] = mine;
-      if (sign) labels[sign] = { text: cleanLabel(`${d.hostId !== LOCAL ? '🌐 ' : ''}${d.name}${extra > 0 ? ` +${extra}` : ''}`), color: signColor(list), by: 'orca', at: 0, ...(mine?.length ? { pins: pinsText(mine) } : {}) };
+      const ports = path ? this.portsByPath.get(path) : undefined;
+      if (path && ports) {
+        listed.add(path);
+        const first = workers.find((w) => at.includes(w.deskId ?? ''));
+        for (const p of ports) services.push(serviceOf(p, first?.id ?? '', sign ?? at[0], this.workspaces.get(d.key)?.branch ?? null));
+      }
+      const pins = [mine?.length ? pinsText(mine) : '', ports?.length ? portsText(ports) : ''].filter(Boolean).join(' · ');
+      if (sign) labels[sign] = { text: cleanLabel(`${d.hostId !== LOCAL ? '🌐 ' : ''}${d.name}${extra > 0 ? ` +${extra}` : ''}`), color: signColor(list), by: 'orca', at: 0, ...(pins ? { pins } : {}) };
       for (const s of at) if (WING_IDS.has(s)) wing = 2;
     }
+    // Servers in this repository's worktrees that have no desk here (Orca has them closed).
+    for (const [path, ports] of this.portsByPath) {
+      const ws = this.byPath.get(`${LOCAL}|${path}`);
+      if (listed.has(path) || !ws || floorNameOf(ws) !== name) continue;
+      for (const p of ports) services.push(serviceOf(p, '', undefined, ws.branch));
+    }
+    services.sort((a, b) => a.port - b.port);
     const busy = workers.filter((w) => w.status === 'working').length;
     const waiting = workers.filter((w) => w.status === 'needs_input').length;
     const dir = ordered.find((d) => d.hostId === LOCAL)?.key;
@@ -714,6 +744,7 @@ export class LiveModel {
       workers,
       plan: { wing, labels },
       links,
+      services,
     };
   }
 
@@ -775,6 +806,7 @@ export class LiveModel {
       workers,
       plan: { wing, labels },
       links: {},
+      services: [],
     };
   }
 
@@ -922,6 +954,29 @@ const floorId_ = (name: string) => floorId(name);
 export function floorId(name: string): string {
   const slug = name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 40) || 'floor';
   return `f-${slug}-${(hash(name) % 1296).toString(36)}`;
+}
+
+/** A dev server as the services board lists it (B7). */
+function serviceOf(p: PortRow, workerId: string, deskId: string | undefined, branch: string | null): ServiceInfo {
+  return {
+    port: p.port,
+    host: p.host,
+    pid: p.pid,
+    command: p.command,
+    workerId,
+    ...(deskId ? { deskId } : {}),
+    worktree: p.worktree,
+    ...(branch ? { branch } : {}),
+    url: p.url ?? `http://localhost:${p.port}`,
+    ...(p.title ? { title: p.title } : {}),
+    since: p.since,
+  };
+}
+
+/** The ports on a desk's sign: "🖥 :5173", the first two. */
+export function portsText(ports: PortRow[]): string {
+  const shown = ports.slice(0, 2).map((p) => `:${p.port}`);
+  return `🖥 ${shown.join(' ')}${ports.length > 2 ? ` +${ports.length - 2}` : ''}`;
 }
 
 function deskOf(w: OrcaWorkspace): DeskRec {

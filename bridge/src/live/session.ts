@@ -28,7 +28,7 @@ export function liveFloorView(floorId: string | null, f: LiveFloor | undefined, 
     pulls: walls?.pulls ?? { items: project ? taskNotes(project) : [], fetchedAt: T0, loading: false },
     decor: [],
     plan: f?.plan ?? { wing: 0, labels: {} },
-    services: { items: [], port: 0 },
+    services: { items: f?.services ?? [] },
     dog: f ? { name: 'Rex', coat: 0, breed: 'corgi', path: [[3, 0]], speed: 1.3, elapsed: 0, act: 'sit' } : null,
     cabinet: { player: null, scores: [], frame: null },
     ball: {},
@@ -110,6 +110,7 @@ export class LiveSession {
   private sentLinks = '';
   private sentProject = '';
   private sentForge = '';
+  private sentServices = '';
 
   constructor(id: string, query: URLSearchParams, b: Building, private forgeOf: ForgeOf = () => null) {
     const n = (k: string) => (query.get(k) ? Number(query.get(k)) : Number.NaN);
@@ -222,6 +223,12 @@ export class LiveSession {
       this.sentPlan = plan;
       if (f) out.push({ t: 'plan', plan: f.plan });
     }
+    // The dev servers in the floor's worktrees (B7).
+    const services = JSON.stringify(f?.services ?? []);
+    if (services !== this.sentServices) {
+      this.sentServices = services;
+      out.push({ t: 'services', state: { items: f?.services ?? [] } });
+    }
     const links = JSON.stringify(f?.links ?? {});
     const forgeChanged = this.forgeKey() !== this.sentForge;
     if ((links !== this.sentLinks || forgeChanged) && f && !b.projects[this.peer.floor]) {
@@ -295,6 +302,7 @@ export class LiveSession {
     const v = liveFloorView(id, id === ROOF ? undefined : f, id ? b.projects[id] : null, this.forge());
     this.sentWorkers = new Map(v.workers.map((w) => [w.id, JSON.stringify(w)]));
     this.sentPlan = JSON.stringify(f?.plan ?? null);
+    this.sentServices = JSON.stringify(v.services.items);
     this.sentFloors = JSON.stringify(b.floors.map((x) => x.info));
     if (id === ROOF) v.dog = null;
     return v;
