@@ -3,6 +3,7 @@ import { EMOTES, EMOTE_BY_ID, EmoteBucket, type EmoteId } from '@orca-office/sha
 import type { Ctx } from '../../core/context';
 import { $, h, toast } from '../../ui/dom';
 import { EmoteWheel } from './ui';
+import { funOn } from '../../fun';
 import type { Person } from '../../world/character';
 
 export interface EmotesDeps {
@@ -56,7 +57,8 @@ export function installEmotes(ctx: Ctx, deps: EmotesDeps) {
 
   /** G opens the emote wheel (hold it and point, or tap it and click); 1–6 play one straight away. */
   function emoteKey(e: KeyboardEvent): boolean {
-    if (e.code === 'KeyG') {
+    // With the fun off, G is the Command Center's (M7 B3).
+    if (e.code === 'KeyG' && funOn()) {
       if (!e.repeat) emoteWheel.press();
       return true;
     }

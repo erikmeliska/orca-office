@@ -96,6 +96,11 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     goToStop({ key: workerId, kind: 'agent', floor, floorName: '', workerId, deskId, name, ask: null, needs: false, since: 0 });
   }
 
+  /** Over to a figure on any floor and open its terminal (or a chat agent's conversation) once there (M7 B3). */
+  function openFigure(floor: string, workerId: string, deskId: string, name: string) {
+    goToStop({ key: workerId, kind: 'agent', floor, floorName: '', workerId, deskId, name, ask: null, needs: false, since: 0 }, () => openWorkerTerminal(workerId));
+  }
+
   /** The banner's click (a stop's key): over to it, wherever it is. */
   function goToKey(key: string) {
     const s = stops().find((x) => x.key === key);
@@ -214,5 +219,5 @@ export function installWaiting(ctx: Ctx, core: CoreState, parts: Pick<Parts, 'wo
     openChanges(net, id, () => openWorkerTerminal(id), repo);
   }
 
-  return { goToNextWaiting, goToWorker, goToFigure, goToKey, answerWorker, answerStop, stops, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch };
+  return { goToNextWaiting, goToWorker, goToFigure, openFigure, goToKey, answerWorker, answerStop, stops, renderWaiting, openWorkerTerminal, openWorkerChanges, showSearch };
 }

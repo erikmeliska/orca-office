@@ -21,7 +21,7 @@ import { openSettings, type SettingsPane } from '../../ui/settings';
 import { openUpgrade } from '../../ui/upgrade';
 import { describeSky } from '../../world/sky';
 
-export type HudParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'you' | 'actions' | 'waiting' | 'bookshelf' | 'hanging' | 'notifier'>;
+export type HudParts = Pick<Parts, 'worlds' | 'place' | 'travel' | 'you' | 'actions' | 'waiting' | 'bookshelf' | 'hanging' | 'notifier' | 'command'>;
 
 /** Listens for clicks on the HUD and the project, registers what the HUD follows (see mountHud), and binds Tab, H and F. */
 export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
@@ -83,6 +83,15 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
         tone: () => (needsNow() ? 'danger' : undefined),
         title: () => 'Go to the next one waiting for you, on any floor: the ones that need you first, longest first (N)',
         run: waiting.goToNextWaiting,
+      },
+      {
+        id: 'command',
+        icon: '🛰️',
+        label: 'Command Center',
+        section: 'Open',
+        key: 'G',
+        title: () => 'Every agent in the building in columns: needs you, working, stuck?, done, ended (G)',
+        run: () => parts.command.toggle(),
       },
     ],
     settings,

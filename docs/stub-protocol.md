@@ -462,3 +462,25 @@ nothing is sent to it.
 ![Answering a permission prompt from the banner](img/m7-answer-banner-desktop.png)
 ![The phone: Yes / Always / No, and Maybe stuck](img/m7-answer-stuck-mobile.png)
 ![A stuck worker (nightly-import) dozing under a grey card](img/m7-stuck-desktop.png)
+
+## Command Center and Orca's Kanban status (M7, roadmap B3, B10)
+
+**B3.** **G** (or ☰ → Command Center) puts the whole building on one screen, from the roster and the
+waiting list the page already has (no new bridge calls): **🙋 Needs you** (agents asking, and decision
+gates), **⌨️ Working**, **😴 Stuck?** (B5's rule), **✅ Done** (done and unread in Orca) and **💤 Ended**
+(done and read, idle bots). A card shows the worktree, branch, floor, Kanban status, how long it has
+been so and its bubble. A click goes to its desk (by the floor list if it's on another floor), Enter
+or ⏎ goes there with its terminal (a chat agent: its conversation) open, ↗ Orca opens it in Orca, and
+an agent that asks is answered on the card as in the banner (B1: Yes / Always / No, or a line).
+With the fun on, G stays the emote wheel and the Command Center is in the ☰ menu. On a phone it is a
+row of columns you swipe through (the phone's list stays the default view there).
+
+**B10.** `orca worktree list --json` carries each worktree's `workspaceStatus` (Kanban; seen on Orca
+1.4.274: `in-progress`). The bridge passes a short lowercase id only (`cleanKanban`), on the desk's
+sign (`DeskLabel.kanban`: a coloured band across the top, e.g. IN PROGRESS yellow, IN REVIEW purple,
+DONE green, unknown ones blue), on figures (`OrcaWorkerInfo.kanban`) and in the roster. The Command
+Center filters by it (Orca status chips) and the phone's list shows it (`📋 In progress`).
+
+![Command Center](img/m7-command-center-desktop.png)
+![Command Center on a phone](img/m7-command-center-mobile.png)
+![Kanban bands on the desk signs](img/m7-kanban-signs-desktop.png)

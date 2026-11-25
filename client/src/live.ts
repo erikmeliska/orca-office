@@ -5,6 +5,7 @@
 
 import './live.css';
 import type { OrcaRosterFloor, OrcaRosterWorker, OrcaWaiting } from '@orca-office/shared/office/protocol/orca';
+import { kanbanStyle } from '@orca-office/shared/office/kanban';
 import { stuckText } from '@orca-office/shared/office/stuck';
 import { forgetBridgeToken, openBridge } from './bridge-auth.js';
 import { loadSettings } from './state/persist.js';
@@ -177,7 +178,7 @@ function render() {
     return card({
       key: w.key,
       title: w.kind === 'gate' ? '⚖️ A decision waits for you' : w.name,
-      where: [`🏢 ${w.floorName}`, p?.branch && p.branch !== w.name ? `🌿 ${p.branch}` : ''].filter(Boolean).join(' · '),
+      where: [`🏢 ${w.floorName}`, p?.branch && p.branch !== w.name ? `🌿 ${p.branch}` : '', p?.kanban ? `📋 ${kanbanStyle(p.kanban).label}` : ''].filter(Boolean).join(' · '),
       text: w.ask,
       tone: 'needs',
       since: w.since,
@@ -200,7 +201,7 @@ function render() {
   const rows = (status: string, tone: string) =>
     [...people.values()]
       .filter((w) => w.status === status && !listed.has(w.id) && !stuckIds.has(w.id))
-      .map((w) => card({ key: w.id, title: `${w.bot ? '🤖 ' : ''}${w.name}`, where: [`🏢 ${w.floorName}`, w.branch && w.branch !== w.name ? `🌿 ${w.branch}` : ''].filter(Boolean).join(' · '), text: w.summary, tone, since: w.since, workerId: w.id, deskId: w.deskId, floor: w.floor, canReply: !!w.terminal }));
+      .map((w) => card({ key: w.id, title: `${w.bot ? '🤖 ' : ''}${w.name}`, where: [`🏢 ${w.floorName}`, w.branch && w.branch !== w.name ? `🌿 ${w.branch}` : '', w.kanban ? `📋 ${kanbanStyle(w.kanban).label}` : ''].filter(Boolean).join(' · '), text: w.summary, tone, since: w.since, workerId: w.id, deskId: w.deskId, floor: w.floor, canReply: !!w.terminal }));
   const status = !st.up ? 'Reconnecting…' : !st.orca ? 'Orca offline' : '';
   const banner = status ? el('p', 'banner', `${status}${st.staleSince ? ` · last update ${ago(st.staleSince)}${ago(st.staleSince) === 'just now' ? '' : ' ago'}` : ''}`) : '';
   app.replaceChildren(
