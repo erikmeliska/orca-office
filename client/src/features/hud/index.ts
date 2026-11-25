@@ -13,7 +13,7 @@ import { saveSettings, store } from '../../state';
 import { openCharacter } from '../../ui/character';
 import { $ } from '../../ui/dom';
 import { toggleFloorMenu } from '../../ui/floormenu';
-import { openHelp } from '../../ui/hud';
+import { firstRunHint, openHelp } from '../../ui/hud';
 import { mountHud } from '../../ui/menu';
 import { openServices } from '../../ui/services';
 import { openSettings, type SettingsPane } from '../../ui/settings';
@@ -92,6 +92,11 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
     run: () => {
       hud.toggleMenu();
     },
+  });
+  // The first time: what to press (A10), once you're in.
+  const offHint = store.on('floor', () => {
+    offHint();
+    firstRunHint($('hud'));
   });
   ctx.keys.bind({
     code: 'KeyH',

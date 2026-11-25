@@ -375,3 +375,22 @@ bubble) and `since` (a gate's: when the bridge first saw it; Orca gives no time)
 ![Workers panel across floors](img/m6-workers-panel-desktop.png)
 ![⌘K finds a worker on another floor](img/m6-palette-desktop.png)
 ![Workers panel on a phone](img/m6-workers-panel-mobile.png)
+
+## Stale data, the overview, the map and the help (M6, roadmap A8–A10)
+
+- **Stale (A8)**: while the bridge is unreachable or Orca's plugin is gone, the world turns grey,
+  the needs-you signals dim and the notice says `· last update 2 min ago`, so an old "working" or
+  "needs you" doesn't pass for a live one.
+- **Overview (A9)**: the office opens with the camera high over the south wall looking down at both
+  rows of desks, not at the lobby. A step, a jump or a click puts you back in your own eyes; **V**
+  goes up again. **M** opens the floor's map: every desk from straight above in its state's colour,
+  and a list of the desks with an agent or a sign; a click (or Enter) takes you to that desk.
+- **Help (A10)**: seven rows for looking after the agents (N, ⌘K, E, O, R, M, V), everything else
+  folded under "All controls" (the agent-office keys that do nothing on Orca are gone). The first
+  time the office opens on a computer, one line says "Press N … M … H"; closing it or pressing N
+  puts it away for good (this browser).
+
+![Overview](img/m6-overview-desktop.png)
+![Map](img/m6-map-desktop.png)
+![Help](img/m6-help-desktop.png)
+![Stale](img/m6-stale-desktop.png)

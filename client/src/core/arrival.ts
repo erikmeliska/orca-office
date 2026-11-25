@@ -11,7 +11,7 @@ import { ROOF, ROOF_NAME } from '@orca-office/shared/office/rooftop';
 import { renderTitle } from '../shared/title';
 import { lastFloor, lastSpot, store, type Spot } from '../state';
 import { openChangesFor, routeChangesMessage } from '../ui/changes';
-import { $, toast } from '../ui/dom';
+import { $, timeAgo, toast } from '../ui/dom';
 import { routeElevatorMessage } from '../ui/elevator';
 import { providerLabel } from '../ui/provider';
 import { routePullMessage } from '../ui/pull';
@@ -45,7 +45,23 @@ export function installArrival(ctx: Ctx, core: CoreState, parts: ArrivalParts) {
 
   // The bridge is down (Reconnecting…), or up without Orca behind it (Orca offline: its plugin isn't connected).
   let orcaOnline = true;
-  const showOrca = () => $('orca-offline').classList.toggle('hidden', orcaOnline || !net.up);
+  /**
+   * Stale (M6 A8): while the bridge or Orca is gone, what the office shows is only what it last
+   * heard. The world greys out and the notice says how old it is, so an old "working" or "needs you"
+   * doesn't pass for a live one.
+   */
+  let staleSince: number | null = null;
+  const ago = () => (staleSince === null ? '' : ` · last update ${timeAgo(staleSince)}`);
+  const showOrca = () => {
+    const stale = !net.up || !orcaOnline;
+    if (stale && staleSince === null) staleSince = Date.now();
+    if (!stale) staleSince = null;
+    document.body.classList.toggle('stale', stale);
+    $('conn').textContent = `Reconnecting…${ago()}`;
+    $('orca-offline').textContent = `Orca offline · waiting for the orca-office plugin${ago()}`;
+    $('orca-offline').classList.toggle('hidden', orcaOnline || !net.up);
+  };
+  setInterval(() => staleSince !== null && showOrca(), 15_000);
   net.onStatus((up) => {
     $('conn').classList.toggle('hidden', up);
     showOrca();

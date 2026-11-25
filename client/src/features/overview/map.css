@@ -1,0 +1,18 @@
+/* The floor map (M): the floor from straight above, a desk per rectangle in its state's colour. */
+.modal.map { width: min(820px, 100%); }
+.floor-map { display: block; width: 100%; height: auto; max-height: 55vh; }
+.floor-map .map-floor { fill: #f1e3c8; stroke: #2b2d42; stroke-width: 0.12; }
+.floor-map .map-desk rect { stroke: #2b2d42; stroke-width: 0.06; }
+.floor-map .map-desk.taken { cursor: pointer; }
+.floor-map .map-desk.needs rect { stroke: #b3123d; stroke-width: 0.16; }
+.floor-map .map-desk:focus-visible rect { stroke: #4f86f7; stroke-width: 0.2; outline: none; }
+.map-legend { display: flex; gap: 14px; margin: 8px 0; }
+.map-legend > span, .map-row { display: inline-flex; align-items: center; gap: 6px; }
+.map .dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; border: 1.5px solid var(--ink); }
+.map-list { list-style: none; margin: 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 6px; }
+.map-row { width: 100%; padding: 6px 10px; border: 2px solid var(--ink); border-radius: 10px; background: #fff; font: inherit; font-weight: 800; text-align: left; cursor: pointer; }
+.map-row:hover, .map-row:focus-visible { background: var(--paper-2); }
+.map-row .grow { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.map-row .note { font-size: 12px; color: var(--muted); }
+/* In the overview, the hint to click and look around is beside the point. */
+body.overview #crosshair { display: none; }

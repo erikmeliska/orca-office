@@ -1,2 +1,9 @@
 /* The controls help (openHelp). The HUD panels (people.ts, workers-panel.ts, chat.ts, features/coffee/meter.ts) are styled in styles/hud.css. */
 .help-grid { display: grid; grid-template-columns: auto 1fr; gap: 8px 14px; align-items: center; font-weight: 700; }
+.help-more { margin-top: 14px; }
+.help-more summary { cursor: pointer; font-weight: 900; margin-bottom: 10px; }
+
+/* The first time the office opens (M6 A10): what to press, once. */
+.first-hint { position: absolute; left: 50%; bottom: 72px; transform: translateX(-50%); display: flex; align-items: center; gap: 10px; max-width: calc(100vw - 32px); padding: 10px 14px; border: 3px solid var(--ink); border-radius: 14px; background: var(--paper); box-shadow: 0 4px 0 var(--ink); font-weight: 800; pointer-events: auto; z-index: 5; }
+.first-hint .key { margin: 0 2px; }
+.first-hint button { border: 0; background: none; font: inherit; font-size: 16px; cursor: pointer; }

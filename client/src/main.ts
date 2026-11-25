@@ -40,6 +40,7 @@ import { installGong } from './features/gong';
 import { installGallery, installHanging } from './features/hanging';
 import { installHerald } from './features/herald';
 import { installHud } from './features/hud';
+import { installOverview } from './features/overview';
 import { installNeedsYou } from './features/needsyou';
 import { installHandoffs } from './features/handoffs';
 import { installProjectBoard } from './ui/project';
@@ -124,6 +125,7 @@ parts.views = installWorkerViews(ctx, core, parts);
 parts.actions = installWorkerActions(ctx, core, parts);
 parts.waiting = installWaiting(ctx, core, parts);
 parts.needsYou = installNeedsYou(ctx, parts);
+parts.overview = installOverview(ctx, core, parts);
 // M4: deliveries between agents (#34) and the project room's board (#29, #30).
 const handoffs = installHandoffs(ctx);
 installProjectBoard(ctx.net);
