@@ -52,10 +52,12 @@ const ERRORS: Record<string, string> = {
   prompt_changed: 'It is asking something new — look again before answering',
   not_working: 'It is not working, so there is nothing to interrupt',
   nothing_to_resume: 'Orca has no earlier session here that can be resumed',
+  unknown_automation: 'That automation is gone — open the list again',
+  changed: 'What the cleanup would remove changed — look at the new list first',
 };
 export const say = (e: string | undefined) => (e && ERRORS[e]) || `Orca said no${e ? ` (${e})` : ''}`;
 
-const DONE: Partial<Record<OrcaActionKind, string>> = { open: '↗ Opened in Orca', read: '✓ Marked read', comment: '✓ Comment saved', answer: '✓ Answered', steer: '✓ Sent', resume: '↻ Resuming in Orca…' };
+const DONE: Partial<Record<OrcaActionKind, string>> = { open: '↗ Opened in Orca', read: '✓ Marked read', comment: '✓ Comment saved', answer: '✓ Answered', steer: '✓ Sent', resume: '↻ Resuming in Orca…', automations: '▶ Started in Orca', cleanup: '🧹 Orca cleaned up' };
 
 /** Waiting for a desk's comment (orca.desk), and new tasks being started. */
 const deskWaiters = new Map<string, (comment: string) => void>();

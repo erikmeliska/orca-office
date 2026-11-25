@@ -469,6 +469,11 @@ export class LiveModel {
     return this.bots.find((b) => b.name === name) ?? null;
   }
 
+  /** The local worktree at `path` (a search hit's cwd, M7 B8), if Orca has one there. */
+  workspaceAt(path: string): OrcaWorkspace | null {
+    return this.byPath.get(`${LOCAL}|${path.replace(/\/+$/, '')}`) ?? null;
+  }
+
   /** The Orca workspace at a seat on a floor (any seat of its desk cluster), when it is one Orca lists. */
   deskWorkspace(floorId: string, deskId: string): OrcaWorkspace | null {
     const key = this.deskSeats.get(floorId)?.get(deskId);

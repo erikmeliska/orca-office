@@ -19,6 +19,7 @@ import { mountHud } from '../../ui/menu';
 import { openServices } from '../../ui/services';
 import { isOrca } from '../../ui/orca';
 import { openReviewQueue, reviewItems } from '../../ui/review';
+import { openAutomations, openCleanup } from '../../ui/extras';
 import { openSettings, type SettingsPane } from '../../ui/settings';
 import { openUpgrade } from '../../ui/upgrade';
 import { describeSky } from '../../world/sky';
@@ -97,6 +98,25 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
         chip: () => `${reviewItems().length} to review`,
         title: () => 'Done agents on this floor whose pull request waits on a review: checks, size, how long',
         run: () => openReviewQueue((id) => waiting.goToWorker(id)),
+      },
+      // Orca's automations and its cleanup rules (M7 B9, B11).
+      {
+        id: 'automations',
+        icon: '🕒',
+        label: 'Automations',
+        section: 'Open',
+        shown: () => isOrca(),
+        title: () => 'Orca’s automations: when each runs next, how the last run went, Run now',
+        run: () => openAutomations(net),
+      },
+      {
+        id: 'cleanup',
+        icon: '🗑️',
+        label: 'Clean up',
+        section: 'Open',
+        shown: () => isOrca(),
+        title: () => 'What Orca’s cleanup rules would remove now, and why (looking removes nothing)',
+        run: () => openCleanup(net),
       },
       {
         id: 'command',

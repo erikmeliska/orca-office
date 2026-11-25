@@ -117,6 +117,35 @@ else if (args.startsWith('agent read') && BOTS.some((b) => botChats(b.name).some
   const w = [...WORKSPACES, ...st.workspaces].find((x) => x.id === id);
   if (!w) process.exit(1);
   out({ worktree: { id, comment: st.comments[id] ?? '', isUnread: !!w.status?.unread && !st.read.includes(id) } });
+} else if (args.startsWith('search')) {
+  // M7 B8: made-up sessions whose snippet mentions the query.
+  const q = (flag('--query') ?? argv[1] ?? '').slice(0, 40);
+  const hit = (agent, title, name, ago, said) => ({ agent, sessionId: `made-up-${name}`, title, cwd: `/code/demo-web/${name}`, branch: name, updatedAt: new Date(Date.now() - ago).toISOString(), messageCount: 12, score: 1, evidence: { snippet: `…${said.replace('%', q)}…`, role: 'assistant', timestamp: new Date().toISOString() }, source: { presence: 'present', filePath: '/made/up.jsonl' }, resumeCommand: 'made-up' });
+  out({ kind: 'results', hits: [hit('claude', 'Fix the login redirect', 'fix-login', 3600_000, 'the % handler now retries once'), hit('codex', 'Dark mode palette', 'dark-mode', 86400_000, 'moved the % check behind the flag'), { ...hit('claude', 'An old spike', 'gone-branch', 5 * 86400_000, 'tried % in a spike'), cwd: '/code/demo-web/gone-branch' }], page: { hasMore: false }, generation: 1, truncated: {}, durationMs: 12 });
+} else if (args.startsWith('automations list')) {
+  // M7 B9: made-up automations (the prompts are never sent on by the bridge).
+  const a = (id, name, enabled, rrule, nextIn, bot) => ({ id, name, prompt: 'made-up prompt', enabled, rrule, nextRunAt: Date.now() + nextIn, ...(bot ? { bot: { botId: 'b', runsIn: 'home', resultsTo: 'home' } } : {}), workspaceMode: 'existing' });
+  out({ automations: [a('11111111-1111-4111-8111-111111111111', 'Morning digest of open PRs', true, 'FREQ=DAILY;BYHOUR=8;BYMINUTE=0', 5 * 3600_000, true), a('22222222-2222-4222-8222-222222222222', 'Nightly dependency check', true, '0 2 * * *', 13 * 3600_000, false), a('33333333-3333-4333-8333-333333333333', 'Friday release notes', false, '0 16 * * 5', 3 * 86400_000, true)], items: [], orphanCount: 0 });
+} else if (args.startsWith('automations runs')) {
+  out({ runs: [
+    { id: 'r1', automationId: '11111111-1111-4111-8111-111111111111', status: 'completed', trigger: 'scheduled', startedAt: Date.now() - 19 * 3600_000 },
+    { id: 'r2', automationId: '22222222-2222-4222-8222-222222222222', status: 'failed', trigger: 'scheduled', startedAt: Date.now() - 11 * 3600_000, errorCode: 'agentExited' },
+    { id: 'r3', automationId: '33333333-3333-4333-8333-333333333333', status: 'skipped_unavailable', trigger: 'scheduled', startedAt: Date.now() - 4 * 86400_000, errorCode: 'botPaused' },
+    ...(st.ran ?? []).map((id, i) => ({ id: `ran-${i}`, automationId: id, status: 'queued', trigger: 'manual', startedAt: Date.now() })),
+  ], nextCursor: null });
+} else if (args.startsWith('automations run')) {
+  st.ran = [...(st.ran ?? []), argv[2]];
+  save(st);
+  out({ run: { id: 'made-up-run', status: 'queued' } });
+} else if (args.startsWith('workspace cleanup preview')) {
+  // M7 B11: what made-up cleanup rules would remove (nothing real is touched, even by `run`).
+  const row = (repo, name, action, cause) => ({ worktreeId: `repo-${repo}::/code/${repo}/${name}`, repoId: `repo-${repo}`, repoName: repo, displayName: name, branch: `refs/heads/${name}`, path: `/code/${repo}/${name}`, evaluation: { action, cause } });
+  const rows = st.cleaned ? [] : [row('demo-web', 'old-spike', 'remove', 'merged'), row('demo-api', 'try-cache', 'remove', 'inactive')];
+  out({ evaluatedAt: Date.now(), rows: [...rows, row('demo-web', 'main', 'keep', 'not-removable'), row('demo-web', 'fix-login', 'keep', 'has-agent'), row('demo-api', 'main', 'keep', 'not-removable')] });
+} else if (args.startsWith('workspace cleanup run')) {
+  st.cleaned = true;
+  save(st);
+  out({ removed: [], kept: [], failed: [] });
 } else {
   console.error(`fake orca: ${args} not faked`);
   process.exit(2);

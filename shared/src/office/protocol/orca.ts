@@ -55,7 +55,7 @@ export const ORCA_AGENT_LABELS: Partial<Record<OrcaAgent, string>> = { antigravi
 /** Bounds the bridge holds the page's messages to (and the worker its calls). */
 export const ORCA_LIMITS = { send: 4096, prompt: 8000, comment: 2000, name: 60 } as const;
 
-export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal' | 'chat' | 'bot' | 'answer' | 'steer' | 'resume';
+export type OrcaActionKind = 'type' | 'open' | 'read' | 'comment' | 'create' | 'terminal' | 'chat' | 'bot' | 'answer' | 'steer' | 'resume' | 'search' | 'automations' | 'cleanup';
 
 /** One entry of a chat agent's conversation, read-only (`orca agent read`): a message, or a tool it used. */
 export type OrcaChatEntry = { role: 'user' | 'assistant'; text: string; shortened?: boolean; mail?: OrcaMailFrom } | { tool: string; state: string | null };
@@ -133,6 +133,47 @@ export interface OrcaForgeItem {
 }
 
 export type OrcaCi = 'passing' | 'failing' | 'pending' | 'none';
+
+/**
+ * A session `orca search` found (M7 B8): its title and the matching words, cut to bubbles; the
+ * worktree it ran in, and its desk when Orca has that open. `index` names it to `orca.search.open`.
+ */
+export interface OrcaSearchHit {
+  index: number;
+  agent: string;
+  title: string;
+  snippet: string;
+  branch?: string;
+  updatedAt?: number;
+  worktree?: string;
+  floor?: string;
+  deskId?: string;
+  /** Its worktree is one Orca has: "Open in Orca" can show it. */
+  canOpen: boolean;
+}
+
+/** An Orca automation (M7 B9): never its prompt. */
+export interface OrcaAutomation {
+  id: string;
+  /** Cut to 60. */
+  name: string;
+  enabled: boolean;
+  /** Its schedule as Orca keeps it: a cron line or an RRULE. */
+  schedule: string;
+  nextRunAt: number | null;
+  /** It runs as a bot. */
+  bot: boolean;
+  last?: { status: string; at: number; error?: string };
+}
+
+/** A workspace Orca's cleanup rules would remove now, and why (M7 B11). */
+export interface OrcaCleanupRow {
+  name: string;
+  repo: string;
+  branch?: string;
+  action: string;
+  cause: string;
+}
 
 /**
  * A floor's repo-wide board (v2, design #17, #38), read through the bridge's ForgeAdapter (`gh`,
@@ -242,6 +283,18 @@ export type OrcaClientMsg =
   | { t: 'orca.steer'; workerId: string; steer: OrcaSteer }
   /** Resume the last session of the desk's worktree (M7 B13): Orca's `agent.resume` in a new terminal there. */
   | { t: 'orca.resume'; deskId: string }
+  /** Search the sessions' full text (M7 B8): 3–200 characters; `orca.search` answers with the same reqId. */
+  | { t: 'orca.search'; reqId: string; query: string }
+  /** Show a hit of the last search's worktree in Orca, by its index. */
+  | { t: 'orca.search.open'; index: number }
+  /** Orca's automations (M7 B9): `orca.automations` answers. */
+  | { t: 'orca.automations' }
+  /** Run one now: only with `confirm` (the page asked first). */
+  | { t: 'orca.automations.run'; id: string; confirm: true }
+  /** What Orca's cleanup rules would remove (M7 B11): `orca.cleanup` answers. */
+  | { t: 'orca.cleanup.preview' }
+  /** Run them: `confirm: 'remove'` and the number the preview showed, or nothing happens. */
+  | { t: 'orca.cleanup.run'; confirm: 'remove'; expect: number }
   /** Mark the desk's worktree read in Orca (clears its unread dot). */
   | { t: 'orca.read'; deskId: string }
   /** Set the desk's worktree comment in Orca ('' clears it). */
@@ -293,6 +346,12 @@ export type OrcaServerMsg =
   | { t: 'orca.roster'; floors: OrcaRosterFloor[] }
   /** Everything in the building waiting for you, longest first (M6 A1/A2). Sent after `welcome` and on change. */
   | { t: 'orca.waiting'; items: OrcaWaiting[] }
+  /** The sessions a search found (M7 B8). */
+  | { t: 'orca.search'; reqId: string; hits: OrcaSearchHit[] }
+  /** Orca's automations, enabled first, soonest first (M7 B9). */
+  | { t: 'orca.automations'; items: OrcaAutomation[] }
+  /** What the cleanup rules would remove now, and how many stay by why (M7 B11). */
+  | { t: 'orca.cleanup'; evaluatedAt: number | null; remove: OrcaCleanupRow[]; keep: Record<string, number> }
   /** A desk's worktree in Orca: its comment and whether it is unread. */
   | { t: 'orca.desk'; deskId: string; comment: string; unread: boolean }
   /**
