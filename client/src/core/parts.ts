@@ -36,6 +36,7 @@ import type { installTelescope } from '../features/telescope';
 import type { installTv } from '../features/tv';
 import type { installWaiting } from '../features/waiting';
 import type { installOverview } from '../features/overview';
+import type { installCommandCenter } from '../features/command';
 import type { installWalking } from '../features/walking';
 import type { installWorkerActions } from '../features/workers/actions';
 import type { installWorkerViews } from '../features/workers/views';
@@ -105,6 +106,8 @@ export interface Parts {
   /** The overview from above and the floor map (M6 A9). */
   overview: Made<typeof installOverview>;
   needsYou: Made<typeof installNeedsYou>;
+  /** The whole building in columns, on G (M7 B3). */
+  command: Made<typeof installCommandCenter>;
   bookshelf: Made<typeof installBookshelf>;
   bar: Made<typeof installBar>;
   coffee: Made<typeof installCoffee>;

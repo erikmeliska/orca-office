@@ -6,8 +6,8 @@
 /** What you can walk up to and use that is only fun. */
 export const FUN_KINDS: ReadonlySet<string> = new Set(['cabinet', 'gong', 'ball', 'bar', 'dj', 'darts', 'axe', 'decor']);
 
-/** The keys that only do fun things: chat (T, Enter), emotes (G, 1–6), hang a picture (F), drop the ball (Q). */
-export const FUN_KEYS: ReadonlySet<string> = new Set(['KeyT', 'Enter', 'KeyG', 'KeyF', 'KeyQ', ...[1, 2, 3, 4, 5, 6].flatMap((n) => [`Digit${n}`, `Numpad${n}`])]);
+/** The keys that only do fun things: chat (T, Enter), emotes (1–6; G too, but with the fun off G opens the Command Center), hang a picture (F), drop the ball (Q). */
+export const FUN_KEYS: ReadonlySet<string> = new Set(['KeyT', 'Enter', 'KeyF', 'KeyQ', ...[1, 2, 3, 4, 5, 6].flatMap((n) => [`Digit${n}`, `Numpad${n}`])]);
 
 /** The ☰ menu's fun actions, by id (see features/hud). */
 export const FUN_ACTIONS: ReadonlySet<string> = new Set(['roof', 'decor']);

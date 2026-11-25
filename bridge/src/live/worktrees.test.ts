@@ -94,3 +94,8 @@ describe('orca worktree list → desk links (#32)', () => {
     expect(pinsText([{ provider: 'github', kind: 'pr', ref: '#1' }, { provider: 'github', kind: 'issue', ref: '#2' }, { provider: 'linear', kind: 'issue', ref: 'E-1' }])).toBe('🔀 #1 · 📌 #2 +1');
   });
 });
+
+test("a worktree's Kanban status comes through as a short id, nothing else (M7 B10)", () => {
+  const [a, b, c] = parseWorktreeList({ result: { worktrees: [row({ workspaceStatus: 'in-progress' }), row({ workspaceStatus: 'In-Review' }), row({ workspaceStatus: '<b>review</b>' })] } });
+  expect([a!.kanban, b!.kanban, c!.kanban]).toEqual(['in-progress', 'in-review', null]);
+});

@@ -7,8 +7,8 @@ test('the fun is off by default: its props do nothing and its keys are taken (M6
   expect(usableKind('gong')).toBe(false);
   // Looking after the agents, and the dog, are never fun-only.
   for (const k of ['desk', 'elevator', 'issues', 'services', 'dog']) expect(usableKind(k)).toBe(true);
-  for (const k of ['KeyT', 'KeyG', 'Digit3', 'KeyF']) expect(FUN_KEYS.has(k)).toBe(true);
-  for (const k of ['KeyN', 'KeyE', 'KeyM', 'KeyV']) expect(FUN_KEYS.has(k)).toBe(false);
+  for (const k of ['KeyT', 'Digit3', 'KeyF']) expect(FUN_KEYS.has(k)).toBe(true);
+  for (const k of ['KeyN', 'KeyE', 'KeyM', 'KeyV', 'KeyG']) expect(FUN_KEYS.has(k)).toBe(false);
   setFun(true);
   expect(usableKind('cabinet')).toBe(true);
   setFun(false);

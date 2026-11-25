@@ -190,6 +190,8 @@ export class LiveModel {
   /** What Orca links to each worktree on this machine, by path (`orca worktree list`, #32). */
   private linksByPath = new Map<string, OrcaLink[]>();
   private linksKey = '';
+  /** Each worktree's Kanban status by path (`workspaceStatus`, M7 B10). */
+  private kanbanByPath = new Map<string, string>();
   /** The dev servers by worktree path (`orca ports`, B7). */
   private portsByPath = new Map<string, PortRow[]>();
   /** Every worktree on this machine as `orca worktree list` gave it (lineage, #29 fallback). */
@@ -310,6 +312,11 @@ export class LiveModel {
     const lineage = JSON.stringify(local.filter((w) => w.parentId || w.childIds.length).map((w) => [w.id, w.parentId, w.childIds]));
     if (lineage !== this.lineageKey) {
       this.lineageKey = lineage;
+      this.version++;
+    }
+    const kanban = new Map(local.filter((w) => w.kanban).map((w) => [w.path, w.kanban!]));
+    if (JSON.stringify([...kanban]) !== JSON.stringify([...this.kanbanByPath])) {
+      this.kanbanByPath = kanban;
       this.version++;
     }
     const next = new Map(local.filter((w) => w.links.length).map((w) => [w.path, w.links]));
@@ -797,7 +804,8 @@ export class LiveModel {
         for (const p of ports) services.push(serviceOf(p, first?.id ?? '', sign ?? at[0], this.workspaces.get(d.key)?.branch ?? null));
       }
       const pins = [mine?.length ? pinsText(mine) : '', ports?.length ? portsText(ports) : ''].filter(Boolean).join(' · ');
-      if (sign) labels[sign] = { text: cleanLabel(`${d.hostId !== LOCAL ? '🌐 ' : ''}${d.name}${extra > 0 ? ` +${extra}` : ''}`), color: signColor(list), by: 'orca', at: 0, ...(pins ? { pins } : {}) };
+      const kanban = path ? this.kanbanByPath.get(path) : undefined;
+      if (sign) labels[sign] = { text: cleanLabel(`${d.hostId !== LOCAL ? '🌐 ' : ''}${d.name}${extra > 0 ? ` +${extra}` : ''}`), color: signColor(list), by: 'orca', at: 0, ...(pins ? { pins } : {}), ...(kanban ? { kanban } : {}) };
       for (const s of at) if (WING_IDS.has(s)) wing = 2;
     }
     // Servers in this repository's worktrees that have no desk here (Orca has them closed).
@@ -825,6 +833,8 @@ export class LiveModel {
   private worker(a: AgentRec, deskId: string, d: DeskRec, nth = 0): WorkerInfo {
     const h = hash(a.paneKey);
     const branch = d.hostId === LOCAL ? this.workspaces.get(d.key)?.branch : null;
+    const path = d.hostId === LOCAL ? this.workspaces.get(d.key)?.path : undefined;
+    const kanban = path ? this.kanbanByPath.get(path) : undefined;
     this.workerIds.set(`a-${h.toString(36)}`, a.paneKey);
     const status = STATUS[a.shown];
     const tag = [a.kind === 'chat' ? '💬' : '', a.hostId !== LOCAL ? `🌐 ${hostLabel(a.hostId)}` : ''].filter(Boolean).join(' ');
@@ -853,6 +863,7 @@ export class LiveModel {
         ...(branch ? { branch: branch.replace(/^refs\/heads\//, '') } : {}),
         ...(status === 'needs_input' ? { asks: a.shown === 'blocked' ? 'permission' : 'question' } : {}),
         ...(working ? { quietSince: a.quietSince } : {}),
+        ...(kanban ? { kanban } : {}),
       },
       ...(working && a.action ? { action: a.action } : {}),
       ...(working && a.activity ? { activity: a.activity } : {}),
@@ -1156,6 +1167,9 @@ function roster(floors: LiveFloor[]): OrcaRosterFloor[] {
         ...(w.orca?.asks ? { asks: w.orca.asks } : {}),
         ...(w.orca?.quietSince !== undefined ? { quietSince: w.orca.quietSince } : {}),
         ...(w.workingSince ? { workingSince: w.workingSince } : {}),
+        ...(w.orca?.kanban ? { kanban: w.orca.kanban } : {}),
+        ...(w.status === 'done' && !w.acked ? { unread: true } : {}),
+        ...(w.orca && !w.orca.terminal && !w.orca.remote && !w.orca.bot ? { chat: true } : {}),
       })),
     }));
 }

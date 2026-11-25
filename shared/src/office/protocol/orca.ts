@@ -21,6 +21,8 @@ export interface OrcaWorkerInfo {
   asks?: OrcaAsks;
   /** When Orca last said anything about it: a state, a tool hook, a new last message (M7 B5, stuck?). */
   quietSince?: number;
+  /** Its worktree's Kanban status in Orca (`workspaceStatus`, M7 B10): "in-progress", "in-review", … */
+  kanban?: string;
 }
 
 /** What a figure that needs you is stopped on (M7 B1). */
@@ -191,6 +193,12 @@ export interface OrcaRosterWorker {
   quietSince?: number;
   /** While working: since when (M7 B5, working for hours). */
   workingSince?: number;
+  /** Its worktree's Kanban status (M7 B10). */
+  kanban?: string;
+  /** Done and nobody has looked yet (Orca's unread dot), for the Command Center's Done / Ended (M7 B3). */
+  unread?: boolean;
+  /** A chat agent (no terminal) on this machine: Enter shows its conversation (M7 B3). */
+  chat?: boolean;
 }
 
 /** A floor of the roster: repository floors and the Staff floor (project rooms only mirror them). */

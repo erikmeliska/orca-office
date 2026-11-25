@@ -11,8 +11,8 @@ export const SUPERVISE_ROWS: readonly (readonly [string, string])[] = [
   ['E', 'At a desk: the agent’s live terminal (a chat agent’s last message). At an empty desk: a new task'],
   ['O', 'Open the desk’s worktree in Orca, its terminal focused'],
   ['R', 'Mark the desk read in Orca'],
+  ['G', 'Command Center: every agent in the building in columns (needs you, working, stuck?, done, ended). Answer from a card, click to go there, Enter to open its terminal'],
   ['M', 'The floor’s map: every desk in its state. Click one to go there'],
-  ['V', 'Overview from above, where you start. A step or a click takes you back down'],
 ];
 
 /** Rows about the games and the company, hidden with the fun off (M6 A11, see fun.ts). */
@@ -20,6 +20,7 @@ export const FUN_ROWS: ReadonlySet<string> = new Set(['🕹️', '🎉', '🏀',
 
 /** Everything else, folded away. */
 export const HELP_ROWS: readonly (readonly [string, string])[] = [
+  ['V', 'Overview from above, where you start. A step or a click takes you back down'],
   ['P', 'Prompt: type a line into the input box of the agent at the desk you face'],
   ['C', 'Comment: the note Orca keeps on the desk’s worktree'],
   ['L', 'Links: the PRs, issues and tickets Orca linked to the desk’s worktree, to open in the browser'],
@@ -40,7 +41,7 @@ export const HELP_ROWS: readonly (readonly [string, string])[] = [
   ['🚧', 'Room to grow: E at the sign on the north wall past the gong knocks through into a back office with 2 more desks, and again for 2 more. The same sign walls a row back up'],
   ['F', 'Hang a picture from the web on a wall. Look at a picture and press E to move, edit or take it down'],
   ['T', 'Chat'],
-  ['G / 1–6', 'Emote: hold G, point at one and let go (or tap G and click one), or press 1–6: wave, thumbs up, clap, dance, point, facepalm. Everyone on your floor sees it'],
+  ['G / 1–6', 'Emote (with the fun on; then the Command Center is in the ☰ menu): hold G, point at one and let go (or tap G and click one), or press 1–6: wave, thumbs up, clap, dance, point, facepalm. Everyone on your floor sees it'],
   ['🐶', 'Walk up to the office dog and press E to pet it. When a worker needs input, it runs to that desk and barks. Name it in ⚙️ Settings'],
   ['☕', 'Press E at the coffee machine in the kitchen for a minute of quicker walking and higher jumps. Three cups in a row gives you the jitters'],
   ['🕹️', 'The arcade cabinet in the lounge plays BLOCKFALL: arrows (or WASD) move and turn, Space drops, C holds, P pauses. Everyone on the floor sees your game on it, and E there watches whoever is playing. One of your workers needing input pauses it'],

@@ -12,6 +12,8 @@ export interface DeskLabel {
   at: number;
   /** A strip pinned under the sign (Orca mode): what Orca links to the desk, "🔀 #12 · 📌 #34" (#32). */
   pins?: string;
+  /** The worktree's Kanban status in Orca (M7 B10): a coloured strip along the sign's top. */
+  kanban?: string;
 }
 
 export interface FloorPlan {

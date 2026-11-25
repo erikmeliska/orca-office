@@ -98,14 +98,14 @@ const gh = (type, number, title) => ({ provider: 'github', type, number, url: `h
 const row = (repo, name, over = {}) => ({ id: `repo-${repo}::/code/${repo}/${name}`, repoId: `repo-${repo}`, projectId: `repo-${repo}`, isMainWorktree: name === 'main', path: `/code/${repo}/${name}`, hostId: 'local', displayName: name, branch: `refs/heads/${name}`, linkedPR: null, linkedIssue: null, linkedGitLabMR: null, linkedGitLabIssue: null, linkedLinearIssue: null, linkedLinearIssueOrganizationUrlKey: null, linkedWorkItem: null, linkedItems: [], parentWorktreeId: null, childWorktreeIds: [], lineage: null, ...over });
 export const WORKTREES = [
   row('demo-web', 'main'),
-  row('demo-web', 'fix-login', { linkedPR: 128, linkedIssue: 97, linkedItems: [gh('pr', 128, 'Redirect to the login page when the session expires'), gh('issue', 97, 'Expired sessions land on a blank dashboard')] }),
-  row('demo-web', 'dark-mode', { linkedLinearIssue: 'WEB-311', linkedLinearIssueOrganizationUrlKey: 'example', linkedItems: [gh('pr', 131, 'Dark mode palette tokens')] }),
-  row('demo-web', 'settings-migration', { linkedWorkItem: { key: 'OPS-42', url: 'https://example.atlassian.net/browse/OPS-42', title: 'Move settings to the new table' } }),
+  row('demo-web', 'fix-login', { workspaceStatus: 'in-review', linkedPR: 128, linkedIssue: 97, linkedItems: [gh('pr', 128, 'Redirect to the login page when the session expires'), gh('issue', 97, 'Expired sessions land on a blank dashboard')] }),
+  row('demo-web', 'dark-mode', { workspaceStatus: 'in-progress', linkedLinearIssue: 'WEB-311', linkedLinearIssueOrganizationUrlKey: 'example', linkedItems: [gh('pr', 131, 'Dark mode palette tokens')] }),
+  row('demo-web', 'settings-migration', { workspaceStatus: 'in-progress', linkedWorkItem: { key: 'OPS-42', url: 'https://example.atlassian.net/browse/OPS-42', title: 'Move settings to the new table' } }),
   row('demo-web', 'readme', { linkedItems: [{ provider: 'github', type: 'issue', number: 88, title: 'Install steps are out of date' }] }),
   row('demo-api', 'main'),
-  row('demo-api', 'nightly-import'),
+  row('demo-api', 'nightly-import', { workspaceStatus: 'in-progress' }),
   row('demo-api', 'rate-limits'),
-  row('demo-api', 'search-speed', { linkedGitLabMR: 17, linkedItems: [{ provider: 'gitlab', type: 'issue', number: 9, url: 'https://gitlab.com/example/demo-api/-/issues/9', title: 'Search takes 4 s on big accounts' }] }),
+  row('demo-api', 'search-speed', { workspaceStatus: 'todo', linkedGitLabMR: 17, linkedItems: [{ provider: 'gitlab', type: 'issue', number: 9, url: 'https://gitlab.com/example/demo-api/-/issues/9', title: 'Search takes 4 s on big accounts' }] }),
 ];
 
 // A made-up orchestration Run (#29, #30): ReleaseBot coordinates (it mails the workers), two

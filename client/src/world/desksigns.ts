@@ -1,4 +1,5 @@
 import * as THREE from 'three';
+import { kanbanStyle } from '@orca-office/shared/office/kanban';
 import { DESKS, DESK_BY_ID, DESK_SIZE, WALL_HEIGHT, WING_DESKS, type DeskDef } from '@orca-office/shared/office/layout';
 import { signInk, type DeskLabel } from '@orca-office/shared/office/floorplan';
 import type { Fixture } from './office/fixture';
@@ -64,17 +65,41 @@ function paintFace(canvas: HTMLCanvasElement, label: DeskLabel) {
   ctx.roundRect(22, 22, w - 44, h - 44, 34);
   ctx.stroke();
   ctx.globalAlpha = 1;
+  // The worktree's Kanban status in Orca (M7 B10): a coloured band across the top, its name in it.
+  const band = label.kanban ? Math.round(h * 0.22) : 0;
+  if (label.kanban) paintKanban(ctx, label.kanban, w, band);
   // Orca's links pinned along the bottom (#32): a sticky strip, the name above it.
   const strip = label.pins ? Math.round(h * 0.46) : 0;
-  const { lines, size } = fit(ctx, label.text, w - 120, h - 70 - strip);
+  const { lines, size } = fit(ctx, label.text, w - 120, h - 70 - strip - band);
   ctx.font = FONT(size);
   ctx.fillStyle = ink;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
   const lh = size * 1.02;
-  const mid = (h - strip) / 2 + (strip ? 10 : 0);
+  const mid = band + (h - strip - band) / 2 + (strip ? 10 : 0);
   lines.forEach((line, i) => ctx.fillText(line, w / 2, mid + (i - (lines.length - 1) / 2) * lh + size * 0.04));
   if (label.pins) paintPins(ctx, label.pins, w, h, strip);
+}
+
+/** The Kanban band: the status's colour across the top of the sign, its name in capitals. */
+function paintKanban(ctx: CanvasRenderingContext2D, status: string, w: number, band: number) {
+  const k = kanbanStyle(status);
+  ctx.save();
+  ctx.fillStyle = k.color;
+  ctx.beginPath();
+  ctx.roundRect(0, 0, w, band, [0, 0, 18, 18]);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(0,0,0,.2)';
+  ctx.fillRect(0, band - 6, w, 6);
+  let size = Math.round(band * 0.62);
+  ctx.font = FONT(size);
+  const text = k.label.toUpperCase();
+  while (size > 20 && ctx.measureText(text).width > w - 80) ctx.font = FONT((size -= 3));
+  ctx.fillStyle = k.ink;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(text, w / 2, band / 2);
+  ctx.restore();
 }
 
 /** The links strip: a yellow note pinned over the sign's bottom edge. */
@@ -161,7 +186,7 @@ export function buildDeskSigns(): DeskSigns {
     return { root, key: keyOf(label, back), canvas, tex, label };
   };
 
-  const keyOf = (label: DeskLabel, back: boolean) => `${label.text}|${label.color}|${label.pins ?? ''}|${back}`;
+  const keyOf = (label: DeskLabel, back: boolean) => `${label.text}|${label.color}|${label.pins ?? ''}|${label.kanban ?? ''}|${back}`;
   const drop = (h: Hung) => {
     h.root.removeFromParent();
     h.root.traverse((o) => {

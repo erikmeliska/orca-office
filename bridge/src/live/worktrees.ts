@@ -15,6 +15,7 @@
  * original dropped. Nothing here is logged or stored.
  */
 import { toBubble } from '@orca-office/shared';
+import { cleanKanban } from '@orca-office/shared/office/kanban';
 import { ORCA_LINK_TITLE, ORCA_LINKS_PER_DESK, type OrcaLink } from '@orca-office/shared/office/protocol/orca';
 
 export interface OrcaWorktree {
@@ -32,6 +33,8 @@ export interface OrcaWorktree {
   /** Its branch without `refs/heads/` (null: detached or unknown); the repo board matches pull requests by it (#38). */
   branch: string | null;
   links: OrcaLink[];
+  /** Its Kanban status in Orca (`workspaceStatus`, M7 B10): a short id, or null. */
+  kanban?: string | null;
   parentId: string | null;
   childIds: string[];
 }
@@ -144,6 +147,7 @@ export function parseWorktreeList(json: unknown): OrcaWorktree[] {
       name: str(w.displayName) ?? path.split('/').pop() ?? id,
       branch: (str(w.branch) ?? str(obj(w.git)?.branch))?.replace(/^refs\/heads\//, '') ?? null,
       links,
+      kanban: cleanKanban(w.workspaceStatus),
       parentId: str(w.parentWorktreeId) ?? str(obj(w.lineage)?.parentWorktreeId),
       childIds: Array.isArray(w.childWorktreeIds) ? w.childWorktreeIds.filter((c): c is string => typeof c === 'string' && c !== '') : [],
     });
