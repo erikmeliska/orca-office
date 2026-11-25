@@ -15,6 +15,7 @@ import { STATUS_LABEL, toast } from '../../ui/dom';
 import { paletteOpen, togglePalette, type PaletteEntry } from '../../ui/palette';
 import { openIssue, openPull } from '../../ui/pull';
 import { openProjectBoard } from '../../ui/project';
+import { funOn } from '../../fun';
 import { openServices, serviceOwner, serviceUrl } from '../../ui/services';
 import { IS_MAC } from '../../ui/termkeys';
 import type { InteractKind, Interactable } from '../../world/types';
@@ -105,7 +106,7 @@ export function installPalette(ctx: Ctx, parts: PaletteParts) {
       walk: free ? () => walkThen(deskSpot(free)!, free.label, hireAt(free), free) : undefined,
     });
     out.push({ icon: '⚙️', kind: 'Action', title: 'Settings', keywords: ['preferences', 'options'], open: () => parts.hud.showSettings() });
-    out.push({ icon: '🖼️', kind: 'Action', title: 'Hang a picture', detail: 'On a wall of this floor', keywords: ['decorate', 'frame', 'art'], open: hanging.startHanging });
+    if (funOn()) out.push({ icon: '🖼️', kind: 'Action', title: 'Hang a picture', detail: 'On a wall of this floor', keywords: ['decorate', 'frame', 'art'], open: hanging.startHanging });
     out.push({ icon: '🔎', kind: 'Action', title: 'Search the chat and every terminal', keywords: ['find'], open: showSearch });
 
     out.push(at('services', 'the Services board', { icon: '🌐', kind: 'Board', title: 'Services board', detail: 'Dev servers running in this floor’s worktrees', open: () => openServices() }));

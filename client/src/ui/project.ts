@@ -69,7 +69,7 @@ export function openProjectBoard() {
         ...p.gates.map((g) => {
           const go = h('button.btn.primary', { type: 'button', disabled: !g.seat, title: g.seat ? 'Open the desk this decision blocks in Orca' : 'No desk to open: decide in Orca' }, '↗ Open in Orca') as HTMLButtonElement;
           go.addEventListener('click', () => g.seat && net?.send({ t: 'orca.open', deskId: g.seat }));
-          return h('div.pb-gate', {}, h('div.pb-q', {}, g.question ?? 'A decision'), g.options.length ? h('div.pb-opts', {}, ...g.options.map((o) => h('span.pb-opt', {}, o))) : '', go);
+          return h('div.pb-gate', {}, h('div.pb-q', {}, g.question ?? 'A decision'), g.options.length ? h('div.pb-opts', { title: 'The answers Orca offers: decide in Orca' }, 'Options: ', g.options.join(' · ')) : '', go);
         }),
       );
     }

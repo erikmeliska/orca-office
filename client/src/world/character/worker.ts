@@ -1,3 +1,4 @@
+import { reducedMotion } from '../../motion';
 import * as THREE from 'three';
 import type { Theme, WorkerAction, WorkerStatus, WorkerTask } from '@orca-office/shared/office/protocol';
 import { isAsleep, type WorkerPr } from '@orca-office/shared/office/status';
@@ -182,6 +183,8 @@ export class Worker {
 
   /** Just finished: a quick spin and a hop. */
   celebrate() {
+    // Less motion asked for (M6 A13): no spin and hop.
+    if (reducedMotion()) return;
     this.twirlT = 0;
     this.cheer(1.2);
   }
@@ -277,7 +280,7 @@ export class Worker {
    * ball, and hops back down into its seat. Asked again mid-dance, it stays up and dances on.
    */
   dance(stage: Stage) {
-    if (this.leaving) return;
+    if (this.leaving || reducedMotion()) return;
     const d = this.dancing;
     if (!d) {
       this.dancing = { stage, t: 0 };

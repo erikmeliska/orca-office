@@ -4,6 +4,7 @@
  */
 import type { Ctx } from '../core/context';
 import type { Parts } from '../core/parts';
+import { FUN_KEYS, funOn } from '../fun';
 import { DESK_KEYS } from '../interaction';
 import { isTyping } from '../player';
 import { modalOpen } from '../ui/dom';
@@ -14,6 +15,10 @@ import { modalOpen } from '../ui/dom';
  */
 export function installKeyGuards(ctx: Ctx, parts: Pick<Parts, 'focus'>) {
   const { player } = ctx;
+  // A button has the focus (Tab, M6 A14): Enter and Space press it, nothing else.
+  ctx.keys.add('guard', (e) => (e.code === 'Space' || e.code === 'Enter' || e.code === 'NumpadEnter') && document.activeElement instanceof HTMLButtonElement);
+  // With the fun off (M6 A11), its keys do nothing: no chat, emotes, pictures or ball.
+  ctx.keys.add('guard', (e) => !funOn() && FUN_KEYS.has(e.code) && !modalOpen() && !isTyping(e));
   // A window's open or you're typing somewhere, or it's a shortcut: the key isn't the office's.
   ctx.keys.add('guard', (e) => modalOpen() || isTyping(e) || e.metaKey || e.ctrlKey || e.altKey);
   // Closing the last window didn't give you the mouse back: any key but Esc takes it (see backToGame).

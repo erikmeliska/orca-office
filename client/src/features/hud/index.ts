@@ -8,6 +8,7 @@ import type { Ctx } from '../../core/context';
 import type { CoreState } from '../../core/ctx';
 import { builtFloors } from '../../core/floors';
 import type { Parts } from '../../core/parts';
+import { funOn } from '../../fun';
 import { pillLabel } from '../../waiting-all';
 import { saveSettings, store } from '../../state';
 import { openCharacter } from '../../ui/character';
@@ -29,9 +30,10 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
   const { travel, waiting, hanging } = parts;
 
   // Buttons must not keep focus, or Space (jump) would click them again.
+  // Pressed from the keyboard (detail 0: Enter or Space on the one in focus, M6 A14), it keeps the focus for Tab to go on from.
   $('hud').addEventListener('click', (e) => {
     const btn = (e.target as HTMLElement).closest('button');
-    if (btn) setTimeout(() => btn.blur(), 0);
+    if (btn && e.detail > 0) setTimeout(() => btn.blur(), 0);
   });
   // The project in the corner is the floor you're on; click it for the list of floors to go to.
   $('project').addEventListener('click', () => {
@@ -50,8 +52,8 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
       // The office has its bookshelf for them; a map of its own may not.
       { id: 'docs', icon: '📚', label: 'Docs', section: 'Open', shown: () => !inOffice(), title: () => 'Read the project’s docs', run: parts.bookshelf.showBookshelf },
       { id: 'elevator', icon: '🛗', label: () => (inOffice() ? 'Elevator' : 'Floors'), section: 'Open', count: () => store.floors.reduce((n, f) => n + (f.id === store.floor ? 0 : f.waiting), 0), title: () => (inOffice() ? 'Ride to another project' : 'Go to another project, or add one'), run: travel.showElevator },
-      { id: 'roof', icon: '🍸', label: 'Rooftop bar', section: 'Open', shown: () => !core.upTop && inOffice() && builtFloors().length > 0, title: () => 'Ride the elevator up to the roof: a DJ, drinks and the city', run: () => travel.ride(ROOF) },
-      { id: 'decor', icon: '🖼️', label: () => (hanging.hanger.active ? 'Stop hanging the picture' : 'Hang a picture'), section: 'Together', key: 'F', shown: () => inOffice(), on: () => hanging.hanger.active, status: () => hanging.hanger.active, run: () => (hanging.hanger.active ? hanging.hanger.cancel() : hanging.startHanging()) },
+      { id: 'roof', icon: '🍸', label: 'Rooftop bar', section: 'Open', shown: () => funOn() && !core.upTop && inOffice() && builtFloors().length > 0, title: () => 'Ride the elevator up to the roof: a DJ, drinks and the city', run: () => travel.ride(ROOF) },
+      { id: 'decor', icon: '🖼️', label: () => (hanging.hanger.active ? 'Stop hanging the picture' : 'Hang a picture'), section: 'Together', key: 'F', shown: () => funOn() && inOffice(), on: () => hanging.hanger.active, status: () => hanging.hanger.active, run: () => (hanging.hanger.active ? hanging.hanger.cancel() : hanging.startHanging()) },
       { id: 'settings', icon: '⚙️', label: 'Settings', section: 'Office', run: showSettings },
       { id: 'help', icon: '❓', label: 'Controls', section: 'Office', key: 'H', run: openHelp },
       {
@@ -86,8 +88,9 @@ export function installHud(ctx: Ctx, core: CoreState, parts: HudParts) {
     settings,
     () => saveSettings(settings),
   );
+  // The ☰ menu on ` (M6 A14): Tab is the browser's again, moving the focus through the top bar.
   ctx.keys.bind({
-    code: 'Tab',
+    code: 'Backquote',
     preventDefault: true,
     run: () => {
       hud.toggleMenu();

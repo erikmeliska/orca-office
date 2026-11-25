@@ -1025,6 +1025,8 @@ function roster(floors: LiveFloor[]): OrcaRosterFloor[] {
         ...(w.orca?.branch ? { branch: w.orca.branch } : {}),
         ...(w.task?.summary ? { summary: w.task.summary } : {}),
         ...(w.orca?.bot ? { bot: true } : {}),
+        ...(w.orca?.terminal ? { terminal: true } : {}),
+        ...(w.waitingSince ?? w.workingSince ? { since: w.waitingSince ?? w.workingSince } : {}),
       })),
     }));
 }

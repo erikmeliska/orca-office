@@ -1,3 +1,4 @@
+import { funOn } from '../fun';
 import './menu.css';
 import { store, type HudPanel, type Settings, type Topic } from '../state';
 import { waitingOnSomeone } from '../notify';
@@ -213,8 +214,8 @@ export function mountHud(actions: HudAction[], settings: Settings, save: () => v
       'div.hud-menu',
       { role: 'menu', 'aria-label': 'Menu' },
       h('div.menu-col', {}, ...section('Open', rows('Open')), ...section('Together', rows('Together'))),
-      h('div.menu-col', {}, ...section('Show on screen', PANELS.map(toggle)), ...section('Office', rows('Office'))),
-      h('p.menu-foot', {}, 'Pin what you use most to keep it on the top bar. ', h('kbd', {}, 'Tab'), ' opens and closes this menu.'),
+      h('div.menu-col', {}, ...section('Show on screen', PANELS.filter((p) => p.id !== 'chat' || funOn()).map(toggle)), ...section('Office', rows('Office'))),
+      h('p.menu-foot', {}, 'Pin what you use most to keep it on the top bar. ', h('kbd', {}, '`'), ' opens and closes this menu; Tab moves through it.'),
     );
     // On the window, so the keys work wherever focus is while the menu is up.
     const onKey = (e: KeyboardEvent) => menuKey(el, e);
@@ -264,13 +265,13 @@ export function mountHud(actions: HudAction[], settings: Settings, save: () => v
       case 'ArrowLeft':
         next = onPin ? at?.previousElementSibling : null;
         break;
-      case 'Tab':
-        // Not on to the office's own Tab, which would open it again, or past the menu to what's behind it.
-        e.preventDefault();
-        e.stopPropagation();
-        menu?.close();
-        return;
       default:
+        // ` puts it away again (the key that opened it, M6 A14); Tab moves on through it as anywhere.
+        if (e.code === 'Backquote') {
+          e.preventDefault();
+          e.stopPropagation();
+          menu?.close();
+        }
         return;
     }
     e.preventDefault();

@@ -1,134 +1,203 @@
-import { PROTOCOL_VERSION } from '@orca-office/shared';
+// The office as a list (M6, roadmap A12): what a phone (or a narrow window) gets instead of the 3D
+// office. Everyone in the building who needs you, then who's working and who's done, each with
+// Reply (a line typed into a terminal agent) and Open in Orca. The same socket and protocol as the
+// 3D office; agent text is only ever the bridge's short bubble.
+
 import './live.css';
-import {
-  applySnapshot,
-  applyStatus,
-  emptyOffice,
-  needsYou,
-  workspaceRank,
-  type Office,
-  type SnapshotMessage,
-  type StatusEvent,
-  type Workspace,
-} from './office-state.js';
+import type { OrcaRosterFloor, OrcaRosterWorker, OrcaWaiting } from '@orca-office/shared/office/protocol/orca';
 import { forgetBridgeToken, openBridge } from './bridge-auth.js';
 
-// Live list of what Orca reports, until the 3D office lands (M1/M2).
-const BRIDGE = `ws://127.0.0.1:${__ORCA_OFFICE_BRIDGE_PORT__}/client?list=1`;
+const BRIDGE = `ws://127.0.0.1:${__ORCA_OFFICE_BRIDGE_PORT__}/client`;
 
-let office: Office = emptyOffice();
-let bridgeUp = false;
-let pluginUp = false;
-let showIdle = false;
-const flashes = new Map<string, number>();
+interface State {
+  up: boolean;
+  orca: boolean;
+  waiting: OrcaWaiting[];
+  roster: OrcaRosterFloor[];
+  /** When the bridge or Orca went away, for "last update 2 min ago". */
+  staleSince: number | null;
+  /** The row whose reply box is open, its draft, and what became of the last send. */
+  replying: string | null;
+  draft: string;
+  note: { key: string; text: string; ok: boolean } | null;
+}
 
+const st: State = { up: false, orca: true, waiting: [], roster: [], staleSince: null, replying: null, draft: '', note: null };
+let ws: WebSocket | null = null;
 const app = document.querySelector<HTMLDivElement>('#app')!;
 
 async function connect() {
-  const ws = await openBridge(BRIDGE);
-  if (!ws) return void setTimeout(connect, 2000);
+  const sock = await openBridge(BRIDGE);
+  if (!sock) return void setTimeout(connect, 2000);
+  ws = sock;
   let opened = false;
-  ws.addEventListener('open', () => {
+  sock.addEventListener('open', () => {
     opened = true;
-    bridgeUp = true;
+    st.up = true;
     render();
   });
-  ws.addEventListener('message', (ev) => {
-    const msg = JSON.parse(String(ev.data)) as { type: string; plugin?: boolean; name?: string };
-    if (msg.type === 'hello' || msg.type === 'bridge') pluginUp = Boolean(msg.plugin);
-    if (msg.type === 'snapshot') {
-      office = applySnapshot(office, msg as unknown as SnapshotMessage);
-      pluginUp = true;
-    }
-    if (msg.type === 'event' && msg.name === 'agent.status.changed') {
-      const e = msg as unknown as StatusEvent;
-      if (applyStatus(office, e) && e.payload.workspaceListId) flashes.set(e.payload.workspaceListId, Date.now());
-    }
+  sock.addEventListener('message', (ev) => {
+    const m = JSON.parse(String(ev.data)) as { t?: string; [k: string]: unknown };
+    if (m.t === 'orca') st.orca = !!m.online;
+    else if (m.t === 'orca.waiting') st.waiting = m.items as OrcaWaiting[];
+    else if (m.t === 'orca.roster') st.roster = m.floors as OrcaRosterFloor[];
+    else if (m.t === 'orca.result' && st.note) {
+      // How the last Reply or Open went: only failures come back for typing.
+      if (!m.ok) st.note = { ...st.note, text: `Didn't go through (${String(m.error ?? 'failed')})`, ok: false };
+    } else return;
     render();
   });
-  ws.addEventListener('close', () => {
+  sock.addEventListener('close', () => {
     if (!opened) forgetBridgeToken();
-    bridgeUp = false;
-    pluginUp = false;
+    st.up = false;
+    ws = null;
     render();
     setTimeout(connect, 2000);
   });
 }
 
-function ago(ms: number | null): string {
+const send = (m: object) => ws?.readyState === WebSocket.OPEN && ws.send(JSON.stringify(m));
+
+function ago(ms: number | undefined): string {
   if (!ms) return '';
-  const s = Math.max(0, Math.round((Date.now() - ms) / 1000));
-  if (s < 60) return `${s}s`;
-  if (s < 3600) return `${Math.round(s / 60)}m`;
-  if (s < 86400) return `${Math.round(s / 3600)}h`;
-  return `${Math.round(s / 86400)}d`;
+  const s = Math.max(0, (Date.now() - ms) / 1000);
+  if (s < 60) return 'just now';
+  if (s < 3600) return `${Math.floor(s / 60)} min`;
+  if (s < 86400) return `${Math.floor(s / 3600)} h`;
+  return `${Math.floor(s / 86400)} d`;
 }
 
-function esc(s: string): string {
-  return s.replace(/[&<>"']/g, (c) => `&#${c.charCodeAt(0)};`);
+function el<K extends keyof HTMLElementTagNameMap>(tag: K, cls: string, ...kids: (Node | string | null | false | undefined)[]): HTMLElementTagNameMap[K] {
+  const e = document.createElement(tag);
+  if (cls) e.className = cls;
+  for (const k of kids) if (k) e.append(k);
+  return e;
 }
 
-function agentChip(a: { agent: string | null; state: string; surface: string; since: number }): string {
-  const label = needsYou(a.state as never) ? 'needs you' : a.state;
-  return `<span class="chip ${esc(a.state)}" title="${esc(a.surface)} · ${esc(label)} for ${ago(a.since)}">
-    <span class="dot"></span>${esc(a.agent ?? 'agent')}${a.surface === 'chat' ? ' 💬' : ' ⌨︎'}
-    <span class="muted">${esc(label)} · ${ago(a.since)}</span></span>`;
+function button(label: string, onClick: () => void, cls = ''): HTMLButtonElement {
+  const b = el('button', `btn ${cls}`.trim(), label);
+  b.type = 'button';
+  b.addEventListener('click', onClick);
+  return b;
 }
 
-function row(w: Workspace): string {
-  const agents = [...w.agents.values()].sort((a, b) => a.state.localeCompare(b.state));
-  const flash = (flashes.get(w.id) ?? 0) > Date.now() - 1500 ? ' flash' : '';
-  const host = w.hostId && w.hostId !== 'local' ? `<span class="tag">${esc(w.hostId)}</span>` : '';
-  return `<div class="desk rank${workspaceRank(w)}${flash}">
-    <div class="desk-name">${esc(w.name)}${w.branch && w.branch !== w.name ? `<span class="muted"> ${esc(w.branch)}</span>` : ''}${host}${w.unread ? '<span class="tag unread">unread</span>' : ''}</div>
-    <div class="chips">${agents.length ? agents.map(agentChip).join('') : '<span class="muted">empty desk</span>'}</div>
-    <div class="muted when">${ago(w.lastActivityAt)}</div>
-  </div>`;
+/** Everyone by id, with the floor they're on. */
+function everyone(): Map<string, OrcaRosterWorker & { floor: string; floorName: string }> {
+  const out = new Map<string, OrcaRosterWorker & { floor: string; floorName: string }>();
+  for (const f of st.roster) for (const w of f.workers) out.set(w.id, { ...w, floor: f.floor, floorName: f.name });
+  return out;
+}
+
+function openInOrca(item: { workerId: string | null; deskId: string | null; floor: string }, key: string) {
+  // A gate has no figure: its desk, on its project room's floor (actions go by the page's floor).
+  if (item.workerId) send({ t: 'orca.open', workerId: item.workerId });
+  else if (item.deskId) {
+    send({ t: 'floor.go', floor: item.floor });
+    send({ t: 'orca.open', deskId: item.deskId });
+  }
+  st.note = { key, text: 'Opened in Orca', ok: true };
+  render();
+}
+
+function replyBox(workerId: string): HTMLElement {
+  const input = el('textarea', 'reply-input');
+  input.rows = 2;
+  input.placeholder = 'Type a line for it, Enter sends';
+  input.value = st.draft;
+  input.setAttribute('aria-label', 'Reply');
+  input.addEventListener('input', () => (st.draft = input.value));
+  const go = () => {
+    const text = input.value.trim();
+    if (!text) return;
+    send({ t: 'worker.prompt', workerId, prompt: text });
+    st.note = { key: workerId, text: 'Sent', ok: true };
+    st.replying = null;
+    st.draft = '';
+    render();
+  };
+  input.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      go();
+    }
+    if (e.key === 'Escape') {
+      st.replying = null;
+      render();
+    }
+  });
+  setTimeout(() => input.focus(), 0);
+  return el('div', 'reply', input, el('div', 'reply-actions', button('Send', go, 'primary'), button('Cancel', () => ((st.replying = null), render()))));
+}
+
+function card(o: { key: string; title: string; where: string; text?: string | null; tone: string; since?: number; workerId: string | null; deskId: string | null; floor: string; canReply: boolean }): HTMLElement {
+  const note = st.note?.key === o.key ? el('p', `note ${st.note.ok ? 'ok' : 'bad'}`, st.note.text) : null;
+  const actions = el(
+    'div',
+    'actions',
+    o.canReply && st.replying !== o.key ? button('Reply', () => ((st.replying = o.key), (st.draft = ''), (st.note = null), render()), 'primary') : null,
+    o.workerId || o.deskId ? button('Open in Orca', () => openInOrca(o, o.key)) : null,
+  );
+  return el(
+    'li',
+    `card ${o.tone}`,
+    el('div', 'card-head', el('strong', '', o.title), el('span', 'when', ago(o.since))),
+    el('div', 'where', o.where),
+    o.text ? el('p', 'text', o.text) : null,
+    st.replying === o.key && o.workerId ? replyBox(o.workerId) : actions,
+    note,
+  );
+}
+
+function section(title: string, cls: string, items: HTMLElement[], empty: string): HTMLElement {
+  return el('section', cls, el('h2', '', `${title} `, el('span', 'count', String(items.length))), items.length ? el('ul', 'cards', ...items) : el('p', 'empty', empty));
 }
 
 function render() {
-  const all = [...office.workspaces.values()];
-  const visible = all.filter((w) => showIdle || w.agents.size > 0);
-  const floors = new Map<string, Workspace[]>();
-  for (const w of visible) floors.set(w.project, [...(floors.get(w.project) ?? []), w]);
-  const sorted = [...floors.entries()]
-    .map(([name, ws]) => ({ name, ws: ws.sort((a, b) => workspaceRank(a) - workspaceRank(b) || (b.lastActivityAt ?? 0) - (a.lastActivityAt ?? 0)) }))
-    .sort((a, b) => workspaceRank(a.ws[0]!) - workspaceRank(b.ws[0]!) || a.name.localeCompare(b.name));
-
-  const counts = { needs: 0, working: 0, done: 0 };
-  for (const w of all)
-    for (const a of w.agents.values()) {
-      if (needsYou(a.state)) counts.needs++;
-      else if (a.state === 'working') counts.working++;
-      else counts.done++;
-    }
-
-  app.innerHTML = `
-    <header>
-      <h1>orca-office <span class="muted">live</span></h1>
-      <div class="status">
-        <span class="pill ${bridgeUp ? 'ok' : 'bad'}">bridge ${bridgeUp ? 'online' : 'offline'}</span>
-        <span class="pill ${pluginUp ? 'ok' : 'bad'}">Orca ${pluginUp ? 'connected' : 'offline'}</span>
-        <span class="pill needs">${counts.needs} needs you</span>
-        <span class="pill working">${counts.working} working</span>
-        <span class="pill done">${counts.done} done</span>
-        <label><input type="checkbox" id="idle" ${showIdle ? 'checked' : ''}/> empty desks (${all.length})</label>
-      </div>
-    </header>
-    <main>
-      ${
-        sorted.length
-          ? sorted.map((f) => `<section class="floor"><h2>${esc(f.name)}</h2>${f.ws.map(row).join('')}</section>`).join('')
-          : `<p class="muted empty">${bridgeUp ? 'Waiting for the first snapshot from Orca…' : 'Start the bridge: npm run dev:bridge'}</p>`
-      }
-    </main>
-    <footer class="muted">protocol ${PROTOCOL_VERSION} · snapshot ${ago(office.snapshotAt)} ago</footer>`;
-  document.querySelector<HTMLInputElement>('#idle')!.onchange = (e) => {
-    showIdle = (e.target as HTMLInputElement).checked;
-    render();
-  };
+  const stale = !st.up || !st.orca;
+  if (stale && st.staleSince === null) st.staleSince = Date.now();
+  if (!stale) st.staleSince = null;
+  document.body.classList.toggle('stale', stale);
+  const people = everyone();
+  const needs = st.waiting.map((w) => {
+    const p = w.workerId ? people.get(w.workerId) : undefined;
+    return card({
+      key: w.key,
+      title: w.kind === 'gate' ? '⚖️ A decision waits for you' : w.name,
+      where: [`🏢 ${w.floorName}`, p?.branch && p.branch !== w.name ? `🌿 ${p.branch}` : ''].filter(Boolean).join(' · '),
+      text: w.ask,
+      tone: 'needs',
+      since: w.since,
+      workerId: w.workerId,
+      deskId: w.deskId,
+      floor: w.floor,
+      canReply: !!p?.terminal,
+    });
+  });
+  const listed = new Set(st.waiting.map((w) => w.workerId));
+  const rows = (status: string, tone: string) =>
+    [...people.values()]
+      .filter((w) => w.status === status && !listed.has(w.id))
+      .map((w) => card({ key: w.id, title: `${w.bot ? '🤖 ' : ''}${w.name}`, where: [`🏢 ${w.floorName}`, w.branch && w.branch !== w.name ? `🌿 ${w.branch}` : ''].filter(Boolean).join(' · '), text: w.summary, tone, since: w.since, workerId: w.id, deskId: w.deskId, floor: w.floor, canReply: !!w.terminal }));
+  const status = !st.up ? 'Reconnecting…' : !st.orca ? 'Orca offline' : '';
+  const banner = status ? el('p', 'banner', `${status}${st.staleSince ? ` · last update ${ago(st.staleSince)}${ago(st.staleSince) === 'just now' ? '' : ' ago'}` : ''}`) : '';
+  app.replaceChildren(
+    el(
+      'header',
+      '',
+      el('h1', '', 'orca-office'),
+      el('span', `pill ${needs.length ? 'needs' : 'calm'}`, needs.length ? `🙋 ${needs.length} need${needs.length === 1 ? 's' : ''} you` : '👍 Nobody waiting'),
+    ),
+    banner,
+    el('main', '', section('Needs you', 'needs', needs, 'Nobody is waiting for you.'), section('Working', 'working', rows('working', 'working'), 'Nobody is working right now.'), section('Done', 'done', rows('done', 'done'), 'Nothing finished yet.')),
+    el('footer', '', el('a', '', 'Open the 3D office')),
+  );
+  const a = app.querySelector('footer a') as HTMLAnchorElement;
+  a.href = `/?3d=1`;
+  // The tab title counts them too.
+  document.title = `${needs.length ? `(${needs.length}) ` : ''}orca-office`;
 }
 
 render();
-connect();
-setInterval(render, 5000);
+void connect();
+// "3 min" moves on (not while typing a reply: that would throw the draft's caret about).
+setInterval(() => st.replying === null && render(), 15_000);

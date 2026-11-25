@@ -15,6 +15,9 @@ export const SUPERVISE_ROWS: readonly (readonly [string, string])[] = [
   ['V', 'Overview from above, where you start. A step or a click takes you back down'],
 ];
 
+/** Rows about the games and the company, hidden with the fun off (M6 A11, see fun.ts). */
+export const FUN_ROWS: ReadonlySet<string> = new Set(['🕹️', '🎉', '🏀', 'Q', '🍸', '🎯', 'F', 'T', 'G / 1–6']);
+
 /** Everything else, folded away. */
 export const HELP_ROWS: readonly (readonly [string, string])[] = [
   ['P', 'Prompt: type a line into the input box of the agent at the desk you face'],
@@ -24,7 +27,8 @@ export const HELP_ROWS: readonly (readonly [string, string])[] = [
   ['Esc', 'Close any window and get back to looking around'],
   ['Ctrl + [', 'Send Esc to a terminal instead, to close a menu like Claude’s /skills or interrupt Claude. ⎋ Esc in the terminal’s header does the same'],
   ['Ctrl+Space', 'Dictate: in a worker’s terminal or a prompt box, hold Ctrl+Space (or the 🎤) and talk, and what you said is typed in when you let go, for you to read over and send. A quick tap leaves it listening until you tap again. The browser does the listening (Chrome, Edge and Safari can), so there’s nothing to install'],
-  ['Tab', 'The ☰ menu, top right: every window, and what shows on screen. Pin what you use most to the top bar'],
+  ['`', 'The ☰ menu, top right: every window, and what shows on screen. Pin what you use most to the top bar'],
+  ['Tab', 'Moves the focus through the top bar’s buttons, the banner and the windows; Enter or Space presses the one in focus'],
   ['W A S D', 'Walk (hold Shift to run)'],
   ['Space', 'Jump'],
   ['Mouse', 'Look around in first person (click to capture the mouse, Esc to free it)'],
