@@ -106,7 +106,7 @@ parts.sound = makeSound(parts.settings);
 
 parts.dog = installDog(ctx);
 parts.cabinet = installCabinet(ctx, { openTerminal: (id) => parts.waiting.openWorkerTerminal(id) });
-parts.notifier = new DesktopNotifier(() => parts.settings.notify, (id) => parts.waiting.answerWorker(id));
+parts.notifier = new DesktopNotifier(() => parts.settings.notify, (id) => parts.waiting.answerWorker(id), (key) => parts.waiting.answerStop(key));
 const standUp = () => parts.seating.standUp();
 const stopWalking = () => parts.walking.stopWalkingTo();
 const personOf = (id: string) => parts.peers.remotes.get(id)?.person;

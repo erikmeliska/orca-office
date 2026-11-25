@@ -187,6 +187,7 @@ function onPlugin(ws: WebSocket) {
     clearTimeout(authTimer);
     link.attach(ws);
     broadcastPlugin();
+    if (!config.stub) pluginStatus(undefined, true);
     console.log('plugin connected (verified)');
   }
 
@@ -322,11 +323,27 @@ function flush() {
   actions.tick();
   for (const [ws, s] of liveSessions) for (const m of s.update(b)) if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(m));
   pushLan(b);
+  pluginStatus(b);
   // Deliveries (#34): to the pages on the floor each happens on.
   for (const h of model.takeHandoffs()) {
     const out = JSON.stringify({ t: 'orca.handoff', from: h.from, to: h.to, kind: h.kind, subject: h.subject });
     for (const [ws, s] of liveSessions) if (s.peer.floor === h.floor && ws.readyState === ws.OPEN) ws.send(out);
   }
+}
+
+/**
+ * How many wait for you, for the plugin's "Office" item in Orca's status bar (A4): sent when it
+ * changes and when the plugin (re)connects. Worktree names only, never what they ask.
+ */
+let sentStatus = '';
+function pluginStatus(b = model.building(), always = false) {
+  const n = b.waiting.length;
+  const names = [...new Set(b.waiting.map((w) => (w.kind === 'gate' ? `⚖️ ${w.floorName}` : w.name)))].slice(0, 5);
+  const msg = { type: 'status', waiting: n, names };
+  const key = JSON.stringify(msg);
+  if (!always && key === sentStatus) return;
+  sentStatus = key;
+  link.send(msg);
 }
 
 if (!config.stub) {

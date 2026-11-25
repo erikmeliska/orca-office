@@ -127,6 +127,28 @@ export interface OrcaProject {
   members: string[];
 }
 
+/**
+ * Something anywhere in the building waiting for you (M6, roadmap A1/A2): an agent stopped on a
+ * question or a permission, or an orchestration Run's decision gate. Longest waiting first.
+ */
+export interface OrcaWaiting {
+  /** Stable: the figure's id, or `gate:<id>`. */
+  key: string;
+  kind: 'agent' | 'gate';
+  floor: string;
+  floorName: string;
+  /** The figure to go to; null for a gate. */
+  workerId: string | null;
+  /** Its desk on that floor (a gate's: the seat "Open in Orca" opens); null when there is none. */
+  deskId: string | null;
+  /** Who: the worktree (or bot), or "Decision" for a gate. */
+  name: string;
+  /** What it asks, already a short bubble (≤120); null when Orca doesn't say. */
+  ask: string | null;
+  /** Since when it has waited (ms). */
+  since: number;
+}
+
 export type OrcaClientMsg =
   /** Show the figure's workspace in Orca and focus its terminal (`workerId`), or a desk's worktree (`deskId`). */
   | { t: 'orca.open'; workerId?: string; deskId?: string }
@@ -177,6 +199,8 @@ export type OrcaServerMsg =
   | { t: 'orca.project'; floor: string; project: OrcaProject | null }
   /** A delivery to animate on the page's floor (#34): seat to seat; null = up to the roof or down from it. */
   | { t: 'orca.handoff'; from: string | null; to: string | null; kind: 'dispatch' | 'ask' | 'reply' | 'worker_done' | 'escalation'; subject: string | null }
+  /** Everything in the building waiting for you, longest first (M6 A1/A2). Sent after `welcome` and on change. */
+  | { t: 'orca.waiting'; items: OrcaWaiting[] }
   /** A desk's worktree in Orca: its comment and whether it is unread. */
   | { t: 'orca.desk'; deskId: string; comment: string; unread: boolean }
   /**

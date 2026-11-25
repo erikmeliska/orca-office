@@ -2,6 +2,7 @@
 // for workers that need input or finish (the tab title counts them too, see main.ts).
 
 import type { WorkerInfo } from '@orca-office/shared/office/protocol';
+import type { OrcaWaiting } from '@orca-office/shared/office/protocol/orca';
 import { alertDetail } from '@orca-office/shared/office/status';
 
 export type NotifyPermission = NotificationPermission | 'unsupported';
@@ -36,6 +37,8 @@ export class DesktopNotifier {
     private enabled: () => boolean,
     /** What a click on a worker's notification does: in the 3D office, over to its desk with its terminal open. */
     private openWorker: (workerId: string) => void,
+    /** The same for one waiting on another floor, or a decision gate (by its key, see OrcaWaiting). */
+    private openStop: (key: string) => void = () => {},
   ) {
     // Back in the office, which shows who's waiting by itself.
     window.addEventListener('focus', () => this.closeAll());
@@ -62,9 +65,40 @@ export class DesktopNotifier {
     this.shown.set(w.id, n);
   }
 
+  /** Someone started waiting for you on another floor, or a decision gate came up (M6 A3): the whole building notifies. */
+  alertStop(s: Pick<OrcaWaiting, 'key' | 'kind' | 'name' | 'ask' | 'floorName'>) {
+    if (!this.enabled() || notifyPermission() !== 'granted') return;
+    if (!document.hidden && document.hasFocus()) return;
+    const title = s.kind === 'gate' ? `⚖️ A decision waits for you (${s.floorName})` : `🙋 ${s.name} needs you (${s.floorName})`;
+    this.shown.get(s.key)?.close();
+    const n = this.show(title, { body: s.ask ?? '', tag: `stop-${s.key}`, requireInteraction: true });
+    if (!n) return;
+    n.onclick = () => {
+      window.focus();
+      n.close();
+      this.openStop(s.key);
+    };
+    n.onclose = () => {
+      if (this.shown.get(s.key) === n) this.shown.delete(s.key);
+    };
+    this.shown.set(s.key, n);
+  }
+
+  /** Takes down the building-wide ones (alertStop) for what isn't waiting any more. */
+  syncStops(items: readonly OrcaWaiting[]) {
+    for (const [key, n] of this.shown) {
+      if (!n.tag.startsWith('stop-')) continue;
+      if (items.some((x) => x.key === key)) continue;
+      n.close();
+      this.shown.delete(key);
+    }
+  }
+
   /** Takes down notifications for workers nobody needs to get to any more (someone else did). */
   sync(workers: Map<string, WorkerInfo>) {
     for (const [id, n] of this.shown) {
+      // The building-wide ones go by the building's list (syncStops).
+      if (n.tag.startsWith('stop-')) continue;
       const w = workers.get(id);
       if (w && waitingOnSomeone(w)) continue;
       n.close();

@@ -33,6 +33,8 @@ function connect() {
   ws.on('open', () => send({ type: 'challenge', nonce }));
   ws.on('message', (d) => {
     const m = JSON.parse(String(d));
+    // What the real plugin puts on Orca's status bar (A4): here only printed.
+    if (m.type === 'status') return console.log(`status bar: ${m.waiting ? `Office 🔴 ${m.waiting} (${m.names.join(', ')})` : 'Office'}`);
     if (m.type === 'auth') {
       if (m.proof !== hmac('bridge', nonce, m.nonce)) return ws.close();
       send({ type: 'auth', proof: hmac('plugin', m.nonce, nonce) });

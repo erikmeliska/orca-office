@@ -1,6 +1,6 @@
 import './ui.css';
 import { h } from '../../ui/dom';
-import type { BannerText } from './logic';
+import type { BannerText } from '../../waiting-all';
 
 export interface BannerHooks {
   /** To that worker's desk. */

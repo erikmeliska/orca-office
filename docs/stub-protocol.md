@@ -338,3 +338,24 @@ worktrees; a desk whose worktree runs one shows `🖥 :5173` on its sign. Bridge
 ![Services panel](img/m6-services-panel-desktop.png)
 ![A desk with its server on the sign](img/m6-services-desk-desktop.png)
 ![Services on a phone](img/m6-services-mobile.png)
+
+## Needs you, for the whole building (M6, roadmap A1–A4)
+
+`{ t: 'orca.waiting', items: OrcaWaiting[] }` comes after `welcome` and whenever it changes:
+every agent asking on any floor (a project room's mirrored figures only once) and every open
+decision gate, longest first. An item has `key` (the figure's id or `gate:<id>`), `kind`, `floor`,
+`floorName`, `workerId`, `deskId`, `name` (worktree or bot; "Decision" for a gate), `ask` (already a
+bubble) and `since` (a gate's: when the bridge first saw it; Orca gives no time).
+
+- The pill and the dock button say "🙋 2 need you · 1 here, 1 on blog-ai", plus this floor's done
+  ones nobody looked at. The banner shows the longest waiting anywhere, with "on <floor>" when it is
+  elsewhere. N goes through them all in that order and takes the floor list to another floor first;
+  a gate takes you to the desk its board names (`client/src/waiting-all.ts`).
+- Tab title "(2) …" and a red count on the favicon. A desktop notification (and the alarm) for
+  someone who starts waiting on another floor, or a new gate; clicking it takes you there.
+- Orca's status bar (A4): the bridge sends the plugin `{ type: 'status', waiting, names }` (worktree
+  names only, never what they ask) when the count changes and on connect; the plugin's existing
+  "Office" item becomes `Office 🔴 2` with the names in its tooltip. No new capability.
+
+![Needs you across the building](img/m6-needs-you-desktop.png)
+![N took you to a decision gate on the roof](img/m6-needs-you-gate-desktop.png)

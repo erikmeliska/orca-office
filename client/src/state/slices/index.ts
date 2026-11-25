@@ -26,6 +26,7 @@ import { sky } from './sky';
 import { theme } from './theme';
 import { upgrade } from './upgrade';
 import { usage } from './usage';
+import { waiting } from './waiting';
 
 export const SLICES: readonly Slice[] = [
   presence,
@@ -49,4 +50,5 @@ export const SLICES: readonly Slice[] = [
   cabinet,
   ball,
   jail,
+  waiting,
 ];
